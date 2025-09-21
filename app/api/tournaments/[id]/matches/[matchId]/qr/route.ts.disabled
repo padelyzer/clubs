@@ -1,0 +1,186 @@
+import { NextRequest, NextResponse } from 'next/server'
+import { requireAuthAPI } from '@/lib/auth/actions'
+import { prisma } from '@/lib/config/prisma'
+import QRCode from 'qrcode'
+
+// interface RouteParams {
+  params: {
+    id: string
+    matchId: string
+  }
+}
+
+// Generate QR Code for match result capture
+export async function POST(
+  request: NextRequest,
+  { params }: { params: Promise<{ [key: string]: string }> }
+) {
+  try {
+    const paramData = await params
+    
+    const session = await requireAuthAPI()
+    
+    if (!session) {
+      return NextResponse.json(
+        { success: false, error: 'No autorizado' },
+        { status: 401 }
+      )
+    }
+    const params_resolved = await params; const { id } = params_resolved
+
+    // Verify tournament belongs to club
+    const tournament = await prisma.tournament.findFirst({
+      where: {
+        id: tournamentId,
+        clubId: session.clubId
+      }
+    })
+
+    if (!tournament) {
+      return NextResponse.json(
+        { success: false, error: 'Torneo no encontrado' },
+        { status: 404 }
+      )
+    }
+
+    // Get match details
+    const match = await prisma.tournamentMatch.findFirst({
+      where: {
+        id: matchId,
+        tournamentId
+      },
+      include: {
+        tournament: true,
+        court: true,
+        player1: true,
+        player2: true
+      }
+    })
+
+    if (!match) {
+      return NextResponse.json(
+        { success: false, error: 'Partido no encontrado' },
+        { status: 404 }
+      )
+    }
+
+    // Generate public URL for result capture
+    const baseUrl = process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000'
+    const resultCaptureUrl = `${baseUrl}/match/${matchId}/score?qr=true`
+    
+    // Calculate QR expiration (valid for 4 hours after scheduled time)
+    const scheduledTime = match.scheduledAt || new Date()
+    const qrValidUntil = new Date(scheduledTime.getTime() + (4 * 60 * 60 * 1000))
+
+    // Generate QR code
+    const qrCodeDataUrl = await QRCode.toDataURL(resultCaptureUrl, {
+      width: 300,
+      margin: 2,
+      color: {
+        dark: '#182A01',
+        light: '#FFFFFF'
+      }
+    })
+
+    // Update match with QR information
+    const updatedMatch = await prisma.tournamentMatch.update({
+      where: { id: matchId },
+      data: {
+        qrCodeUrl: resultCaptureUrl,
+        qrValidUntil
+      }
+    })
+
+    // Prepare QR poster data
+    const qrPosterData = {
+      qrCode: qrCodeDataUrl,
+      tournament: {
+        name: match.tournament.name,
+        date: match.scheduledAt?.toLocaleDateString('es-MX', {
+          day: 'numeric',
+          month: 'short',
+          year: 'numeric'
+        }),
+        time: match.startTime && match.endTime 
+          ? `${match.startTime} - ${match.endTime}`
+          : 'Horario por confirmar'
+      },
+      match: {
+        player1Name: match.player1Name || 'Por definir',
+        player2Name: match.player2Name || 'Por definir',
+        round: match.round,
+        court: match.court?.name || 'Por definir'
+      },
+      instructions: 'Escanea para reportar resultado',
+      url: resultCaptureUrl,
+      validUntil: qrValidUntil
+    }
+
+    return NextResponse.json({
+      success: true,
+      qrData: qrPosterData,
+      message: 'QR generado exitosamente'
+    })
+
+  } catch (error) {
+    console.error('Error generating QR code:', error)
+    return NextResponse.json(
+      { success: false, error: 'Error al generar código QR' },
+      { status: 500 }
+    )
+  }
+}
+
+// Get QR Code information
+export async function GET(
+  request: NextRequest,
+  { params }: { params: Promise<{ [key: string]: string }> }
+) {
+  try {
+    const paramData = await params
+    
+    const params_resolved = await params; const { id } = params_resolved
+
+    // Get match QR information (public endpoint)
+    const match = await prisma.tournamentMatch.findFirst({
+      where: {
+        id: matchId,
+        tournamentId
+      },
+      select: {
+        id: true,
+        qrCodeUrl: true,
+        qrValidUntil: true,
+        status: true
+      }
+    })
+
+    if (!match) {
+      return NextResponse.json(
+        { success: false, error: 'Partido no encontrado' },
+        { status: 404 }
+      )
+    }
+
+    // Check if QR is still valid
+    const isValid = match.qrValidUntil && new Date() < match.qrValidUntil
+    const canCapture = match.status === 'SCHEDULED' || match.status === 'IN_PROGRESS'
+
+    return NextResponse.json({
+      success: true,
+      qr: {
+        url: match.qrCodeUrl,
+        validUntil: match.qrValidUntil,
+        isValid,
+        canCapture
+      }
+    })
+
+  } catch (error) {
+    console.error('Error getting QR information:', error)
+    return NextResponse.json(
+      { success: false, error: 'Error al obtener información del QR' },
+      { status: 500 }
+    )
+  }
+}

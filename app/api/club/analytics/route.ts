@@ -1,0 +1,216 @@
+import { NextRequest, NextResponse } from 'next/server'
+import { requireClubStaff } from '@/lib/auth/actions'
+import { prisma } from '@/lib/config/prisma'
+
+export async function GET(request: NextRequest) {
+  try {
+    const session = await requireClubStaff()
+    const { searchParams } = new URL(request.url)
+    const range = searchParams.get('range') || 'week'
+
+    // Calcular fechas según el rango
+    const now = new Date()
+    let startDate = new Date()
+    let previousStartDate = new Date()
+    
+    switch(range) {
+      case 'week':
+        startDate.setDate(now.getDate() - 7)
+        previousStartDate.setDate(now.getDate() - 14)
+        break
+      case 'month':
+        startDate.setMonth(now.getMonth() - 1)
+        previousStartDate.setMonth(now.getMonth() - 2)
+        break
+      case 'year':
+        startDate.setFullYear(now.getFullYear() - 1)
+        previousStartDate.setFullYear(now.getFullYear() - 2)
+        break
+    }
+
+    // Obtener métricas del período actual
+    const [bookings, payments, uniquePlayers, courts] = await Promise.all([
+      // Reservas del período
+      prisma.booking.findMany({
+        where: {
+          clubId: session.clubId,
+          createdAt: { gte: startDate },
+          status: { in: ['CONFIRMED', 'COMPLETED'] }
+        }
+      }),
+      
+      // Pagos del período
+      prisma.payment.findMany({
+        where: {
+          booking: {
+            clubId: session.clubId
+          },
+          createdAt: { gte: startDate },
+          status: 'succeeded'
+        }
+      }),
+      
+      // Jugadores únicos
+      prisma.booking.groupBy({
+        by: ['playerPhone'],
+        where: {
+          clubId: session.clubId,
+          createdAt: { gte: startDate }
+        }
+      }),
+      
+      // Canchas del club
+      prisma.court.findMany({
+        where: { clubId: session.clubId }
+      })
+    ])
+
+    // Obtener métricas del período anterior para comparación
+    const [previousBookings, previousPayments, previousPlayers] = await Promise.all([
+      prisma.booking.count({
+        where: {
+          clubId: session.clubId,
+          createdAt: {
+            gte: previousStartDate,
+            lt: startDate
+          },
+          status: { in: ['CONFIRMED', 'COMPLETED'] }
+        }
+      }),
+      
+      prisma.payment.aggregate({
+        _sum: { amount: true },
+        where: {
+          booking: { clubId: session.clubId },
+          createdAt: {
+            gte: previousStartDate,
+            lt: startDate
+          },
+          status: 'succeeded'
+        }
+      }),
+      
+      prisma.booking.groupBy({
+        by: ['playerPhone'],
+        where: {
+          clubId: session.clubId,
+          createdAt: {
+            gte: previousStartDate,
+            lt: startDate
+          }
+        }
+      })
+    ])
+
+    // Calcular métricas
+    const currentRevenue = payments.reduce((sum, p) => sum + (p.amount || 0), 0)
+    const previousRevenue = previousPayments._sum.amount || 0
+    const revenueChange = previousRevenue > 0 
+      ? Math.round(((currentRevenue - previousRevenue) / previousRevenue) * 100)
+      : 0
+
+    const bookingsChange = previousBookings > 0
+      ? Math.round(((bookings.length - previousBookings) / previousBookings) * 100)
+      : 0
+
+    const playersChange = previousPlayers.length > 0
+      ? Math.round(((uniquePlayers.length - previousPlayers.length) / previousPlayers.length) * 100)
+      : 0
+
+    // Calcular ocupación
+    const totalSlots = courts.length * 14 * 7 // canchas * horas/día * días
+    const occupancy = Math.round((bookings.length / totalSlots) * 100)
+    
+    // Preparar datos para gráficos
+    const revenueByDay: { [key: string]: number } = {}
+    const bookingsByDay: { [key: string]: number } = {}
+    
+    bookings.forEach(booking => {
+      const day = booking.date.toISOString().split('T')[0]
+      bookingsByDay[day] = (bookingsByDay[day] || 0) + 1
+    })
+
+    payments.forEach(payment => {
+      const day = payment.createdAt.toISOString().split('T')[0]
+      revenueByDay[day] = (revenueByDay[day] || 0) + (payment.amount || 0)
+    })
+
+    // Uso de canchas
+    const courtUsage = await Promise.all(courts.map(async court => {
+      const courtBookings = bookings.filter(b => b.courtId === court.id).length
+      const usage = Math.round((courtBookings / (14 * 7)) * 100)
+      return {
+        id: court.id,
+        name: court.name,
+        usage: Math.min(usage, 100)
+      }
+    }))
+
+    // Horas pico
+    const hourCounts: { [key: string]: number } = {}
+    bookings.forEach(booking => {
+      const hour = booking.startTime
+      hourCounts[hour] = (hourCounts[hour] || 0) + 1
+    })
+    
+    const peakHours = Object.entries(hourCounts)
+      .map(([time, bookings]) => ({ time, bookings }))
+      .sort((a, b) => b.bookings - a.bookings)
+      .slice(0, 5)
+
+    // Top jugadores
+    const playerBookings: { [key: string]: { count: number, revenue: number, name: string } } = {}
+    bookings.forEach(booking => {
+      const key = booking.playerPhone
+      if (!playerBookings[key]) {
+        playerBookings[key] = {
+          count: 0,
+          revenue: 0,
+          name: booking.playerName
+        }
+      }
+      playerBookings[key].count++
+      playerBookings[key].revenue += booking.price || 0
+    })
+
+    const topPlayers = Object.values(playerBookings)
+      .map(p => ({
+        name: p.name,
+        bookings: p.count,
+        revenue: p.revenue
+      }))
+      .sort((a, b) => b.revenue - a.revenue)
+      .slice(0, 5)
+
+    // Preparar respuesta
+    return NextResponse.json({
+      success: true,
+      revenue: currentRevenue,
+      revenueChange,
+      bookings: bookings.length,
+      bookingsChange,
+      players: uniquePlayers.length,
+      playersChange,
+      occupancy,
+      occupancyChange: 0,
+      revenueChart: {
+        labels: Object.keys(revenueByDay).slice(-7),
+        values: Object.values(revenueByDay).slice(-7)
+      },
+      bookingsChart: {
+        labels: Object.keys(bookingsByDay).slice(-7),
+        values: Object.values(bookingsByDay).slice(-7)
+      },
+      courtUsage,
+      peakHours,
+      topPlayers
+    })
+
+  } catch (error) {
+    console.error('Error fetching analytics:', error)
+    return NextResponse.json(
+      { error: 'Error al obtener métricas' },
+      { status: 500 }
+    )
+  }
+}

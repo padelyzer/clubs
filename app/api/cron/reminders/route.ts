@@ -1,0 +1,204 @@
+import { NextRequest, NextResponse } from 'next/server'
+import { prisma } from '@/lib/config/prisma'
+import { WhatsAppService } from '@/lib/services/whatsapp-service'
+
+export async function GET(request: NextRequest) {
+  try {
+    // Verify cron secret for security
+    const authHeader = request.headers.get('authorization')
+    if (authHeader !== `Bearer ${process.env.CRON_SECRET}`) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+    }
+
+    console.log('[Cron] Starting reminder job...')
+
+    const now = new Date()
+    const results = []
+
+    // Find bookings that need reminders (2 hours before)
+    const bookingsToRemind = await prisma.booking.findMany({
+      where: {
+        status: 'CONFIRMED',
+        date: {
+          gte: new Date(now.toDateString()), // Today or later
+          lte: new Date(Date.now() + 24 * 60 * 60 * 1000) // Within next 24 hours
+        },
+        // Check if reminder not already sent
+        notifications: {
+          none: {
+            template: 'BOOKING_REMINDER',
+            status: {
+              in: ['sent', 'delivered']
+            }
+          }
+        }
+      },
+      include: {
+        club: true,
+        court: true
+      }
+    })
+
+    console.log(`[Cron] Found ${bookingsToRemind.length} potential bookings for reminders`)
+
+    for (const booking of bookingsToRemind) {
+      try {
+        // Parse booking datetime
+        const [hours, minutes] = booking.startTime.split(':').map(Number)
+        const bookingDateTime = new Date(booking.date)
+        bookingDateTime.setHours(hours, minutes, 0, 0)
+        
+        // Check if booking is exactly 2 hours away (±30 minutes window)
+        const timeDiff = bookingDateTime.getTime() - now.getTime()
+        const isInReminderWindow = timeDiff >= (1.5 * 60 * 60 * 1000) && timeDiff <= (2.5 * 60 * 60 * 1000)
+        
+        if (isInReminderWindow) {
+          console.log(`[Cron] Sending reminder for booking: ${booking.id} (${booking.club.name} - ${booking.court.name})`)
+          
+          const result = await WhatsAppService.sendBookingReminder(booking.id)
+          
+          results.push({
+            bookingId: booking.id,
+            clubName: booking.club.name,
+            courtName: booking.court.name,
+            playerName: booking.playerName,
+            bookingTime: booking.startTime,
+            timeDiff: Math.round(timeDiff / (60 * 1000)), // minutes
+            result
+          })
+        } else {
+          console.log(`[Cron] Booking ${booking.id} not in reminder window (${Math.round(timeDiff / (60 * 1000))} minutes away)`)
+        }
+      } catch (error) {
+        console.error(`[Cron] Error processing booking ${booking.id}:`, error)
+        results.push({
+          bookingId: booking.id,
+          error: error instanceof Error ? error.message : 'Unknown error'
+        })
+      }
+    }
+
+    // Also check for overdue payment reminders (24 hours after booking creation)
+    const overduePayments = await prisma.booking.findMany({
+      where: {
+        splitPaymentEnabled: true,
+        createdAt: {
+          lte: new Date(Date.now() - 24 * 60 * 60 * 1000) // Created more than 24h ago
+        },
+        splitPayments: {
+          some: {
+            status: 'pending'
+          }
+        },
+        // Check if overdue reminder not already sent
+        notifications: {
+          none: {
+            template: 'PAYMENT_OVERDUE',
+            createdAt: {
+              gte: new Date(Date.now() - 6 * 60 * 60 * 1000) // No reminder in last 6 hours
+            }
+          }
+        }
+      },
+      include: {
+        club: true,
+        splitPayments: {
+          where: { status: 'pending' }
+        }
+      }
+    })
+
+    console.log(`[Cron] Found ${overduePayments.length} bookings with overdue payments`)
+
+    for (const booking of overduePayments) {
+      try {
+        // Send overdue payment reminders
+        for (const splitPayment of booking.splitPayments) {
+          console.log(`[Cron] Sending overdue payment reminder to: ${splitPayment.playerPhone}`)
+          
+          // For now, reuse the payment pending template
+          // In the future, create a specific overdue template
+          const reminderResult = await WhatsAppService.sendPaymentPendingNotifications(booking.id)
+          
+          results.push({
+            type: 'overdue_payment',
+            bookingId: booking.id,
+            splitPaymentId: splitPayment.id,
+            playerName: splitPayment.playerName,
+            amount: splitPayment.amount,
+            result: reminderResult
+          })
+        }
+      } catch (error) {
+        console.error(`[Cron] Error sending overdue payment reminder for booking ${booking.id}:`, error)
+      }
+    }
+
+    const summary = {
+      totalProcessed: results.length,
+      successful: results.filter(r => r.result?.success !== false).length,
+      failed: results.filter(r => r.result?.success === false || r.error).length,
+      remindersSent: results.filter(r => !r.type && r.result?.success).length,
+      overdueRemindersSent: results.filter(r => r.type === 'overdue_payment' && r.result?.success).length
+    }
+
+    console.log('[Cron] Reminder job completed:', summary)
+
+    return NextResponse.json({
+      success: true,
+      timestamp: now.toISOString(),
+      summary,
+      results,
+      message: `Processed ${summary.totalProcessed} items. Sent ${summary.remindersSent} reminders and ${summary.overdueRemindersSent} overdue payment reminders.`
+    })
+
+  } catch (error) {
+    console.error('[Cron] Reminder job error:', error)
+    return NextResponse.json(
+      { 
+        error: 'Internal server error', 
+        details: error instanceof Error ? error.message : 'Unknown error',
+        timestamp: new Date().toISOString()
+      }, 
+      { status: 500 }
+    )
+  }
+}
+
+// Health check endpoint
+export async function POST(request: NextRequest) {
+  try {
+    // This can be used to manually trigger reminders or health checks
+    const body = await request.json()
+    const { action, secret } = body
+
+    if (secret !== process.env.CRON_SECRET) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+    }
+
+    if (action === 'health') {
+      return NextResponse.json({
+        success: true,
+        message: 'Cron service is healthy',
+        timestamp: new Date().toISOString()
+      })
+    }
+
+    if (action === 'manual_trigger') {
+      // Manually trigger the reminder process
+      return GET(request)
+    }
+
+    return NextResponse.json(
+      { error: 'Invalid action' },
+      { status: 400 }
+    )
+
+  } catch (error) {
+    console.error('[Cron] Health check error:', error)
+    return NextResponse.json(
+      { error: 'Internal server error' },
+      { status: 500 }
+    )
+  }
+}

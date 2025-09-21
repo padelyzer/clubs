@@ -1,0 +1,112 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Test QR Generator</title>
+    <script src="https://cdn.jsdelivr.net/npm/qrcodejs@1.0.0/qrcode.min.js"></script>
+</head>
+<body>
+    <h1>Generador de QR de Prueba</h1>
+    
+    <div style="padding: 20px; background: #f5f5f5; margin: 20px; border-radius: 10px;">
+        <h2>1. Generar QRs en la Base de Datos</h2>
+        <button onclick="generateQRCodes()" style="padding: 10px 20px; background: #10b981; color: white; border: none; border-radius: 5px; cursor: pointer;">
+            Generar QR Codes para Canchas
+        </button>
+        <div id="result"></div>
+    </div>
+
+    <div style="padding: 20px; background: #f5f5f5; margin: 20px; border-radius: 10px;">
+        <h2>2. QR Codes de Prueba (URLs Directas)</h2>
+        <p>Estos son códigos QR de ejemplo que puedes escanear:</p>
+        
+        <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 20px; margin-top: 20px;">
+            <div style="text-align: center; padding: 20px; background: white; border-radius: 10px;">
+                <h3>Cancha 1</h3>
+                <div id="qr1"></div>
+                <p style="margin-top: 10px; font-size: 12px; color: #666;">
+                    URL: http://localhost:3000/tournaments/court/TEST_QR_001/results
+                </p>
+            </div>
+            
+            <div style="text-align: center; padding: 20px; background: white; border-radius: 10px;">
+                <h3>Cancha 2</h3>
+                <div id="qr2"></div>
+                <p style="margin-top: 10px; font-size: 12px; color: #666;">
+                    URL: http://localhost:3000/tournaments/court/TEST_QR_002/results
+                </p>
+            </div>
+            
+            <div style="text-align: center; padding: 20px; background: white; border-radius: 10px;">
+                <h3>Cancha 10</h3>
+                <div id="qr3"></div>
+                <p style="margin-top: 10px; font-size: 12px; color: #666;">
+                    URL: http://localhost:3000/tournaments/court/TEST_QR_010/results
+                </p>
+            </div>
+        </div>
+    </div>
+
+    <div style="padding: 20px; background: #f5f5f5; margin: 20px; border-radius: 10px;">
+        <h2>3. Simular Escaneo de QR</h2>
+        <p>Haz clic en estos enlaces para simular que escaneaste el QR:</p>
+        <ul>
+            <li><a href="http://localhost:3000/tournaments/court/TEST_QR_001/results" target="_blank">🎾 Abrir Cancha 1</a></li>
+            <li><a href="http://localhost:3000/tournaments/court/TEST_QR_010/results" target="_blank">🎾 Abrir Cancha 10</a></li>
+            <li><a href="http://localhost:3000/tournaments/court/TEST_QR_002/results" target="_blank">🎾 Abrir Cancha 2</a></li>
+        </ul>
+    </div>
+
+    <script>
+        // Generar QR codes visuales
+        window.onload = function() {
+            new QRCode(document.getElementById("qr1"), {
+                text: "http://localhost:3000/tournaments/court/TEST_QR_001/results",
+                width: 150,
+                height: 150
+            });
+            
+            new QRCode(document.getElementById("qr2"), {
+                text: "http://localhost:3000/tournaments/court/TEST_QR_002/results",
+                width: 150,
+                height: 150
+            });
+            
+            new QRCode(document.getElementById("qr3"), {
+                text: "http://localhost:3000/tournaments/court/TEST_QR_010/results",
+                width: 150,
+                height: 150
+            });
+        }
+
+        async function generateQRCodes() {
+            try {
+                const response = await fetch('http://localhost:3000/api/tournaments-v2/courts/qr', {
+                    method: 'POST',
+                    credentials: 'include',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    }
+                });
+                
+                const data = await response.json();
+                document.getElementById('result').innerHTML = `
+                    <div style="margin-top: 10px; padding: 10px; background: ${response.ok ? '#d4edda' : '#f8d7da'}; color: ${response.ok ? '#155724' : '#721c24'}; border-radius: 5px;">
+                        ${response.ok ? '✅ QR Codes generados exitosamente!' : '❌ Error: ' + data.error}
+                        ${response.ok ? '<br>QR Codes generados: ' + data.qrCodes.length : ''}
+                    </div>
+                `;
+                
+                if (response.ok && data.qrCodes) {
+                    console.log('QR Codes generados:', data.qrCodes);
+                }
+            } catch (error) {
+                document.getElementById('result').innerHTML = `
+                    <div style="margin-top: 10px; padding: 10px; background: #f8d7da; color: #721c24; border-radius: 5px;">
+                        ❌ Error de conexión: ${error.message}
+                    </div>
+                `;
+            }
+        }
+    </script>
+</body>
+</html>

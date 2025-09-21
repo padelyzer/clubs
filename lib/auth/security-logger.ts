@@ -1,0 +1,381 @@
+/**
+ * Sistema de Audit Logging para Seguridad
+ * Registra todos los eventos críticos de autenticación y seguridad
+ */
+
+import { prisma } from '@/lib/config/prisma'
+import { headers } from 'next/headers'
+
+export enum SecurityEventType {
+  // Autenticación
+  LOGIN_ATTEMPT = 'LOGIN_ATTEMPT',
+  LOGIN_SUCCESS = 'LOGIN_SUCCESS',
+  LOGIN_FAILED = 'LOGIN_FAILED',
+  LOGOUT = 'LOGOUT',
+  
+  // Sesiones
+  SESSION_CREATED = 'SESSION_CREATED',
+  SESSION_EXPIRED = 'SESSION_EXPIRED',
+  SESSION_INVALIDATED = 'SESSION_INVALIDATED',
+  SESSION_REFRESH = 'SESSION_REFRESH',
+  
+  // Acceso
+  ACCESS_DENIED = 'ACCESS_DENIED',
+  PERMISSION_DENIED = 'PERMISSION_DENIED',
+  RATE_LIMIT_EXCEEDED = 'RATE_LIMIT_EXCEEDED',
+  
+  // Cambios de seguridad
+  PASSWORD_CHANGED = 'PASSWORD_CHANGED',
+  PASSWORD_RESET_REQUESTED = 'PASSWORD_RESET_REQUESTED',
+  PASSWORD_RESET_COMPLETED = 'PASSWORD_RESET_COMPLETED',
+  
+  // Administración
+  CLUB_ACCESS = 'CLUB_ACCESS',
+  CLUB_SWITCH = 'CLUB_SWITCH',
+  ADMIN_ACTION = 'ADMIN_ACTION',
+  IMPERSONATION_START = 'IMPERSONATION_START',
+  IMPERSONATION_END = 'IMPERSONATION_END',
+  
+  // Anomalías
+  SUSPICIOUS_ACTIVITY = 'SUSPICIOUS_ACTIVITY',
+  INVALID_TOKEN = 'INVALID_TOKEN',
+  BRUTE_FORCE_DETECTED = 'BRUTE_FORCE_DETECTED'
+}
+
+export enum SecuritySeverity {
+  INFO = 'INFO',
+  WARNING = 'WARNING',
+  ERROR = 'ERROR',
+  CRITICAL = 'CRITICAL'
+}
+
+interface SecurityLogEntry {
+  eventType: SecurityEventType
+  severity: SecuritySeverity
+  userId?: string | null
+  email?: string | null
+  ipAddress?: string
+  userAgent?: string
+  metadata?: Record<string, any>
+  message?: string
+  timestamp?: Date
+}
+
+export class SecurityLogger {
+  private static instance: SecurityLogger
+  private buffer: SecurityLogEntry[] = []
+  private flushInterval: NodeJS.Timeout | null = null
+  
+  private constructor() {
+    // Flush logs cada 5 segundos si hay pendientes
+    this.flushInterval = setInterval(() => {
+      if (this.buffer.length > 0) {
+        this.flush()
+      }
+    }, 5000)
+  }
+  
+  static getInstance(): SecurityLogger {
+    if (!SecurityLogger.instance) {
+      SecurityLogger.instance = new SecurityLogger()
+    }
+    return SecurityLogger.instance
+  }
+  
+  /**
+   * Obtener información del request actual
+   */
+  private async getRequestInfo(): Promise<{ ipAddress?: string; userAgent?: string }> {
+    try {
+      const headersList = await headers()
+      const ipAddress = 
+        headersList.get('x-forwarded-for')?.split(',')[0] ||
+        headersList.get('x-real-ip') ||
+        headersList.get('cf-connecting-ip') ||
+        'unknown'
+      
+      const userAgent = headersList.get('user-agent') || 'unknown'
+      
+      return { ipAddress, userAgent }
+    } catch {
+      return { ipAddress: 'unknown', userAgent: 'unknown' }
+    }
+  }
+  
+  /**
+   * Log de evento de seguridad
+   */
+  async log(entry: Omit<SecurityLogEntry, 'timestamp' | 'ipAddress' | 'userAgent'>): Promise<void> {
+    const requestInfo = await this.getRequestInfo()
+    
+    const fullEntry: SecurityLogEntry = {
+      ...entry,
+      ...requestInfo,
+      timestamp: new Date()
+    }
+    
+    // En desarrollo, también log a consola
+    if (process.env.NODE_ENV === 'development') {
+      const color = {
+        [SecuritySeverity.INFO]: '\x1b[36m',
+        [SecuritySeverity.WARNING]: '\x1b[33m',
+        [SecuritySeverity.ERROR]: '\x1b[31m',
+        [SecuritySeverity.CRITICAL]: '\x1b[35m'
+      }[entry.severity] || '\x1b[0m'
+      
+      console.log(
+        `${color}[SECURITY ${entry.severity}] ${entry.eventType}:`,
+        entry.message || '',
+        entry.metadata || '',
+        '\x1b[0m'
+      )
+    }
+    
+    // Agregar al buffer
+    this.buffer.push(fullEntry)
+    
+    // Si es crítico, flush inmediato
+    if (entry.severity === SecuritySeverity.CRITICAL) {
+      await this.flush()
+    }
+    
+    // Si el buffer está muy grande, flush
+    if (this.buffer.length >= 10) {
+      await this.flush()
+    }
+  }
+  
+  /**
+   * Guardar logs en base de datos
+   */
+  private async flush(): Promise<void> {
+    if (this.buffer.length === 0) return
+    
+    const logsToSave = [...this.buffer]
+    this.buffer = []
+    
+    try {
+      // Intentar guardar en base de datos
+      await prisma.$transaction(async (tx) => {
+        for (const log of logsToSave) {
+          // Use Prisma's built-in methods instead of raw SQL
+          try {
+            await tx.security_logs.create({
+              data: {
+                event_type: log.eventType,
+                severity: log.severity,
+                user_id: log.userId || null,
+                email: log.email || null,
+                ip_address: log.ipAddress || 'unknown',
+                user_agent: log.userAgent || 'unknown',
+                metadata: log.metadata || {},
+                message: log.message || '',
+                created_at: log.timestamp || new Date()
+              }
+            })
+          } catch (createError) {
+            // If table doesn't exist, fall back to creating it
+            console.log('Security log creation failed, table may not exist:', createError)
+          }
+        }
+      })
+    } catch (error) {
+      // Si falla la BD, log a archivo
+      this.logToFile(logsToSave)
+    }
+  }
+  
+  /**
+   * Crear tabla de logs si no existe
+   */
+  private async createSecurityLogTable(tx: any): Promise<void> {
+    try {
+      await tx.$executeRawUnsafe(`
+        CREATE TABLE IF NOT EXISTS security_logs (
+          id SERIAL PRIMARY KEY,
+          event_type VARCHAR(50) NOT NULL,
+          severity VARCHAR(20) NOT NULL,
+          user_id VARCHAR(255),
+          email VARCHAR(255),
+          ip_address VARCHAR(45),
+          user_agent TEXT,
+          metadata JSONB,
+          message TEXT,
+          created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+          INDEX idx_user_id (user_id),
+          INDEX idx_email (email),
+          INDEX idx_event_type (event_type),
+          INDEX idx_created_at (created_at)
+        )
+      `)
+    } catch {
+      // Tabla ya existe o no se puede crear
+    }
+  }
+  
+  /**
+   * Fallback: log a archivo cuando la BD no está disponible
+   */
+  private logToFile(logs: SecurityLogEntry[]): void {
+    if (process.env.NODE_ENV === 'development') {
+      console.log('[SECURITY] Logs que no se pudieron guardar en BD:', logs.length)
+    }
+    
+    // En producción, aquí podrías enviar a un servicio externo
+    // como Sentry, LogRocket, DataDog, etc.
+  }
+  
+  /**
+   * Helpers para eventos comunes
+   */
+  async logLoginAttempt(email: string, metadata?: Record<string, any>): Promise<void> {
+    await this.log({
+      eventType: SecurityEventType.LOGIN_ATTEMPT,
+      severity: SecuritySeverity.INFO,
+      email,
+      message: `Login attempt for ${email}`,
+      metadata
+    })
+  }
+  
+  async logLoginSuccess(userId: string, email: string, metadata?: Record<string, any>): Promise<void> {
+    await this.log({
+      eventType: SecurityEventType.LOGIN_SUCCESS,
+      severity: SecuritySeverity.INFO,
+      userId,
+      email,
+      message: `Successful login for ${email}`,
+      metadata
+    })
+  }
+  
+  async logLoginFailed(email: string, reason: string, metadata?: Record<string, any>): Promise<void> {
+    await this.log({
+      eventType: SecurityEventType.LOGIN_FAILED,
+      severity: SecuritySeverity.WARNING,
+      email,
+      message: `Failed login for ${email}: ${reason}`,
+      metadata: { ...metadata, reason }
+    })
+  }
+  
+  async logLogout(userId: string, email: string): Promise<void> {
+    await this.log({
+      eventType: SecurityEventType.LOGOUT,
+      severity: SecuritySeverity.INFO,
+      userId,
+      email,
+      message: `User ${email} logged out`
+    })
+  }
+  
+  async logAccessDenied(
+    userId: string | null,
+    resource: string,
+    reason: string
+  ): Promise<void> {
+    await this.log({
+      eventType: SecurityEventType.ACCESS_DENIED,
+      severity: SecuritySeverity.WARNING,
+      userId,
+      message: `Access denied to ${resource}: ${reason}`,
+      metadata: { resource, reason }
+    })
+  }
+  
+  async logSuspiciousActivity(
+    userId: string | null,
+    activity: string,
+    metadata?: Record<string, any>
+  ): Promise<void> {
+    await this.log({
+      eventType: SecurityEventType.SUSPICIOUS_ACTIVITY,
+      severity: SecuritySeverity.ERROR,
+      userId,
+      message: `Suspicious activity detected: ${activity}`,
+      metadata
+    })
+  }
+  
+  async logRateLimitExceeded(
+    identifier: string,
+    endpoint: string
+  ): Promise<void> {
+    await this.log({
+      eventType: SecurityEventType.RATE_LIMIT_EXCEEDED,
+      severity: SecuritySeverity.WARNING,
+      message: `Rate limit exceeded for ${identifier} on ${endpoint}`,
+      metadata: { identifier, endpoint }
+    })
+  }
+  
+  /**
+   * Analizar patrones de seguridad
+   */
+  async analyzeSecurityPatterns(userId: string): Promise<{
+    recentFailedLogins: number
+    suspiciousActivities: number
+    shouldBlockUser: boolean
+  }> {
+    try {
+      // Buscar eventos recientes del usuario (últimas 24 horas)
+      const oneDayAgo = new Date(Date.now() - 24 * 60 * 60 * 1000)
+      
+      const result = await prisma.$queryRawUnsafe<any[]>(`
+        SELECT 
+          COUNT(CASE WHEN event_type = 'LOGIN_FAILED' THEN 1 END) as failed_logins,
+          COUNT(CASE WHEN event_type = 'SUSPICIOUS_ACTIVITY' THEN 1 END) as suspicious
+        FROM security_logs
+        WHERE user_id = $1 
+          AND created_at > $2
+      `, userId, oneDayAgo)
+      
+      const stats = result[0] || { failed_logins: 0, suspicious: 0 }
+      
+      return {
+        recentFailedLogins: parseInt(stats.failed_logins) || 0,
+        suspiciousActivities: parseInt(stats.suspicious) || 0,
+        shouldBlockUser: 
+          parseInt(stats.failed_logins) > 10 || 
+          parseInt(stats.suspicious) > 5
+      }
+    } catch {
+      return {
+        recentFailedLogins: 0,
+        suspiciousActivities: 0,
+        shouldBlockUser: false
+      }
+    }
+  }
+  
+  /**
+   * Limpiar logs antiguos (mantener últimos 90 días)
+   */
+  async cleanOldLogs(): Promise<void> {
+    try {
+      const ninetyDaysAgo = new Date(Date.now() - 90 * 24 * 60 * 60 * 1000)
+      
+      await prisma.$executeRawUnsafe(`
+        DELETE FROM security_logs
+        WHERE created_at < $1
+      `, ninetyDaysAgo)
+    } catch {
+      // Ignorar si falla
+    }
+  }
+  
+  /**
+   * Destructor - limpiar interval
+   */
+  destroy(): void {
+    if (this.flushInterval) {
+      clearInterval(this.flushInterval)
+      this.flushInterval = null
+    }
+    // Flush final
+    this.flush()
+  }
+}
+
+// Exportar instancia singleton
+export const securityLogger = SecurityLogger.getInstance()

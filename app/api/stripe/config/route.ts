@@ -1,0 +1,95 @@
+import { NextRequest, NextResponse } from 'next/server'
+import { requireAuthAPI } from '@/lib/auth/actions'
+import { prisma } from '@/lib/config/prisma'
+
+export async function GET(request: NextRequest) {
+  try {
+    const session = await requireAuthAPI()
+    
+    if (!session) {
+      return NextResponse.json(
+        { success: false, error: 'No autorizado' },
+        { status: 401 }
+      )
+    }
+    const { searchParams } = new URL(request.url)
+    const bookingId = searchParams.get('bookingId')
+    
+    if (!bookingId) {
+      return NextResponse.json(
+        { success: false, error: 'bookingId is required' },
+        { status: 400 }
+      )
+    }
+
+    // Primero intentar como booking regular - filtrado por club
+    let booking = await prisma.booking.findFirst({
+      where: { 
+        id: bookingId,
+        clubId: session.clubId 
+      },
+      include: { Club: true }
+    })
+
+    let clubId = booking?.clubId
+
+    // Si no se encuentra, intentar como bookingGroup - filtrado por club
+    if (!booking) {
+      const bookingGroup = await prisma.bookingGroup.findFirst({
+        where: { 
+          id: bookingId,
+          clubId: session.clubId 
+        },
+        include: { Club: true }
+      })
+      
+      if (bookingGroup) {
+        clubId = bookingGroup.clubId
+      }
+    }
+
+    if (!clubId) {
+      return NextResponse.json(
+        { success: false, error: 'Booking not found' },
+        { status: 404 }
+      )
+    }
+
+    // Buscar configuración de Stripe del club
+    const stripeProvider = await prisma.paymentProvider.findFirst({
+      where: {
+        clubId: clubId,
+        providerId: 'stripe',
+        enabled: true
+      }
+    })
+
+    if (!stripeProvider || !stripeProvider.config) {
+      return NextResponse.json(
+        { success: false, error: 'El club no tiene configurado Stripe. Contacte al administrador.' },
+        { status: 400 }
+      )
+    }
+
+    const config = stripeProvider.config as any
+    if (!config.publicKey) {
+      return NextResponse.json(
+        { success: false, error: 'Configuración de Stripe incompleta para este club. Contacte al administrador.' },
+        { status: 400 }
+      )
+    }
+
+    return NextResponse.json({
+      success: true,
+      publicKey: config.publicKey,
+      hasClubConfig: true
+    })
+
+  } catch (error) {
+    console.error('Error fetching Stripe config:', error)
+    return NextResponse.json(
+      { success: false, error: 'Error fetching Stripe configuration' },
+      { status: 500 }
+    )
+  }
+}

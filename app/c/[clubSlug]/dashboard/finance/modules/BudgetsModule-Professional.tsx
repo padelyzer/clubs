@@ -1,0 +1,1023 @@
+'use client'
+
+import React, { useState, useEffect } from 'react'
+import { CardModern } from '@/components/design-system/CardModern'
+import { 
+  Target, TrendingUp, AlertTriangle, CheckCircle,
+  Plus, Search, Filter, Download, Calendar,
+  ChevronLeft, ChevronRight, Eye, Edit,
+  DollarSign, BarChart3, PieChart, Activity
+} from 'lucide-react'
+import { formatCurrency } from '@/lib/design-system/localization'
+import { getCategoryDisplayName } from '@/lib/utils/category-translations'
+import { format } from 'date-fns'
+import { es } from 'date-fns/locale'
+import { FinanceLoader } from '@/components/finance/FinanceLoader'
+
+interface Budget {
+  id: string
+  category: string
+  allocated: number
+  spent: number
+  remaining: number
+  percentage: number
+  status: 'on-track' | 'warning' | 'exceeded'
+  trend: 'up' | 'down' | 'stable'
+}
+
+export default function BudgetsModuleProfessional() {
+  const [searchQuery, setSearchQuery] = useState('')
+  // Initialize with current month
+  const [selectedPeriod, setSelectedPeriod] = useState(() => {
+    const now = new Date()
+    return new Date(now.getFullYear(), now.getMonth(), 1)
+  })
+  const [activeTab, setActiveTab] = useState<'overview' | 'categories' | 'analysis'>('overview')
+  const [budgets, setBudgets] = useState<Budget[]>([])
+  const [loading, setLoading] = useState(true)
+  const [exporting, setExporting] = useState(false)
+  const [initialLoad, setInitialLoad] = useState(true)
+
+  useEffect(() => {
+    fetchBudgets()
+  }, [selectedPeriod])
+
+  const fetchBudgets = async () => {
+    try {
+      setLoading(true)
+
+      if (initialLoad) {
+        await new Promise(resolve => setTimeout(resolve, 1500))
+      }
+
+      const currentMonth = format(selectedPeriod, 'yyyy-MM')
+      const response = await fetch(`/api/finance/budgets?period=${currentMonth}&withComparison=true`)
+      if (response.ok) {
+        const data = await response.json()
+        console.log('Budget API response:', data)
+
+        // Process the budget data with categories
+        const mappedBudgets: Budget[] = []
+
+        if (data.budgets && data.budgets.length > 0) {
+          const budget = data.budgets[0] // Get the first budget for the selected period
+
+          // If we have categories, map them
+          if (budget.BudgetCategory || budget.categories) {
+            // When withComparison=true, categories are in 'categories' field
+            // Otherwise they're in 'BudgetCategory' field
+            const categories = budget.categories || budget.BudgetCategory || []
+            categories.forEach((cat: any) => {
+              // Amounts are in cents, keep them in cents for consistency
+              const allocated = cat.budgetAmount || 0
+              const spent = cat.actualAmount || 0
+              const percentage = allocated > 0 ? (spent / allocated) * 100 : 0
+
+              let status: 'on-track' | 'warning' | 'exceeded' = 'on-track'
+              if (percentage >= 100) status = 'exceeded'
+              else if (percentage >= 80) status = 'warning'
+
+              mappedBudgets.push({
+                id: cat.id,
+                category: cat.category,
+                allocated,  // Keep in cents
+                spent,      // Keep in cents
+                remaining: allocated - spent,
+                percentage,
+                status,
+                trend: 'stable'
+              })
+            })
+          }
+        }
+
+        setBudgets(mappedBudgets)
+      }
+    } catch (error) {
+      console.error('Error fetching budgets:', error)
+      setBudgets([])
+    } finally {
+      setLoading(false)
+      setInitialLoad(false)
+    }
+  }
+
+  const handleExport = async () => {
+    try {
+      setExporting(true)
+      const period = format(selectedPeriod, 'yyyy-MM')
+      const response = await fetch(`/api/finance/export?type=budgets&format=csv&period=${period}`)
+      
+      if (response.ok) {
+        const blob = await response.blob()
+        const url = window.URL.createObjectURL(blob)
+        const a = document.createElement('a')
+        a.style.display = 'none'
+        a.href = url
+        a.download = `presupuestos-${period}.csv`
+        document.body.appendChild(a)
+        a.click()
+        window.URL.revokeObjectURL(url)
+      }
+    } catch (error) {
+      console.error('Error exporting budget data:', error)
+    } finally {
+      setExporting(false)
+    }
+  }
+
+  const totalBudget = budgets.reduce((sum, b) => sum + b.allocated, 0) || 0
+  const totalSpent = budgets.reduce((sum, b) => sum + b.spent, 0) || 0
+  const totalRemaining = totalBudget - totalSpent
+  const budgetUtilization = totalBudget > 0 ? (totalSpent / totalBudget) * 100 : 0
+
+  const getStatusColor = (status: string) => {
+    switch (status) {
+      case 'on-track': return '#A4DF4E'
+      case 'warning': return '#FBBF24'
+      case 'exceeded': return '#EF4444'
+      default: return '#9CA3AF'
+    }
+  }
+
+  const getStatusBg = (status: string) => {
+    switch (status) {
+      case 'on-track': return 'rgba(164, 223, 78, 0.1)'
+      case 'warning': return 'rgba(251, 191, 36, 0.1)'
+      case 'exceeded': return 'rgba(239, 68, 68, 0.1)'
+      default: return 'rgba(156, 163, 175, 0.1)'
+    }
+  }
+
+  const getStatusIcon = (status: string) => {
+    switch (status) {
+      case 'on-track': return <CheckCircle style={{ width: '14px', height: '14px', color: '#A4DF4E' }} />
+      case 'warning': return <AlertTriangle style={{ width: '14px', height: '14px', color: '#FBBF24' }} />
+      case 'exceeded': return <AlertTriangle style={{ width: '14px', height: '14px', color: '#EF4444' }} />
+      default: return null
+    }
+  }
+
+  if (loading) {
+    return (
+      <FinanceLoader
+        title="Presupuestos"
+        subtitle="Control y seguimiento de presupuestos del club"
+        selectedPeriod={selectedPeriod}
+        skeletonType="cards"
+      />
+    )
+  }
+
+  return (
+    <div style={{ padding: '32px' }}>
+      {/* Header */}
+      <div style={{ marginBottom: '32px' }}>
+        <h1 style={{
+          fontSize: '32px',
+          fontWeight: 700,
+          color: '#182A01',
+          margin: '0 0 8px 0',
+          letterSpacing: '-0.02em'
+        }}>
+          Presupuestos
+        </h1>
+        <p style={{
+          fontSize: '16px',
+          color: '#516640',
+          fontWeight: 400,
+          margin: 0
+        }}>
+          Control y seguimiento de presupuestos del club
+        </p>
+      </div>
+
+      {/* Métricas */}
+      <div style={{
+        display: 'grid',
+        gridTemplateColumns: 'repeat(4, 1fr)',
+        gap: '20px',
+        marginBottom: '32px'
+      }}>
+        <CardModern variant="glass">
+          <div style={{ padding: '24px' }}>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '12px' }}>
+              <div style={{
+                width: '40px',
+                height: '40px',
+                borderRadius: '10px',
+                background: 'rgba(59, 130, 246, 0.1)',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center'
+              }}>
+                <Target style={{ width: '20px', height: '20px', color: '#3B82F6' }} />
+              </div>
+              <span style={{ fontSize: '12px', color: '#516640', fontWeight: 600 }}>Anual</span>
+            </div>
+            <p style={{ fontSize: '12px', color: '#516640', marginBottom: '4px' }}>Presupuesto Total</p>
+            <p style={{ fontSize: '24px', fontWeight: 700, color: '#182A01' }}>
+              {formatCurrency(totalBudget / 100)}
+            </p>
+          </div>
+        </CardModern>
+
+        <CardModern variant="glass">
+          <div style={{ padding: '24px' }}>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '12px' }}>
+              <div style={{
+                width: '40px',
+                height: '40px',
+                borderRadius: '10px',
+                background: 'rgba(239, 68, 68, 0.1)',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center'
+              }}>
+                <DollarSign style={{ width: '20px', height: '20px', color: '#EF4444' }} />
+              </div>
+              <span style={{ fontSize: '12px', color: '#516640', fontWeight: 600 }}>
+                {budgetUtilization.toFixed(0)}%
+              </span>
+            </div>
+            <p style={{ fontSize: '12px', color: '#516640', marginBottom: '4px' }}>Ejecutado</p>
+            <p style={{ fontSize: '24px', fontWeight: 700, color: '#182A01' }}>
+              {formatCurrency(totalSpent / 100)}
+            </p>
+          </div>
+        </CardModern>
+
+        <CardModern variant="glass">
+          <div style={{ padding: '24px' }}>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '12px' }}>
+              <div style={{
+                width: '40px',
+                height: '40px',
+                borderRadius: '10px',
+                background: 'rgba(164, 223, 78, 0.1)',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center'
+              }}>
+                <TrendingUp style={{ width: '20px', height: '20px', color: '#A4DF4E' }} />
+              </div>
+              <span style={{ fontSize: '12px', color: '#A4DF4E', fontWeight: 600 }}>
+                {(100 - budgetUtilization).toFixed(0)}%
+              </span>
+            </div>
+            <p style={{ fontSize: '12px', color: '#516640', marginBottom: '4px' }}>Disponible</p>
+            <p style={{ fontSize: '24px', fontWeight: 700, color: '#182A01' }}>
+              {formatCurrency(totalRemaining / 100)}
+            </p>
+          </div>
+        </CardModern>
+
+        <CardModern variant="glass">
+          <div style={{ padding: '24px' }}>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '12px' }}>
+              <div style={{
+                width: '40px',
+                height: '40px',
+                borderRadius: '10px',
+                background: 'rgba(251, 191, 36, 0.1)',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center'
+              }}>
+                <AlertTriangle style={{ width: '20px', height: '20px', color: '#FBBF24' }} />
+              </div>
+              <span style={{ fontSize: '12px', color: '#FBBF24', fontWeight: 600 }}>
+                {budgets.filter(b => b.status === 'warning' || b.status === 'exceeded').length}
+              </span>
+            </div>
+            <p style={{ fontSize: '12px', color: '#516640', marginBottom: '4px' }}>Alertas</p>
+            <p style={{ fontSize: '24px', fontWeight: 700, color: '#182A01' }}>
+              {budgets.filter(b => b.status === 'exceeded').length} Excedidos
+            </p>
+          </div>
+        </CardModern>
+      </div>
+
+      {/* Tabs */}
+      <div style={{ 
+        display: 'flex', 
+        gap: '8px',
+        marginBottom: '24px',
+        borderBottom: '1px solid rgba(164, 223, 78, 0.1)',
+        paddingBottom: '2px'
+      }}>
+        <button
+          onClick={() => setActiveTab('overview')}
+          style={{
+            padding: '10px 20px',
+            background: 'transparent',
+            border: 'none',
+            color: activeTab === 'overview' ? '#182A01' : '#516640',
+            fontSize: '14px',
+            fontWeight: activeTab === 'overview' ? 600 : 500,
+            cursor: 'pointer',
+            borderBottom: activeTab === 'overview' ? '2px solid #A4DF4E' : '2px solid transparent',
+            transition: 'all 0.2s'
+          }}
+        >
+          Vista General
+        </button>
+        <button
+          onClick={() => setActiveTab('categories')}
+          style={{
+            padding: '10px 20px',
+            background: 'transparent',
+            border: 'none',
+            color: activeTab === 'categories' ? '#182A01' : '#516640',
+            fontSize: '14px',
+            fontWeight: activeTab === 'categories' ? 600 : 500,
+            cursor: 'pointer',
+            borderBottom: activeTab === 'categories' ? '2px solid #A4DF4E' : '2px solid transparent',
+            transition: 'all 0.2s'
+          }}
+        >
+          Por Categorías
+        </button>
+        <button
+          onClick={() => setActiveTab('analysis')}
+          style={{
+            padding: '10px 20px',
+            background: 'transparent',
+            border: 'none',
+            color: activeTab === 'analysis' ? '#182A01' : '#516640',
+            fontSize: '14px',
+            fontWeight: activeTab === 'analysis' ? 600 : 500,
+            cursor: 'pointer',
+            borderBottom: activeTab === 'analysis' ? '2px solid #A4DF4E' : '2px solid transparent',
+            transition: 'all 0.2s'
+          }}
+        >
+          Análisis y Proyecciones
+        </button>
+      </div>
+
+      {/* Content */}
+      <div style={{
+        display: 'grid',
+        gridTemplateColumns: '1fr 380px',
+        gap: '24px'
+      }}>
+        {/* Main Content */}
+        <CardModern variant="glass">
+          <div style={{ padding: '24px' }}>
+            {/* Header */}
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '20px' }}>
+              <h3 style={{
+                fontSize: '18px',
+                fontWeight: 600,
+                color: '#182A01'
+              }}>
+                {activeTab === 'overview' && 'Estado de Presupuestos'}
+                {activeTab === 'categories' && 'Presupuesto por Categorías'}
+                {activeTab === 'analysis' && 'Análisis y Proyecciones'}
+              </h3>
+              <div style={{ display: 'flex', gap: '8px' }}>
+                <button
+                  style={{
+                    padding: '8px 16px',
+                    borderRadius: '10px',
+                    border: '1px solid rgba(164, 223, 78, 0.2)',
+                    background: 'white',
+                    color: '#516640',
+                    fontSize: '14px',
+                    fontWeight: 500,
+                    cursor: 'pointer',
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '6px'
+                  }}
+                >
+                  <Filter style={{ width: '14px', height: '14px' }} />
+                  Filtrar
+                </button>
+                <button
+                  style={{
+                    padding: '8px 16px',
+                    borderRadius: '10px',
+                    border: 'none',
+                    background: 'linear-gradient(135deg, #66E7AA 0%, #A4DF4E 100%)',
+                    color: '#182A01',
+                    fontSize: '14px',
+                    fontWeight: 600,
+                    cursor: 'pointer',
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '6px'
+                  }}
+                >
+                  <Plus style={{ width: '14px', height: '14px' }} />
+                  Nuevo Presupuesto
+                </button>
+              </div>
+            </div>
+
+            {/* Search */}
+            <div style={{ position: 'relative', marginBottom: '20px' }}>
+              <Search style={{
+                position: 'absolute',
+                left: '12px',
+                top: '50%',
+                transform: 'translateY(-50%)',
+                width: '16px',
+                height: '16px',
+                color: '#516640'
+              }} />
+              <input
+                type="text"
+                placeholder="Buscar categoría o presupuesto..."
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                style={{
+                  width: '100%',
+                  padding: '10px 12px 10px 36px',
+                  borderRadius: '10px',
+                  border: '1px solid rgba(164, 223, 78, 0.2)',
+                  background: 'white',
+                  fontSize: '14px',
+                  color: '#182A01',
+                  outline: 'none'
+                }}
+              />
+            </div>
+
+            {/* Content based on tab */}
+            {activeTab === 'overview' && (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+                {budgets.map((budget, index) => (
+                  <div
+                    key={budget.id}
+                    style={{
+                      padding: '16px',
+                      borderRadius: '12px',
+                      border: '1px solid rgba(164, 223, 78, 0.15)',
+                      background: 'rgba(255, 255, 255, 0.5)',
+                      backdropFilter: 'blur(10px)',
+                      transition: 'all 0.3s ease'
+                    }}
+                  >
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '12px' }}>
+                      <div>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '4px' }}>
+                          <h4 style={{ fontSize: '14px', fontWeight: 600, color: '#182A01' }}>
+                            {getCategoryDisplayName(budget.category)}
+                          </h4>
+                          <span style={{
+                            display: 'flex',
+                            alignItems: 'center',
+                            gap: '4px',
+                            fontSize: '11px',
+                            padding: '2px 8px',
+                            borderRadius: '12px',
+                            background: getStatusBg(budget.status),
+                            color: getStatusColor(budget.status)
+                          }}>
+                            {getStatusIcon(budget.status)}
+                            {budget.status === 'on-track' && 'En curso'}
+                            {budget.status === 'warning' && 'Atención'}
+                            {budget.status === 'exceeded' && 'Excedido'}
+                          </span>
+                        </div>
+                        <p style={{ fontSize: '12px', color: '#516640' }}>
+                          {formatCurrency(budget.spent / 100)} de {formatCurrency(budget.allocated / 100)}
+                        </p>
+                      </div>
+                      <div style={{ textAlign: 'right' }}>
+                        <p style={{
+                          fontSize: '16px',
+                          fontWeight: 600,
+                          color: budget.remaining < 0 ? '#EF4444' : '#182A01'
+                        }}>
+                          {budget.remaining < 0 ? '-' : ''}{formatCurrency(Math.abs(budget.remaining) / 100)}
+                        </p>
+                        <p style={{ fontSize: '11px', color: '#516640' }}>
+                          {budget.remaining < 0 ? 'Excedido' : 'Disponible'}
+                        </p>
+                      </div>
+                    </div>
+                    <div style={{
+                      height: '8px',
+                      background: 'rgba(164, 223, 78, 0.1)',
+                      borderRadius: '4px',
+                      overflow: 'hidden',
+                      position: 'relative'
+                    }}>
+                      <div style={{
+                        width: `${Math.min(budget.percentage, 100)}%`,
+                        height: '100%',
+                        background: budget.percentage > 100 
+                          ? '#EF4444'
+                          : budget.percentage > 80 
+                          ? '#FBBF24' 
+                          : '#A4DF4E',
+                        borderRadius: '4px',
+                        transition: 'width 0.5s ease'
+                      }} />
+                      {budget.percentage > 100 && (
+                        <div style={{
+                          position: 'absolute',
+                          right: '0',
+                          top: '0',
+                          height: '100%',
+                          width: `${budget.percentage - 100}%`,
+                          background: 'repeating-linear-gradient(45deg, #EF4444, #EF4444 4px, #DC2626 4px, #DC2626 8px)',
+                          borderRadius: '0 4px 4px 0'
+                        }} />
+                      )}
+                    </div>
+                    <div style={{
+                      display: 'flex',
+                      justifyContent: 'space-between',
+                      marginTop: '8px'
+                    }}>
+                      <span style={{ fontSize: '11px', color: '#516640' }}>
+                        {budget.percentage.toFixed(1)}% utilizado
+                      </span>
+                      <span style={{
+                        fontSize: '11px',
+                        color: budget.trend === 'up' ? '#EF4444' : 
+                               budget.trend === 'down' ? '#A4DF4E' : '#9CA3AF'
+                      }}>
+                        {budget.trend === 'up' && '↑ Aumentando'}
+                        {budget.trend === 'down' && '↓ Disminuyendo'}
+                        {budget.trend === 'stable' && '→ Estable'}
+                      </span>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+
+            {activeTab === 'categories' && (
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: '16px' }}>
+                {budgets.map((budget, index) => (
+                  <div
+                    key={budget.id}
+                    style={{
+                      padding: '20px',
+                      borderRadius: '12px',
+                      border: '1px solid rgba(164, 223, 78, 0.15)',
+                      background: 'rgba(255, 255, 255, 0.5)',
+                      backdropFilter: 'blur(10px)',
+                      cursor: 'pointer',
+                      transition: 'all 0.3s ease'
+                    }}
+                    onMouseEnter={(e) => {
+                      e.currentTarget.style.borderColor = getStatusColor(budget.status) + '40'
+                      e.currentTarget.style.transform = 'translateY(-4px)'
+                      e.currentTarget.style.boxShadow = '0 8px 24px rgba(0, 0, 0, 0.08)'
+                    }}
+                    onMouseLeave={(e) => {
+                      e.currentTarget.style.borderColor = 'rgba(164, 223, 78, 0.15)'
+                      e.currentTarget.style.transform = 'translateY(0)'
+                      e.currentTarget.style.boxShadow = 'none'
+                    }}
+                  >
+                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '16px' }}>
+                      <div style={{
+                        width: '40px',
+                        height: '40px',
+                        borderRadius: '10px',
+                        background: getStatusBg(budget.status),
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center'
+                      }}>
+                        <BarChart3 style={{ width: '20px', height: '20px', color: getStatusColor(budget.status) }} />
+                      </div>
+                      {getStatusIcon(budget.status)}
+                    </div>
+                    <h4 style={{ fontSize: '14px', fontWeight: 600, color: '#182A01', marginBottom: '8px' }}>
+                      {getCategoryDisplayName(budget.category)}
+                    </h4>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '12px' }}>
+                      <div>
+                        <p style={{ fontSize: '11px', color: '#516640', marginBottom: '2px' }}>Asignado</p>
+                        <p style={{ fontSize: '14px', fontWeight: 600, color: '#182A01' }}>
+                          {formatCurrency(budget.allocated / 100)}
+                        </p>
+                      </div>
+                      <div>
+                        <p style={{ fontSize: '11px', color: '#516640', marginBottom: '2px' }}>Gastado</p>
+                        <p style={{ fontSize: '14px', fontWeight: 600, color: getStatusColor(budget.status) }}>
+                          {formatCurrency(budget.spent / 100)}
+                        </p>
+                      </div>
+                    </div>
+                    <div style={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      padding: '8px',
+                      borderRadius: '8px',
+                      background: getStatusBg(budget.status)
+                    }}>
+                      <span style={{
+                        fontSize: '20px',
+                        fontWeight: 700,
+                        color: getStatusColor(budget.status)
+                      }}>
+                        {budget.percentage.toFixed(0)}%
+                      </span>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+
+            {activeTab === 'analysis' && (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
+                {/* Proyección Mensual */}
+                <div>
+                  <h4 style={{ fontSize: '16px', fontWeight: 600, color: '#182A01', marginBottom: '16px' }}>
+                    Proyección de Gastos
+                  </h4>
+                  <div style={{
+                    padding: '16px',
+                    borderRadius: '12px',
+                    background: 'linear-gradient(135deg, rgba(59, 130, 246, 0.05), rgba(164, 223, 78, 0.05))'
+                  }}>
+                    <p style={{ fontSize: '13px', color: '#516640', marginBottom: '8px' }}>
+                      Basado en el ritmo actual de gastos
+                    </p>
+                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '16px' }}>
+                      {(() => {
+                        // Calcular proyecciones más inteligentes
+                        const currentMonthSpent = budgets.reduce((sum, b) => sum + b.spent, 0)
+                        const currentMonthBudget = budgets.reduce((sum, b) => sum + b.allocated, 0)
+
+                        // Calcular el día actual del mes
+                        const now = new Date()
+                        const daysInMonth = new Date(now.getFullYear(), now.getMonth() + 1, 0).getDate()
+                        const currentDay = now.getDate()
+                        const daysRemaining = daysInMonth - currentDay
+
+                        // Proyección fin de mes basada en ritmo actual
+                        const dailyAverage = currentMonthSpent / currentDay
+                        const projectedEndOfMonth = currentMonthSpent + (dailyAverage * daysRemaining)
+
+                        // Proyección trimestral considerando presupuesto vs gasto real
+                        const spendingRate = currentMonthBudget > 0 ? currentMonthSpent / currentMonthBudget : 1
+                        const quarterProjection = currentMonthBudget * 3 * spendingRate
+
+                        // Proyección anual con factor de ajuste estacional
+                        const yearProjection = currentMonthBudget * 12 * spendingRate * 0.95 // 5% de optimización esperada
+
+                        return [
+                          { label: 'Fin de mes', value: Math.floor(projectedEndOfMonth), color: '#182A01' },
+                          { label: 'Próximo trimestre', value: Math.floor(quarterProjection), color: '#3B82F6' },
+                          { label: 'Fin de año', value: Math.floor(yearProjection), color: '#9333EA' }
+                        ]
+                      })().map((projection, index) => (
+                        <div key={index}>
+                          <p style={{ fontSize: '11px', color: '#516640', marginBottom: '4px' }}>{projection.label}</p>
+                          <p style={{ fontSize: '18px', fontWeight: 600, color: projection.color }}>
+                            {formatCurrency(projection.value / 100)}
+                          </p>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                </div>
+
+                {/* Recomendaciones */}
+                <div>
+                  <h4 style={{ fontSize: '16px', fontWeight: 600, color: '#182A01', marginBottom: '16px' }}>
+                    Recomendaciones de Optimización
+                  </h4>
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+                    {(() => {
+                      // Generar recomendaciones basadas en datos reales
+                      const recommendations = []
+
+                      // Analizar categorías con mayor gasto
+                      const sortedBudgets = [...budgets].sort((a, b) => b.spent - a.spent)
+
+                      sortedBudgets.slice(0, 3).forEach(budget => {
+                        if (budget.percentage > 80) {
+                          const potentialSaving = Math.floor(budget.spent * 0.1) // 10% de ahorro potencial
+                          let impact = 'Bajo'
+                          if (potentialSaving > 100000) impact = 'Alto'
+                          else if (potentialSaving > 50000) impact = 'Medio'
+
+                          recommendations.push({
+                            title: `Optimizar ${getCategoryDisplayName(budget.category)}`,
+                            saving: potentialSaving,
+                            impact: impact
+                          })
+                        }
+                      })
+
+                      // Si no hay recomendaciones basadas en gastos excesivos, mostrar genéricas
+                      if (recommendations.length === 0) {
+                        const totalSpent = budgets.reduce((sum, b) => sum + b.spent, 0)
+                        if (totalSpent > 0) {
+                          recommendations.push({
+                            title: 'Mantener control de gastos',
+                            saving: Math.floor(totalSpent * 0.05),
+                            impact: 'Medio'
+                          })
+                        }
+                      }
+
+                      return recommendations
+                    })().map((rec, index) => (
+                      <div
+                        key={index}
+                        style={{
+                          padding: '12px',
+                          borderRadius: '10px',
+                          border: '1px solid rgba(164, 223, 78, 0.15)',
+                          background: 'white',
+                          display: 'flex',
+                          justifyContent: 'space-between',
+                          alignItems: 'center'
+                        }}
+                      >
+                        <div>
+                          <p style={{ fontSize: '13px', fontWeight: 500, color: '#182A01' }}>
+                            {rec.title}
+                          </p>
+                          <p style={{ fontSize: '11px', color: '#516640' }}>
+                            Impacto: {rec.impact}
+                          </p>
+                        </div>
+                        <div style={{ textAlign: 'right' }}>
+                          <p style={{ fontSize: '14px', fontWeight: 600, color: '#A4DF4E' }}>
+                            +{formatCurrency(rec.saving / 100)}
+                          </p>
+                          <p style={{ fontSize: '11px', color: '#516640' }}>ahorro/mes</p>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              </div>
+            )}
+          </div>
+        </CardModern>
+
+        {/* Sidebar */}
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
+          {/* Period Selector */}
+          <CardModern variant="glass">
+            <div style={{ padding: '24px' }}>
+              <div style={{
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'space-between',
+                marginBottom: '20px'
+              }}>
+                <h3 style={{
+                  fontSize: '16px',
+                  fontWeight: 600,
+                  color: '#182A01'
+                }}>
+                  {format(selectedPeriod, 'MMMM yyyy', { locale: es })}
+                </h3>
+                <div style={{ display: 'flex', gap: '8px' }}>
+                  <button
+                    onClick={() => {
+                      const newDate = new Date(selectedPeriod)
+                      newDate.setMonth(newDate.getMonth() - 1)
+                      setSelectedPeriod(newDate)
+                    }}
+                    style={{
+                      width: '32px',
+                      height: '32px',
+                      borderRadius: '8px',
+                      border: '1px solid rgba(164, 223, 78, 0.2)',
+                      background: 'white',
+                      cursor: 'pointer',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center'
+                    }}
+                  >
+                    <ChevronLeft style={{ width: '16px', height: '16px', color: '#516640' }} />
+                  </button>
+                  <button
+                    onClick={() => {
+                      const newDate = new Date(selectedPeriod)
+                      newDate.setMonth(newDate.getMonth() + 1)
+                      setSelectedPeriod(newDate)
+                    }}
+                    style={{
+                      width: '32px',
+                      height: '32px',
+                      borderRadius: '8px',
+                      border: '1px solid rgba(164, 223, 78, 0.2)',
+                      background: 'white',
+                      cursor: 'pointer',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center'
+                    }}
+                  >
+                    <ChevronRight style={{ width: '16px', height: '16px', color: '#516640' }} />
+                  </button>
+                </div>
+              </div>
+
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                  <span style={{ fontSize: '14px', color: '#516640' }}>Presupuesto</span>
+                  <span style={{ fontSize: '14px', fontWeight: 600, color: '#3B82F6' }}>
+                    {formatCurrency(totalBudget / 100)}
+                  </span>
+                </div>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                  <span style={{ fontSize: '14px', color: '#516640' }}>Ejecutado</span>
+                  <span style={{ fontSize: '14px', fontWeight: 600, color: '#EF4444' }}>
+                    {formatCurrency(totalSpent / 100)}
+                  </span>
+                </div>
+                <div style={{
+                  borderTop: '1px solid rgba(164, 223, 78, 0.1)',
+                  paddingTop: '12px',
+                  display: 'flex',
+                  justifyContent: 'space-between',
+                  alignItems: 'center'
+                }}>
+                  <span style={{ fontSize: '14px', fontWeight: 600, color: '#182A01' }}>Disponible</span>
+                  <span style={{ fontSize: '18px', fontWeight: 700, color: '#A4DF4E' }}>
+                    {formatCurrency(totalRemaining / 100)}
+                  </span>
+                </div>
+              </div>
+            </div>
+          </CardModern>
+
+          {/* Quick Actions */}
+          <CardModern variant="glass">
+            <div style={{ padding: '24px' }}>
+              <h3 style={{
+                fontSize: '16px',
+                fontWeight: 600,
+                color: '#182A01',
+                marginBottom: '16px'
+              }}>
+                Acciones Rápidas
+              </h3>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+                <button
+                  style={{
+                    width: '100%',
+                    padding: '12px 16px',
+                    borderRadius: '10px',
+                    border: '1px solid rgba(164, 223, 78, 0.2)',
+                    background: 'white',
+                    color: '#182A01',
+                    fontSize: '14px',
+                    fontWeight: 500,
+                    cursor: 'pointer',
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '8px',
+                    transition: 'all 0.2s'
+                  }}
+                  onMouseEnter={(e) => {
+                    e.currentTarget.style.background = 'rgba(164, 223, 78, 0.05)'
+                  }}
+                  onMouseLeave={(e) => {
+                    e.currentTarget.style.background = 'white'
+                  }}
+                >
+                  <Target style={{ width: '16px', height: '16px' }} />
+                  Ajustar Presupuesto
+                </button>
+                <button
+                  style={{
+                    width: '100%',
+                    padding: '12px 16px',
+                    borderRadius: '10px',
+                    border: '1px solid rgba(164, 223, 78, 0.2)',
+                    background: 'white',
+                    color: '#182A01',
+                    fontSize: '14px',
+                    fontWeight: 500,
+                    cursor: 'pointer',
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '8px',
+                    transition: 'all 0.2s'
+                  }}
+                  onMouseEnter={(e) => {
+                    e.currentTarget.style.background = 'rgba(164, 223, 78, 0.05)'
+                  }}
+                  onMouseLeave={(e) => {
+                    e.currentTarget.style.background = 'white'
+                  }}
+                >
+                  <BarChart3 style={{ width: '16px', height: '16px' }} />
+                  Ver Tendencias
+                </button>
+                <button
+                  onClick={handleExport}
+                  disabled={exporting}
+                  style={{
+                    width: '100%',
+                    padding: '12px 16px',
+                    borderRadius: '10px',
+                    border: '1px solid rgba(164, 223, 78, 0.2)',
+                    background: 'white',
+                    color: '#182A01',
+                    fontSize: '14px',
+                    fontWeight: 500,
+                    cursor: exporting ? 'wait' : 'pointer',
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '8px',
+                    transition: 'all 0.2s',
+                    opacity: exporting ? 0.6 : 1
+                  }}
+                  onMouseEnter={(e) => {
+                    if (!exporting) e.currentTarget.style.background = 'rgba(164, 223, 78, 0.05)'
+                  }}
+                  onMouseLeave={(e) => {
+                    e.currentTarget.style.background = 'white'
+                  }}
+                >
+                  <Download style={{ width: '16px', height: '16px' }} />
+                  {exporting ? 'Exportando...' : 'Exportar Reporte'}
+                </button>
+              </div>
+            </div>
+          </CardModern>
+
+          {/* Estado General */}
+          <CardModern variant="glass">
+            <div style={{ padding: '24px' }}>
+              <h3 style={{
+                fontSize: '16px',
+                fontWeight: 600,
+                color: '#182A01',
+                marginBottom: '16px'
+              }}>
+                Estado del Presupuesto
+              </h3>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+                <div style={{
+                  padding: '12px',
+                  borderRadius: '8px',
+                  background: 'rgba(164, 223, 78, 0.05)',
+                  border: '1px solid rgba(164, 223, 78, 0.2)'
+                }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '4px' }}>
+                    <CheckCircle style={{ width: '14px', height: '14px', color: '#A4DF4E' }} />
+                    <span style={{ fontSize: '12px', fontWeight: 600, color: '#182A01' }}>
+                      Bajo Control
+                    </span>
+                  </div>
+                  <p style={{ fontSize: '11px', color: '#516640' }}>
+                    {budgets.filter(b => b.status === 'on-track').length} categorías en curso
+                  </p>
+                </div>
+                
+                <div style={{
+                  padding: '12px',
+                  borderRadius: '8px',
+                  background: 'rgba(251, 191, 36, 0.05)',
+                  border: '1px solid rgba(251, 191, 36, 0.2)'
+                }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '4px' }}>
+                    <AlertTriangle style={{ width: '14px', height: '14px', color: '#FBBF24' }} />
+                    <span style={{ fontSize: '12px', fontWeight: 600, color: '#182A01' }}>
+                      Requiere Atención
+                    </span>
+                  </div>
+                  <p style={{ fontSize: '11px', color: '#516640' }}>
+                    {budgets.filter(b => b.status === 'warning').length} categorías cerca del límite
+                  </p>
+                </div>
+
+                {budgets.filter(b => b.status === 'exceeded').length > 0 && (
+                  <div style={{
+                    padding: '12px',
+                    borderRadius: '8px',
+                    background: 'rgba(239, 68, 68, 0.05)',
+                    border: '1px solid rgba(239, 68, 68, 0.2)'
+                  }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '4px' }}>
+                      <AlertTriangle style={{ width: '14px', height: '14px', color: '#EF4444' }} />
+                      <span style={{ fontSize: '12px', fontWeight: 600, color: '#182A01' }}>
+                        Presupuesto Excedido
+                      </span>
+                    </div>
+                    <p style={{ fontSize: '11px', color: '#516640' }}>
+                      {budgets.filter(b => b.status === 'exceeded').length} categorías excedidas
+                    </p>
+                  </div>
+                )}
+              </div>
+            </div>
+          </CardModern>
+        </div>
+      </div>
+    </div>
+  )
+}

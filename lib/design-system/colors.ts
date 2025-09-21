@@ -1,0 +1,245 @@
+/**
+ * Professional Sports Design System Color Palette
+ * Padelyzer - Fresh green color scheme for sports management
+ */
+
+export const colors = {
+  // Primary - Lime Green (for main actions and brand)
+  primary: {
+    50: '#f7fee7',
+    100: '#ecfccb',
+    200: '#d9f99d',
+    300: '#bef264',
+    400: '#a3e635',
+    500: '#84cc16',
+    600: '#A4DF4E', // Main primary - Lime green
+    700: '#7cb342',
+    800: '#689f38',
+    900: '#182A01', // Dark green
+  },
+
+  // Secondary - Dark Green (for secondary UI elements)
+  secondary: {
+    50: '#f3f7f0',
+    100: '#e7efe1',
+    200: '#c3d7b4',
+    300: '#9fbf87',
+    400: '#7ba75a',
+    500: '#5a8f3a',
+    600: '#3d6b1f', // Main secondary
+    700: '#2d5217',
+    800: '#1e3a0f',
+    900: '#182A01', // Dark green
+  },
+
+  // Accent - Turquoise (for success and courts)
+  accent: {
+    50: '#e6fef5',
+    100: '#ccfce9',
+    200: '#99f9d3',
+    300: '#66E7AA', // Main accent - Turquoise
+    400: '#33dd8a',
+    500: '#22c55e',
+    600: '#16a34a',
+    700: '#15803d',
+    800: '#166534',
+    900: '#14532d',
+  },
+
+  // Warning - Amber (for warnings and pending states)
+  warning: {
+    50: '#fffbeb',
+    100: '#fef3c7',
+    200: '#fde68a',
+    300: '#fcd34d',
+    400: '#fbbf24',
+    500: '#f59e0b',
+    600: '#d97706', // Main warning
+    700: '#b45309',
+    800: '#92400e',
+    900: '#78350f',
+  },
+
+  // Danger - Rose Red (for errors and cancellations)
+  danger: {
+    50: '#fff1f2',
+    100: '#ffe4e6',
+    200: '#fecdd3',
+    300: '#fda4af',
+    400: '#fb7185',
+    500: '#f43f5e',
+    600: '#e11d48', // Main danger
+    700: '#be123c',
+    800: '#9f1239',
+    900: '#881337',
+  },
+
+  // Info - Sky Blue (for information)
+  info: {
+    50: '#f0f9ff',
+    100: '#e0f2fe',
+    200: '#bae6fd',
+    300: '#7dd3fc',
+    400: '#38bdf8',
+    500: '#0ea5e9',
+    600: '#0284c7', // Main info
+    700: '#0369a1',
+    800: '#075985',
+    900: '#0c4a6e',
+  },
+
+  // Neutral - Gray/Green tinted (for text and backgrounds)
+  neutral: {
+    0: '#ffffff',
+    50: '#f7f9f6',
+    100: '#f0f4ed',
+    200: '#e2e8dd',
+    300: '#c9d3c0',
+    400: '#a1b194',
+    500: '#708561',
+    600: '#516640',
+    700: '#3a4d2b',
+    800: '#2a3a1e',
+    900: '#182A01',
+    950: '#0d1500',
+  },
+
+  // Sport specific colors
+  sport: {
+    court: '#66E7AA', // Turquoise for courts
+    match: '#A4DF4E', // Lime for matches
+    tournament: '#7cb342', // Green for tournaments
+    ranking: '#f59e0b', // Gold for rankings
+    player: '#66E7AA', // Turquoise for players
+  },
+
+  // Background colors
+  background: {
+    primary: '#ffffff',
+    secondary: '#f7f9f6',
+    tertiary: '#f0f4ed',
+    elevated: '#ffffff',
+    overlay: 'rgba(24, 42, 1, 0.5)',
+  },
+
+  // Text colors
+  text: {
+    primary: '#182A01',
+    secondary: '#3a4d2b',
+    tertiary: '#516640',
+    disabled: '#a1b194',
+    inverse: '#ffffff',
+  },
+
+  // Border colors
+  border: {
+    default: '#e2e8dd',
+    light: '#f0f4ed',
+    dark: '#c9d3c0',
+    focus: '#A4DF4E',
+  },
+}
+
+// Semantic color aliases
+export const semanticColors = {
+  // Actions
+  action: {
+    primary: colors.primary[600],
+    primaryHover: colors.primary[700],
+    primaryActive: colors.primary[800],
+    secondary: colors.secondary[600],
+    secondaryHover: colors.secondary[700],
+    secondaryActive: colors.secondary[800],
+  },
+
+  // States
+  state: {
+    success: colors.accent[600],
+    warning: colors.warning[600],
+    error: colors.danger[600],
+    info: colors.info[600],
+  },
+
+  // UI
+  ui: {
+    background: colors.background.primary,
+    backgroundAlt: colors.background.secondary,
+    border: colors.border.default,
+    borderFocus: colors.border.focus,
+    text: colors.text.primary,
+    textMuted: colors.text.secondary,
+  },
+}
+
+// Export a function to get CSS variables
+export function getCSSVariables() {
+  return `
+    :root {
+      /* Primary colors */
+      --color-primary-50: ${colors.primary[50]};
+      --color-primary-100: ${colors.primary[100]};
+      --color-primary-200: ${colors.primary[200]};
+      --color-primary-300: ${colors.primary[300]};
+      --color-primary-400: ${colors.primary[400]};
+      --color-primary-500: ${colors.primary[500]};
+      --color-primary-600: ${colors.primary[600]};
+      --color-primary-700: ${colors.primary[700]};
+      --color-primary-800: ${colors.primary[800]};
+      --color-primary-900: ${colors.primary[900]};
+
+      /* Secondary colors */
+      --color-secondary-50: ${colors.secondary[50]};
+      --color-secondary-100: ${colors.secondary[100]};
+      --color-secondary-200: ${colors.secondary[200]};
+      --color-secondary-300: ${colors.secondary[300]};
+      --color-secondary-400: ${colors.secondary[400]};
+      --color-secondary-500: ${colors.secondary[500]};
+      --color-secondary-600: ${colors.secondary[600]};
+      --color-secondary-700: ${colors.secondary[700]};
+      --color-secondary-800: ${colors.secondary[800]};
+      --color-secondary-900: ${colors.secondary[900]};
+
+      /* Accent colors */
+      --color-accent: ${colors.accent[600]};
+      --color-accent-hover: ${colors.accent[700]};
+      
+      /* State colors */
+      --color-success: ${colors.accent[600]};
+      --color-warning: ${colors.warning[600]};
+      --color-danger: ${colors.danger[600]};
+      --color-info: ${colors.info[600]};
+
+      /* Neutral colors */
+      --color-white: ${colors.neutral[0]};
+      --color-black: ${colors.neutral[950]};
+      --color-gray-50: ${colors.neutral[50]};
+      --color-gray-100: ${colors.neutral[100]};
+      --color-gray-200: ${colors.neutral[200]};
+      --color-gray-300: ${colors.neutral[300]};
+      --color-gray-400: ${colors.neutral[400]};
+      --color-gray-500: ${colors.neutral[500]};
+      --color-gray-600: ${colors.neutral[600]};
+      --color-gray-700: ${colors.neutral[700]};
+      --color-gray-800: ${colors.neutral[800]};
+      --color-gray-900: ${colors.neutral[900]};
+
+      /* Background colors */
+      --color-bg-primary: ${colors.background.primary};
+      --color-bg-secondary: ${colors.background.secondary};
+      --color-bg-tertiary: ${colors.background.tertiary};
+
+      /* Text colors */
+      --color-text-primary: ${colors.text.primary};
+      --color-text-secondary: ${colors.text.secondary};
+      --color-text-tertiary: ${colors.text.tertiary};
+      --color-text-disabled: ${colors.text.disabled};
+      --color-text-inverse: ${colors.text.inverse};
+
+      /* Border colors */
+      --color-border: ${colors.border.default};
+      --color-border-light: ${colors.border.light};
+      --color-border-dark: ${colors.border.dark};
+      --color-border-focus: ${colors.border.focus};
+    }
+  `;
+}

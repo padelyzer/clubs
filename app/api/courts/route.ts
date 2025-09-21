@@ -1,0 +1,105 @@
+import { NextRequest, NextResponse } from 'next/server'
+import { requireAuthAPI } from '@/lib/auth/actions'
+import { prisma } from '@/lib/config/prisma'
+
+export async function GET(request: NextRequest) {
+  try {
+    const auth = await requireAuthAPI()
+    
+    if (!auth.clubId) {
+      return NextResponse.json(
+        { error: 'No autorizado' },
+        { status: 401 }
+      )
+    }
+
+    const courts = await prisma.court.findMany({
+      where: {
+        clubId: auth.clubId,
+        active: true
+      },
+      orderBy: {
+        order: 'asc'
+      },
+      select: {
+        id: true,
+        name: true,
+        indoor: true,
+        order: true,
+        active: true
+      }
+    })
+
+    // Add price per hour (mock data for now since it's not in the schema)
+    const courtsWithPricing = courts.map(court => ({
+      ...court,
+      type: court.indoor ? 'Interior' : 'Exterior',
+      pricePerHour: 500 // Default price in pesos
+    }))
+
+    return NextResponse.json({
+      success: true,
+      courts: courtsWithPricing
+    })
+  } catch (error) {
+    console.error('Error fetching courts:', error)
+    return NextResponse.json(
+      { success: false, error: 'Error al obtener las canchas' },
+      { status: 500 }
+    )
+  }
+}
+
+export async function POST(request: NextRequest) {
+  try {
+    const auth = await requireAuthAPI()
+    
+    if (!auth.clubId) {
+      return NextResponse.json(
+        { error: 'No autorizado' },
+        { status: 401 }
+      )
+    }
+
+    const body = await request.json()
+    const { name, indoor } = body
+
+    if (!name) {
+      return NextResponse.json(
+        { error: 'El nombre de la cancha es requerido' },
+        { status: 400 }
+      )
+    }
+
+    // Get the next order number
+    const lastCourt = await prisma.court.findFirst({
+      where: {
+        clubId: auth.clubId
+      },
+      orderBy: {
+        order: 'desc'
+      }
+    })
+
+    const court = await prisma.court.create({
+      data: {
+        clubId: auth.clubId,
+        name,
+        indoor: indoor || false,
+        order: (lastCourt?.order || 0) + 1,
+        active: true
+      }
+    })
+
+    return NextResponse.json({
+      success: true,
+      court
+    })
+  } catch (error) {
+    console.error('Error creating court:', error)
+    return NextResponse.json(
+      { success: false, error: 'Error al crear la cancha' },
+      { status: 500 }
+    )
+  }
+}

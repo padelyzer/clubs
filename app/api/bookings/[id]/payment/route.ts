@@ -1,0 +1,360 @@
+import { NextRequest, NextResponse } from 'next/server'
+import { requireAuthAPI } from '@/lib/auth/actions'
+import { prisma } from '@/lib/config/prisma'
+import { v4 as uuidv4 } from 'uuid'
+import { z } from 'zod'
+
+const paymentSchema = z.object({
+  method: z.enum(['CASH', 'TERMINAL', 'STRIPE', 'OXXO', 'SPEI']),
+  amount: z.number().min(1),
+  reference: z.string().optional(),
+  notes: z.string().optional()
+})
+
+const splitPaymentSchema = z.object({
+  splitPaymentId: z.string(),
+  method: z.enum(['CASH', 'TERMINAL', 'STRIPE', 'OXXO', 'SPEI']),
+  amount: z.number().min(1),
+  reference: z.string().optional()
+})
+
+// POST - Process payment for booking
+export async function POST(
+  request: NextRequest,
+  { params }: { params: Promise<{ id: string }> }
+) {
+  try {
+    const { id } = await params
+    
+    const session = await requireAuthAPI()
+    
+    if (!session) {
+      return NextResponse.json(
+        { success: false, error: 'No autorizado' },
+        { status: 401 }
+      )
+    }
+    const bookingId = id
+    const body = await request.json()
+
+    // Get the booking - verify it belongs to user's club
+    const booking = await prisma.booking.findFirst({
+      where: { 
+        id: bookingId,
+        clubId: session.clubId 
+      },
+      include: {
+        splitPayments: true,
+        payments: true
+      }
+    })
+
+    if (!booking) {
+      return NextResponse.json(
+        { success: false, error: 'Reserva no encontrada' },
+        { status: 404 }
+      )
+    }
+
+    // Check if booking is already fully paid
+    if (booking.paymentStatus === 'completed') {
+      return NextResponse.json(
+        { success: false, error: 'Esta reserva ya está pagada' },
+        { status: 400 }
+      )
+    }
+
+    // Handle split payment
+    if (booking.splitPaymentEnabled && body.splitPaymentId) {
+      const validatedData = splitPaymentSchema.parse(body)
+      
+      // Find the split payment
+      const splitPayment = await prisma.splitPayment.findFirst({
+        where: {
+          id: validatedData.splitPaymentId,
+          bookingId
+        }
+      })
+
+      if (!splitPayment) {
+        return NextResponse.json(
+          { success: false, error: 'Pago dividido no encontrado' },
+          { status: 404 }
+        )
+      }
+
+      if (splitPayment.status === 'completed') {
+        return NextResponse.json(
+          { success: false, error: 'Este pago ya está completado' },
+          { status: 400 }
+        )
+      }
+
+      // Update split payment
+      const updatedSplitPayment = await prisma.splitPayment.update({
+        where: { id: validatedData.splitPaymentId },
+        data: {
+          status: 'completed',
+          completedAt: new Date()
+        }
+      })
+
+      // Check if all split payments are completed
+      const allSplitPayments = await prisma.splitPayment.findMany({
+        where: { bookingId }
+      })
+
+      const completedCount = allSplitPayments.filter(
+        sp => sp.status === 'completed'
+      ).length
+
+      // Update booking payment status
+      const bookingPaymentStatus = completedCount === booking.splitPaymentCount
+        ? 'completed'
+        : 'processing'
+
+      await prisma.booking.update({
+        where: { id: bookingId },
+        data: {
+          paymentStatus: bookingPaymentStatus,
+          status: bookingPaymentStatus === 'completed' ? 'CONFIRMED' : booking.status
+        }
+      })
+
+      // Create transaction if all payments are completed
+      if (bookingPaymentStatus === 'completed') {
+        const transactionId = `tx_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`
+        await prisma.transaction.create({
+          data: {
+            id: transactionId,
+            clubId: session.clubId,
+            bookingId: booking.id,
+            amount: booking.price,
+            type: 'INCOME',
+            category: 'BOOKING',
+            description: `Reserva de cancha - ${booking.playerName}`,
+            date: booking.date,
+            currency: 'MXN',
+            createdAt: new Date(),
+            updatedAt: new Date()
+          }
+        })
+        console.log(`✅ Created transaction for completed split payment booking ${booking.id}`)
+      }
+
+      // Create payment record
+      await prisma.payment.create({
+        data: {
+          bookingId,
+          amount: validatedData.amount,
+          currency: 'MXN',
+          method: validatedData.method,
+          status: 'completed',
+          completedAt: new Date()
+        }
+      })
+
+      return NextResponse.json({
+        success: true,
+        splitPayment: updatedSplitPayment,
+        progress: {
+          completed: completedCount,
+          total: booking.splitPaymentCount,
+          isComplete: completedCount === booking.splitPaymentCount
+        },
+        message: `Pago ${completedCount}/${booking.splitPaymentCount} completado`
+      })
+
+    } else {
+      // Handle full payment
+      const validatedData = paymentSchema.parse(body)
+
+      // Validate amount
+      if (validatedData.amount !== booking.price) {
+        return NextResponse.json(
+          { 
+            success: false, 
+            error: 'El monto no coincide con el precio de la reserva',
+            expected: booking.price,
+            received: validatedData.amount
+          },
+          { status: 400 }
+        )
+      }
+
+      // Create payment record
+      const payment = await prisma.payment.create({
+        data: {
+          id: uuidv4(),
+          bookingId,
+          amount: validatedData.amount,
+          currency: 'MXN',
+          method: validatedData.method,
+          status: 'completed',
+          completedAt: new Date()
+        }
+      })
+
+      // Update booking
+      const updatedBooking = await prisma.booking.update({
+        where: { id: bookingId },
+        data: {
+          paymentStatus: 'completed',
+          status: 'CONFIRMED'
+        },
+        include: {
+          court: true,
+          payments: true
+        }
+      })
+
+      // Create transaction for finance module (for all completed payments)
+      const transactionReference = validatedData.reference
+        ? `${validatedData.method}-${validatedData.reference}`
+        : `${validatedData.method}-${bookingId}`
+
+      const transactionId = `tx_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`
+      await prisma.transaction.create({
+        data: {
+          id: transactionId,
+          clubId: session.clubId,
+          type: 'INCOME',
+          category: 'BOOKING',
+          amount: validatedData.amount,
+          currency: 'MXN',
+          description: `Pago de reserva - ${booking.playerName} - ${updatedBooking.court?.name || 'Cancha'}`,
+          reference: transactionReference,
+          bookingId,
+          date: new Date(),
+          createdBy: session.userId,
+          notes: validatedData.notes || `Pago vía ${validatedData.method}. ${validatedData.reference ? `Referencia: ${validatedData.reference}` : ''}`,
+          createdAt: new Date(),
+          updatedAt: new Date()
+        }
+      })
+      console.log(`✅ Created transaction for completed booking payment ${bookingId}`)
+
+      // Create notification for payment confirmation
+      await prisma.notification.create({
+        data: {
+          bookingId,
+          type: 'WHATSAPP',
+          template: 'PAYMENT_CONFIRMATION',
+          recipient: booking.playerPhone,
+          status: 'pending'
+        }
+      })
+
+      return NextResponse.json({
+        success: true,
+        payment,
+        booking: updatedBooking,
+        message: 'Pago procesado exitosamente'
+      })
+    }
+
+  } catch (error) {
+    console.error('Error processing payment:', error)
+    
+    if (error instanceof z.ZodError) {
+      return NextResponse.json(
+        { success: false, error: 'Datos de pago inválidos', details: error.issues },
+        { status: 400 }
+      )
+    }
+
+    return NextResponse.json(
+      { success: false, error: 'Error al procesar el pago' },
+      { status: 500 }
+    )
+  }
+}
+
+// GET - Get payment status
+export async function GET(
+  request: NextRequest,
+  { params }: { params: Promise<{ id: string }> }
+) {
+  try {
+    const { id } = await params
+    
+    const session = await requireAuthAPI()
+    
+    if (!session) {
+      return NextResponse.json(
+        { success: false, error: 'No autorizado' },
+        { status: 401 }
+      )
+    }
+    const bookingId = id
+
+    const booking = await prisma.booking.findFirst({
+      where: { 
+        id: bookingId,
+        clubId: session.clubId 
+      },
+      include: {
+        payments: {
+          orderBy: { createdAt: 'desc' }
+        },
+        splitPayments: {
+          orderBy: { createdAt: 'asc' }
+        }
+      }
+    })
+
+    if (!booking) {
+      return NextResponse.json(
+        { success: false, error: 'Reserva no encontrada' },
+        { status: 404 }
+      )
+    }
+
+    // Calculate payment summary
+    const totalPaid = booking.payments.reduce(
+      (sum, payment) => sum + (payment.status === 'completed' ? payment.amount : 0), 
+      0
+    )
+
+    const splitPaymentSummary = booking.splitPaymentEnabled ? {
+      enabled: true,
+      total: booking.splitPaymentCount,
+      completed: booking.splitPayments.filter(sp => sp.status === 'completed').length,
+      pending: booking.splitPayments.filter(sp => sp.status === 'pending').length,
+      details: booking.splitPayments.map(sp => ({
+        id: sp.id,
+        playerName: sp.playerName,
+        amount: sp.amount,
+        status: sp.status,
+        completedAt: sp.completedAt
+      }))
+    } : null
+
+    return NextResponse.json({
+      success: true,
+      paymentStatus: {
+        bookingId: booking.id,
+        totalPrice: booking.price,
+        totalPaid,
+        balance: booking.price - totalPaid,
+        status: booking.paymentStatus,
+        splitPayment: splitPaymentSummary,
+        payments: booking.payments.map(p => ({
+          id: p.id,
+          amount: p.amount,
+          method: p.method,
+          status: p.status,
+          createdAt: p.createdAt,
+          completedAt: p.completedAt
+        }))
+      }
+    })
+
+  } catch (error) {
+    console.error('Error fetching payment status:', error)
+    return NextResponse.json(
+      { success: false, error: 'Error al obtener estado del pago' },
+      { status: 500 }
+    )
+  }
+}

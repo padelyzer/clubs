@@ -1,0 +1,1316 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Mockup Mejorado - Módulo de Torneos para Eventos Grandes</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+            background: #f5f7fa;
+            color: #2d3748;
+        }
+        
+        /* Sidebar */
+        .sidebar {
+            position: fixed;
+            left: 0;
+            top: 0;
+            bottom: 0;
+            width: 240px;
+            background: #1a202c;
+            padding: 20px 0;
+            z-index: 100;
+        }
+        
+        .sidebar-logo {
+            padding: 0 20px 30px;
+            color: white;
+            font-size: 20px;
+            font-weight: bold;
+            border-bottom: 1px solid #2d3748;
+            margin-bottom: 20px;
+        }
+        
+        .sidebar-menu {
+            list-style: none;
+        }
+        
+        .sidebar-item {
+            padding: 12px 20px;
+            color: #cbd5e0;
+            cursor: pointer;
+            transition: all 0.2s;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+        
+        .sidebar-item:hover {
+            background: #2d3748;
+            color: white;
+        }
+        
+        .sidebar-item.active {
+            background: #4a5568;
+            color: white;
+            border-left: 3px solid #667eea;
+        }
+        
+        /* Main Content */
+        .main-content {
+            margin-left: 240px;
+            min-height: 100vh;
+        }
+        
+        /* Top Bar with Search and Notifications */
+        .top-bar {
+            background: white;
+            padding: 15px 30px;
+            border-bottom: 1px solid #e2e8f0;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            position: sticky;
+            top: 0;
+            z-index: 50;
+        }
+        
+        .global-search {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            flex: 1;
+            max-width: 500px;
+        }
+        
+        .search-input {
+            flex: 1;
+            padding: 10px 15px;
+            border: 1px solid #e2e8f0;
+            border-radius: 8px;
+            font-size: 14px;
+        }
+        
+        .search-input:focus {
+            outline: none;
+            border-color: #667eea;
+            box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
+        }
+        
+        .notifications-area {
+            display: flex;
+            align-items: center;
+            gap: 15px;
+        }
+        
+        .notification-bell {
+            position: relative;
+            cursor: pointer;
+        }
+        
+        .notification-badge {
+            position: absolute;
+            top: -5px;
+            right: -5px;
+            background: #f56565;
+            color: white;
+            font-size: 10px;
+            font-weight: bold;
+            padding: 2px 5px;
+            border-radius: 10px;
+        }
+        
+        /* Live Notifications */
+        .live-notifications {
+            position: fixed;
+            top: 70px;
+            right: 20px;
+            width: 350px;
+            z-index: 200;
+        }
+        
+        .notification-card {
+            background: white;
+            border-radius: 8px;
+            padding: 15px;
+            margin-bottom: 10px;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+            border-left: 4px solid #48bb78;
+            animation: slideIn 0.3s ease;
+        }
+        
+        @keyframes slideIn {
+            from {
+                transform: translateX(100%);
+                opacity: 0;
+            }
+            to {
+                transform: translateX(0);
+                opacity: 1;
+            }
+        }
+        
+        .notification-card.warning {
+            border-left-color: #f6ad55;
+        }
+        
+        .notification-card.success {
+            border-left-color: #48bb78;
+        }
+        
+        .notification-card.info {
+            border-left-color: #4299e1;
+        }
+        
+        /* Header */
+        .header {
+            background: white;
+            padding: 20px 30px;
+            border-bottom: 1px solid #e2e8f0;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        
+        .header-title {
+            font-size: 24px;
+            font-weight: 600;
+            color: #1a202c;
+        }
+        
+        .header-actions {
+            display: flex;
+            gap: 10px;
+        }
+        
+        .btn {
+            padding: 8px 16px;
+            border-radius: 6px;
+            font-size: 14px;
+            font-weight: 500;
+            cursor: pointer;
+            transition: all 0.2s;
+            border: none;
+        }
+        
+        .btn-primary {
+            background: #667eea;
+            color: white;
+        }
+        
+        .btn-primary:hover {
+            background: #5a67d8;
+        }
+        
+        .btn-secondary {
+            background: white;
+            color: #4a5568;
+            border: 1px solid #e2e8f0;
+        }
+        
+        .btn-success {
+            background: #48bb78;
+            color: white;
+        }
+        
+        /* Enhanced Filters */
+        .enhanced-filters {
+            background: white;
+            padding: 20px 30px;
+            border-bottom: 1px solid #e2e8f0;
+            display: none;
+        }
+        
+        .filter-row {
+            display: flex;
+            gap: 15px;
+            margin-bottom: 15px;
+        }
+        
+        .filter-group {
+            display: flex;
+            gap: 8px;
+        }
+        
+        .filter-label {
+            font-size: 12px;
+            color: #718096;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            margin-bottom: 5px;
+        }
+        
+        .filter-chip {
+            padding: 8px 14px;
+            background: white;
+            border: 1px solid #e2e8f0;
+            border-radius: 20px;
+            font-size: 13px;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+        
+        .filter-chip:hover {
+            border-color: #667eea;
+            background: #f7f8ff;
+        }
+        
+        .filter-chip.active {
+            background: #667eea;
+            color: white;
+            border-color: #667eea;
+        }
+        
+        /* Kanban View */
+        .kanban-container {
+            display: flex;
+            gap: 20px;
+            padding: 20px;
+            overflow-x: auto;
+            background: #f5f7fa;
+            min-height: 600px;
+        }
+        
+        .kanban-column {
+            flex: 0 0 300px;
+            background: white;
+            border-radius: 8px;
+            padding: 15px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.05);
+        }
+        
+        .kanban-header {
+            font-size: 16px;
+            font-weight: 600;
+            margin-bottom: 15px;
+            padding-bottom: 10px;
+            border-bottom: 2px solid #e2e8f0;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        
+        .kanban-count {
+            background: #edf2f7;
+            padding: 2px 8px;
+            border-radius: 12px;
+            font-size: 12px;
+            font-weight: 500;
+        }
+        
+        .kanban-card {
+            background: white;
+            border: 1px solid #e2e8f0;
+            border-radius: 6px;
+            padding: 12px;
+            margin-bottom: 10px;
+            cursor: move;
+            transition: all 0.2s;
+        }
+        
+        .kanban-card:hover {
+            box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+            transform: translateY(-2px);
+        }
+        
+        .kanban-card.playing {
+            border-left: 4px solid #48bb78;
+        }
+        
+        .kanban-card.delayed {
+            border-left: 4px solid #f56565;
+        }
+        
+        .kanban-card.upcoming {
+            border-left: 4px solid #f6ad55;
+        }
+        
+        .kanban-time {
+            font-size: 12px;
+            color: #718096;
+            margin-bottom: 5px;
+        }
+        
+        .kanban-teams {
+            font-size: 14px;
+            font-weight: 500;
+            margin-bottom: 8px;
+        }
+        
+        .kanban-status {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        
+        .status-badge {
+            padding: 3px 8px;
+            border-radius: 4px;
+            font-size: 11px;
+            font-weight: 600;
+        }
+        
+        .badge-playing {
+            background: #c6f6d5;
+            color: #22543d;
+        }
+        
+        .badge-delayed {
+            background: #fed7d7;
+            color: #742a2a;
+        }
+        
+        .badge-upcoming {
+            background: #feebc8;
+            color: #744210;
+        }
+        
+        /* Mass Capture */
+        .mass-capture-container {
+            background: white;
+            border-radius: 8px;
+            padding: 20px;
+            margin: 20px;
+            display: none;
+        }
+        
+        .mass-capture-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 20px;
+        }
+        
+        .mass-capture-title {
+            font-size: 18px;
+            font-weight: 600;
+        }
+        
+        .mass-capture-actions {
+            display: flex;
+            gap: 10px;
+        }
+        
+        .capture-grid {
+            display: grid;
+            gap: 15px;
+        }
+        
+        .capture-row {
+            display: grid;
+            grid-template-columns: 30px 2fr 100px 100px 100px 2fr 120px;
+            gap: 10px;
+            align-items: center;
+            padding: 12px;
+            background: #f7fafc;
+            border-radius: 6px;
+        }
+        
+        .capture-row:hover {
+            background: #edf2f7;
+        }
+        
+        .capture-checkbox {
+            width: 20px;
+            height: 20px;
+            cursor: pointer;
+        }
+        
+        .capture-team {
+            font-weight: 500;
+            font-size: 14px;
+        }
+        
+        .capture-score {
+            padding: 8px;
+            border: 1px solid #e2e8f0;
+            border-radius: 4px;
+            text-align: center;
+            font-size: 14px;
+            font-weight: 600;
+        }
+        
+        .capture-score:focus {
+            outline: none;
+            border-color: #667eea;
+        }
+        
+        .capture-winner {
+            padding: 6px 10px;
+            background: #c6f6d5;
+            color: #22543d;
+            border-radius: 4px;
+            font-size: 12px;
+            font-weight: 600;
+            text-align: center;
+        }
+        
+        /* Quick Stats Dashboard */
+        .quick-stats-bar {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 15px 30px;
+            display: flex;
+            gap: 30px;
+            overflow-x: auto;
+        }
+        
+        .quick-stat {
+            display: flex;
+            flex-direction: column;
+            min-width: 120px;
+        }
+        
+        .quick-stat-value {
+            font-size: 24px;
+            font-weight: bold;
+        }
+        
+        .quick-stat-label {
+            font-size: 12px;
+            opacity: 0.9;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+        
+        /* Tabs */
+        .tabs-container {
+            background: white;
+            margin: 0 30px;
+            border-radius: 12px;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+        }
+        
+        .tabs-header {
+            display: flex;
+            border-bottom: 1px solid #e2e8f0;
+            padding: 0 20px;
+        }
+        
+        .tab {
+            padding: 16px 20px;
+            font-size: 14px;
+            font-weight: 500;
+            color: #718096;
+            cursor: pointer;
+            border-bottom: 2px solid transparent;
+            transition: all 0.2s;
+        }
+        
+        .tab:hover {
+            color: #4a5568;
+        }
+        
+        .tab.active {
+            color: #667eea;
+            border-bottom-color: #667eea;
+        }
+        
+        .tab-content {
+            padding: 30px;
+        }
+        
+        /* Mobile Referee View Toggle */
+        .view-toggle {
+            position: fixed;
+            bottom: 20px;
+            right: 20px;
+            background: #667eea;
+            color: white;
+            padding: 12px 20px;
+            border-radius: 8px;
+            cursor: pointer;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+            z-index: 100;
+        }
+        
+        /* Mobile Referee View */
+        .mobile-referee-view {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: white;
+            z-index: 1000;
+            overflow-y: auto;
+        }
+        
+        .referee-header {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 20px;
+            text-align: center;
+        }
+        
+        .referee-court {
+            font-size: 24px;
+            font-weight: bold;
+            margin-bottom: 5px;
+        }
+        
+        .referee-current-match {
+            background: white;
+            margin: 20px;
+            border-radius: 12px;
+            padding: 20px;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+        }
+        
+        .referee-teams {
+            font-size: 20px;
+            font-weight: 600;
+            text-align: center;
+            margin-bottom: 20px;
+        }
+        
+        .referee-actions {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 15px;
+        }
+        
+        .referee-btn {
+            padding: 20px;
+            border-radius: 8px;
+            font-size: 16px;
+            font-weight: 600;
+            border: none;
+            cursor: pointer;
+        }
+        
+        .referee-btn.start {
+            background: #48bb78;
+            color: white;
+        }
+        
+        .referee-btn.finish {
+            background: #f56565;
+            color: white;
+        }
+        
+        .referee-btn.score {
+            background: #4299e1;
+            color: white;
+            grid-column: span 2;
+        }
+        
+        /* TV Display Mode */
+        .tv-display {
+            display: none;
+            background: #1a202c;
+            color: white;
+            padding: 40px;
+            min-height: 100vh;
+        }
+        
+        .tv-header {
+            text-align: center;
+            margin-bottom: 40px;
+        }
+        
+        .tv-title {
+            font-size: 48px;
+            font-weight: bold;
+            margin-bottom: 10px;
+        }
+        
+        .tv-grid {
+            display: grid;
+            grid-template-columns: 2fr 1fr;
+            gap: 40px;
+        }
+        
+        .tv-live-matches {
+            background: #2d3748;
+            border-radius: 12px;
+            padding: 30px;
+        }
+        
+        .tv-section-title {
+            font-size: 24px;
+            font-weight: 600;
+            margin-bottom: 20px;
+            color: #48bb78;
+        }
+        
+        .tv-match {
+            background: #1a202c;
+            padding: 20px;
+            border-radius: 8px;
+            margin-bottom: 15px;
+        }
+        
+        .tv-match-court {
+            font-size: 14px;
+            color: #a0aec0;
+            margin-bottom: 10px;
+        }
+        
+        .tv-match-teams {
+            font-size: 20px;
+            font-weight: 600;
+            margin-bottom: 10px;
+        }
+        
+        .tv-match-score {
+            font-size: 24px;
+            font-weight: bold;
+            color: #48bb78;
+        }
+        
+        .tv-standings {
+            background: #2d3748;
+            border-radius: 12px;
+            padding: 30px;
+        }
+        
+        .tv-table {
+            width: 100%;
+            font-size: 16px;
+        }
+        
+        .tv-table th {
+            text-align: left;
+            padding: 10px;
+            border-bottom: 1px solid #4a5568;
+            color: #a0aec0;
+        }
+        
+        .tv-table td {
+            padding: 10px;
+            border-bottom: 1px solid #1a202c;
+        }
+    </style>
+</head>
+<body>
+    <!-- Sidebar -->
+    <div class="sidebar">
+        <div class="sidebar-logo">
+            🏓 Padelyzer Pro
+        </div>
+        <ul class="sidebar-menu">
+            <li class="sidebar-item" onclick="showView('dashboard')">
+                <span>📊</span> Dashboard
+            </li>
+            <li class="sidebar-item active" onclick="showView('today')">
+                <span>📅</span> Vista del Día
+            </li>
+            <li class="sidebar-item" onclick="showView('kanban')">
+                <span>🏟️</span> Vista Canchas
+            </li>
+            <li class="sidebar-item" onclick="showView('capture')">
+                <span>🎯</span> Captura Masiva
+            </li>
+            <li class="sidebar-item" onclick="showView('operation')">
+                <span>⚡</span> Operación
+            </li>
+            <li class="sidebar-item" onclick="showView('tv')">
+                <span>📺</span> Modo TV
+            </li>
+        </ul>
+    </div>
+    
+    <!-- Main Content -->
+    <div class="main-content">
+        <!-- Top Bar with Global Search -->
+        <div class="top-bar">
+            <div class="global-search">
+                <span>🔍</span>
+                <input type="text" class="search-input" placeholder="Buscar equipo, jugador o categoría... (ej: 'Guerreros', 'Open Fem', 'María González')">
+            </div>
+            <div class="notifications-area">
+                <div class="notification-bell" onclick="toggleNotifications()">
+                    <span style="font-size: 24px;">🔔</span>
+                    <span class="notification-badge">3</span>
+                </div>
+                <span>👤 Coordinador</span>
+            </div>
+        </div>
+        
+        <!-- Live Notifications -->
+        <div class="live-notifications" id="notifications" style="display: none;">
+            <div class="notification-card success">
+                <strong>✅ Partido Completado</strong>
+                <p style="font-size: 13px; margin-top: 5px;">Los Guerreros vs Los Titanes - Cancha 1</p>
+                <p style="font-size: 11px; color: #718096; margin-top: 3px;">Hace 2 minutos</p>
+            </div>
+            <div class="notification-card warning">
+                <strong>⚠️ Retraso en Cancha 3</strong>
+                <p style="font-size: 13px; margin-top: 5px;">Partido lleva 30 min de retraso</p>
+                <p style="font-size: 11px; color: #718096; margin-top: 3px;">Hace 5 minutos</p>
+            </div>
+            <div class="notification-card info">
+                <strong>📊 Fase Completada</strong>
+                <p style="font-size: 13px; margin-top: 5px;">Open Masculino - Listo para Cuartos</p>
+                <p style="font-size: 11px; color: #718096; margin-top: 3px;">Hace 10 minutos</p>
+            </div>
+        </div>
+        
+        <!-- Dashboard View -->
+        <div id="dashboard-view">
+            <!-- Quick Stats Bar -->
+            <div class="quick-stats-bar">
+                <div class="quick-stat">
+                    <div class="quick-stat-value">42</div>
+                    <div class="quick-stat-label">Partidos Hoy</div>
+                </div>
+                <div class="quick-stat">
+                    <div class="quick-stat-value">6</div>
+                    <div class="quick-stat-label">En Juego</div>
+                </div>
+                <div class="quick-stat">
+                    <div class="quick-stat-value">12</div>
+                    <div class="quick-stat-label">Completados</div>
+                </div>
+                <div class="quick-stat">
+                    <div class="quick-stat-value">24</div>
+                    <div class="quick-stat-label">Pendientes</div>
+                </div>
+                <div class="quick-stat">
+                    <div class="quick-stat-value">15min</div>
+                    <div class="quick-stat-label">Retraso Prom</div>
+                </div>
+                <div class="quick-stat">
+                    <div class="quick-stat-value">6/8</div>
+                    <div class="quick-stat-label">Canchas Activas</div>
+                </div>
+            </div>
+            
+            <!-- Header -->
+            <div class="header">
+                <h1 class="header-title">🏆 Gran Torneo 2025 - Centro de Control</h1>
+                <div class="header-actions">
+                    <button class="btn btn-secondary" onclick="showView('kanban')">
+                        🏟️ Vista Canchas
+                    </button>
+                    <button class="btn btn-primary" onclick="showView('capture')">
+                        🎯 Captura Masiva
+                    </button>
+                </div>
+            </div>
+        </div>
+        
+        <!-- Today View with Enhanced Filters -->
+        <div id="today-view" style="display: none;">
+            <div class="header">
+                <h1 class="header-title">📅 Partidos de Hoy - Sábado 30 Enero</h1>
+                <div class="header-actions">
+                    <button class="btn btn-secondary" onclick="toggleFilters()">
+                        🔽 Filtros Avanzados
+                    </button>
+                    <button class="btn btn-success">
+                        📥 Exportar Horarios
+                    </button>
+                </div>
+            </div>
+            
+            <!-- Enhanced Filters -->
+            <div class="enhanced-filters" id="filters">
+                <div class="filter-label">HORARIO</div>
+                <div class="filter-row">
+                    <div class="filter-group">
+                        <div class="filter-chip active">Todos</div>
+                        <div class="filter-chip">🌅 Mañana (9-12)</div>
+                        <div class="filter-chip">☀️ Tarde (12-18)</div>
+                        <div class="filter-chip">🌙 Noche (18-22)</div>
+                    </div>
+                </div>
+                
+                <div class="filter-label">CANCHAS</div>
+                <div class="filter-row">
+                    <div class="filter-group">
+                        <div class="filter-chip active">Todas</div>
+                        <div class="filter-chip">Cancha 1</div>
+                        <div class="filter-chip">Cancha 2</div>
+                        <div class="filter-chip">Cancha 3</div>
+                        <div class="filter-chip">Cancha 4</div>
+                        <div class="filter-chip">Cancha 5</div>
+                        <div class="filter-chip">Cancha 6</div>
+                    </div>
+                </div>
+                
+                <div class="filter-label">CATEGORÍAS</div>
+                <div class="filter-row">
+                    <div class="filter-group">
+                        <div class="filter-chip active">Todas</div>
+                        <div class="filter-chip">Open</div>
+                        <div class="filter-chip">Primera</div>
+                        <div class="filter-chip">Segunda</div>
+                        <div class="filter-chip">Tercera</div>
+                        <div class="filter-chip">Cuarta</div>
+                        <div class="filter-chip">Quinta</div>
+                        <div class="filter-chip">Sexta</div>
+                    </div>
+                </div>
+                
+                <div class="filter-label">ESTADO</div>
+                <div class="filter-row">
+                    <div class="filter-group">
+                        <div class="filter-chip active">Todos</div>
+                        <div class="filter-chip">🟢 En Juego</div>
+                        <div class="filter-chip">🟡 Por Iniciar</div>
+                        <div class="filter-chip">🔴 Retrasados</div>
+                        <div class="filter-chip">✅ Completados</div>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- Today matches content would go here -->
+            <div style="padding: 20px;">
+                <div style="background: white; padding: 20px; border-radius: 8px;">
+                    <h3>42 partidos programados para hoy</h3>
+                    <p style="color: #718096; margin-top: 10px;">Usa los filtros para ver partidos específicos</p>
+                </div>
+            </div>
+        </div>
+        
+        <!-- Kanban View by Courts -->
+        <div id="kanban-view" style="display: none;">
+            <div class="header">
+                <h1 class="header-title">🏟️ Vista por Canchas - Tiempo Real</h1>
+                <div class="header-actions">
+                    <button class="btn btn-secondary">
+                        🔄 Auto-refresh ON
+                    </button>
+                </div>
+            </div>
+            
+            <div class="kanban-container">
+                <!-- Cancha 1 -->
+                <div class="kanban-column">
+                    <div class="kanban-header">
+                        <span>⚡ CANCHA 1</span>
+                        <span class="kanban-count">8 partidos</span>
+                    </div>
+                    
+                    <div class="kanban-card playing">
+                        <div class="kanban-time">🕐 10:00 AM</div>
+                        <div class="kanban-teams">Los Guerreros vs Los Titanes</div>
+                        <div style="font-size: 12px; color: #718096; margin-bottom: 8px;">Masculino Open - Grupo A</div>
+                        <div class="kanban-status">
+                            <span class="status-badge badge-playing">🟢 En Juego (45 min)</span>
+                            <button class="btn btn-success" style="padding: 4px 8px; font-size: 12px;">
+                                Capturar
+                            </button>
+                        </div>
+                    </div>
+                    
+                    <div class="kanban-card upcoming">
+                        <div class="kanban-time">🕐 11:00 AM</div>
+                        <div class="kanban-teams">Las Amazonas vs Las Valkirias</div>
+                        <div style="font-size: 12px; color: #718096; margin-bottom: 8px;">Femenino Open - Grupo A</div>
+                        <div class="kanban-status">
+                            <span class="status-badge badge-upcoming">🟡 Siguiente</span>
+                        </div>
+                    </div>
+                    
+                    <div class="kanban-card">
+                        <div class="kanban-time">🕐 12:00 PM</div>
+                        <div class="kanban-teams">Los Halcones vs Los Lobos</div>
+                        <div style="font-size: 12px; color: #718096; margin-bottom: 8px;">Masculino Primera - Grupo B</div>
+                        <div class="kanban-status">
+                            <span class="status-badge">⏳ Programado</span>
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- Cancha 2 -->
+                <div class="kanban-column">
+                    <div class="kanban-header">
+                        <span>⚡ CANCHA 2</span>
+                        <span class="kanban-count">7 partidos</span>
+                    </div>
+                    
+                    <div class="kanban-card delayed">
+                        <div class="kanban-time">🕐 10:00 AM</div>
+                        <div class="kanban-teams">Los Vikingos vs Los Espartanos</div>
+                        <div style="font-size: 12px; color: #718096; margin-bottom: 8px;">Masculino Open - Grupo A</div>
+                        <div class="kanban-status">
+                            <span class="status-badge badge-delayed">🔴 Retrasado (30 min)</span>
+                            <button class="btn btn-success" style="padding: 4px 8px; font-size: 12px;">
+                                Iniciar
+                            </button>
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- Cancha 3 -->
+                <div class="kanban-column">
+                    <div class="kanban-header">
+                        <span>⚡ CANCHA 3</span>
+                        <span class="kanban-count">9 partidos</span>
+                    </div>
+                    
+                    <div class="kanban-card playing">
+                        <div class="kanban-time">🕐 10:00 AM</div>
+                        <div class="kanban-teams">Los Águilas vs Los Panteras</div>
+                        <div style="font-size: 12px; color: #718096; margin-bottom: 8px;">Masculino Segunda - Grupo A</div>
+                        <div class="kanban-status">
+                            <span class="status-badge badge-playing">🟢 En Juego (20 min)</span>
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- Cancha 4 -->
+                <div class="kanban-column">
+                    <div class="kanban-header">
+                        <span>⚡ CANCHA 4</span>
+                        <span class="kanban-count">6 partidos</span>
+                    </div>
+                    
+                    <div class="kanban-card playing">
+                        <div class="kanban-time">🕐 10:00 AM</div>
+                        <div class="kanban-teams">Las Guerreras vs Las Titanas</div>
+                        <div style="font-size: 12px; color: #718096; margin-bottom: 8px;">Femenino Primera - Grupo A</div>
+                        <div class="kanban-status">
+                            <span class="status-badge badge-playing">🟢 En Juego (60 min)</span>
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- Cancha 5 -->
+                <div class="kanban-column">
+                    <div class="kanban-header">
+                        <span>⚡ CANCHA 5</span>
+                        <span class="kanban-count">6 partidos</span>
+                    </div>
+                    
+                    <div class="kanban-card">
+                        <div class="kanban-time">🕐 11:00 AM</div>
+                        <div class="kanban-teams">Los Cometas vs Los Astros</div>
+                        <div style="font-size: 12px; color: #718096; margin-bottom: 8px;">Masculino Cuarta - Grupo A</div>
+                        <div class="kanban-status">
+                            <span class="status-badge">⏳ Programado</span>
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- Cancha 6 -->
+                <div class="kanban-column">
+                    <div class="kanban-header">
+                        <span>⚡ CANCHA 6</span>
+                        <span class="kanban-count">6 partidos</span>
+                    </div>
+                    
+                    <div class="kanban-card playing">
+                        <div class="kanban-time">🕐 10:00 AM</div>
+                        <div class="kanban-teams">Los Saturno vs Los Plutón</div>
+                        <div style="font-size: 12px; color: #718096; margin-bottom: 8px;">Masculino Quinta - Grupo A</div>
+                        <div class="kanban-status">
+                            <span class="status-badge badge-playing">🟢 En Juego (15 min)</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <!-- Mass Capture View -->
+        <div id="capture-view" style="display: none;">
+            <div class="mass-capture-container" style="display: block;">
+                <div class="mass-capture-header">
+                    <h2 class="mass-capture-title">🎯 Captura Masiva de Resultados</h2>
+                    <div class="mass-capture-actions">
+                        <select class="btn btn-secondary">
+                            <option>Filtrar: Todos los pendientes</option>
+                            <option>Solo Open</option>
+                            <option>Solo Primera</option>
+                            <option>Solo Masculino</option>
+                            <option>Solo Femenino</option>
+                        </select>
+                        <button class="btn btn-primary" onclick="selectAll()">
+                            ✅ Seleccionar Todos
+                        </button>
+                        <button class="btn btn-success">
+                            💾 Guardar Seleccionados
+                        </button>
+                    </div>
+                </div>
+                
+                <div class="capture-grid">
+                    <div class="capture-row">
+                        <input type="checkbox" class="capture-checkbox" checked>
+                        <div class="capture-team">Los Guerreros</div>
+                        <input type="text" class="capture-score" value="6">
+                        <input type="text" class="capture-score" value="6">
+                        <input type="text" class="capture-score" value="">
+                        <div class="capture-team">Los Titanes</div>
+                        <div class="capture-winner">🏆 Los Guerreros</div>
+                    </div>
+                    
+                    <div class="capture-row">
+                        <input type="checkbox" class="capture-checkbox" checked>
+                        <div class="capture-team">Las Amazonas</div>
+                        <input type="text" class="capture-score" value="6">
+                        <input type="text" class="capture-score" value="7">
+                        <input type="text" class="capture-score" value="6">
+                        <div class="capture-team">Las Valkirias</div>
+                        <div class="capture-winner">🏆 Las Amazonas</div>
+                    </div>
+                    
+                    <div class="capture-row">
+                        <input type="checkbox" class="capture-checkbox">
+                        <div class="capture-team">Los Halcones</div>
+                        <input type="text" class="capture-score" placeholder="Set 1">
+                        <input type="text" class="capture-score" placeholder="Set 2">
+                        <input type="text" class="capture-score" placeholder="Set 3">
+                        <div class="capture-team">Los Lobos</div>
+                        <div class="capture-winner" style="background: #f7fafc; color: #718096;">Pendiente</div>
+                    </div>
+                    
+                    <div class="capture-row">
+                        <input type="checkbox" class="capture-checkbox">
+                        <div class="capture-team">Los Vikingos</div>
+                        <input type="text" class="capture-score" placeholder="Set 1">
+                        <input type="text" class="capture-score" placeholder="Set 2">
+                        <input type="text" class="capture-score" placeholder="Set 3">
+                        <div class="capture-team">Los Espartanos</div>
+                        <div class="capture-winner" style="background: #f7fafc; color: #718096;">Pendiente</div>
+                    </div>
+                    
+                    <div class="capture-row">
+                        <input type="checkbox" class="capture-checkbox" checked>
+                        <div class="capture-team">Los Águilas</div>
+                        <input type="text" class="capture-score" value="6">
+                        <input type="text" class="capture-score" value="4">
+                        <input type="text" class="capture-score" value="7">
+                        <div class="capture-team">Los Panteras</div>
+                        <div class="capture-winner">🏆 Los Águilas</div>
+                    </div>
+                </div>
+                
+                <div style="margin-top: 20px; padding: 15px; background: #f7fafc; border-radius: 6px;">
+                    <strong>Resumen:</strong> 3 resultados listos para guardar • 2 pendientes de captura
+                </div>
+            </div>
+        </div>
+        
+        <!-- TV Display Mode -->
+        <div id="tv-view" class="tv-display">
+            <div class="tv-header">
+                <div class="tv-title">🏆 Gran Torneo 2025</div>
+                <div style="font-size: 24px;">Club de Pádel • En Vivo</div>
+            </div>
+            
+            <div class="tv-grid">
+                <div class="tv-live-matches">
+                    <div class="tv-section-title">🔴 PARTIDOS EN JUEGO</div>
+                    
+                    <div class="tv-match">
+                        <div class="tv-match-court">CANCHA 1 • Masculino Open</div>
+                        <div class="tv-match-teams">Los Guerreros vs Los Titanes</div>
+                        <div class="tv-match-score">6-4 • 5-3</div>
+                    </div>
+                    
+                    <div class="tv-match">
+                        <div class="tv-match-court">CANCHA 3 • Masculino Segunda</div>
+                        <div class="tv-match-teams">Los Águilas vs Los Panteras</div>
+                        <div class="tv-match-score">6-3 • 2-1</div>
+                    </div>
+                    
+                    <div class="tv-match">
+                        <div class="tv-match-court">CANCHA 4 • Femenino Primera</div>
+                        <div class="tv-match-teams">Las Guerreras vs Las Titanas</div>
+                        <div class="tv-match-score">6-4 • 6-7 • 3-2</div>
+                    </div>
+                    
+                    <div class="tv-section-title" style="margin-top: 30px;">⏭️ PRÓXIMOS PARTIDOS</div>
+                    
+                    <div class="tv-match">
+                        <div class="tv-match-court">11:00 AM • CANCHA 1</div>
+                        <div class="tv-match-teams">Las Amazonas vs Las Valkirias</div>
+                    </div>
+                    
+                    <div class="tv-match">
+                        <div class="tv-match-court">11:00 AM • CANCHA 2</div>
+                        <div class="tv-match-teams">Los Vikingos vs Los Espartanos</div>
+                    </div>
+                </div>
+                
+                <div class="tv-standings">
+                    <div class="tv-section-title">📊 TABLA DE POSICIONES</div>
+                    <div style="font-size: 18px; color: #a0aec0; margin-bottom: 15px;">Masculino Open - Grupo A</div>
+                    
+                    <table class="tv-table">
+                        <thead>
+                            <tr>
+                                <th>Pos</th>
+                                <th>Equipo</th>
+                                <th>PJ</th>
+                                <th>Pts</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr>
+                                <td>1</td>
+                                <td>Los Guerreros</td>
+                                <td>2</td>
+                                <td>6</td>
+                            </tr>
+                            <tr>
+                                <td>2</td>
+                                <td>Los Titanes</td>
+                                <td>2</td>
+                                <td>3</td>
+                            </tr>
+                            <tr>
+                                <td>3</td>
+                                <td>Los Vikingos</td>
+                                <td>1</td>
+                                <td>3</td>
+                            </tr>
+                            <tr>
+                                <td>4</td>
+                                <td>Los Espartanos</td>
+                                <td>1</td>
+                                <td>0</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                    
+                    <div style="margin-top: 30px; padding: 20px; background: #1a202c; border-radius: 8px;">
+                        <div style="font-size: 20px; margin-bottom: 10px;">📈 Estadísticas del Día</div>
+                        <div style="display: grid; gap: 10px; font-size: 16px;">
+                            <div>Partidos Jugados: <strong>18</strong></div>
+                            <div>En Juego: <strong>6</strong></div>
+                            <div>Pendientes: <strong>24</strong></div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Mobile Referee View -->
+    <div class="mobile-referee-view" id="referee-view">
+        <div class="referee-header">
+            <button onclick="toggleRefereeView()" style="position: absolute; left: 20px; top: 20px; background: rgba(255,255,255,0.2); border: none; color: white; padding: 10px; border-radius: 8px; cursor: pointer;">
+                ← Cerrar
+            </button>
+            <div class="referee-court">CANCHA 1</div>
+            <div>Árbitro: Juan Pérez</div>
+        </div>
+        
+        <div class="referee-current-match">
+            <div class="referee-teams">
+                Los Guerreros<br>vs<br>Los Titanes
+            </div>
+            <div style="text-align: center; color: #718096; margin-bottom: 20px;">
+                Masculino Open - Grupo A
+            </div>
+            
+            <div class="referee-actions">
+                <button class="referee-btn start">
+                    ▶️ Iniciar Partido
+                </button>
+                <button class="referee-btn finish">
+                    ⏹️ Finalizar
+                </button>
+                <button class="referee-btn score">
+                    🎯 Capturar Marcador
+                </button>
+            </div>
+        </div>
+        
+        <div style="background: #f7fafc; margin: 20px; padding: 15px; border-radius: 8px;">
+            <div style="font-weight: 600; margin-bottom: 10px;">Próximos en esta cancha:</div>
+            <div style="font-size: 14px; color: #4a5568;">
+                11:00 - Las Amazonas vs Las Valkirias<br>
+                12:00 - Los Halcones vs Los Lobos<br>
+                13:00 - Los Fénix vs Los Gladiadores
+            </div>
+        </div>
+    </div>
+    
+    <!-- View Toggle Button -->
+    <div class="view-toggle" onclick="toggleRefereeView()">
+        📱 Vista Árbitro
+    </div>
+    
+    <script>
+        function showView(view) {
+            // Hide all views
+            document.getElementById('dashboard-view').style.display = 'none';
+            document.getElementById('today-view').style.display = 'none';
+            document.getElementById('kanban-view').style.display = 'none';
+            document.getElementById('capture-view').style.display = 'none';
+            document.getElementById('tv-view').style.display = 'none';
+            
+            // Remove active class from all sidebar items
+            document.querySelectorAll('.sidebar-item').forEach(item => {
+                item.classList.remove('active');
+            });
+            
+            // Show selected view and mark as active
+            if (view === 'dashboard') {
+                document.getElementById('dashboard-view').style.display = 'block';
+            } else if (view === 'today') {
+                document.getElementById('today-view').style.display = 'block';
+            } else if (view === 'kanban') {
+                document.getElementById('kanban-view').style.display = 'block';
+            } else if (view === 'capture') {
+                document.getElementById('capture-view').style.display = 'block';
+            } else if (view === 'tv') {
+                document.getElementById('tv-view').style.display = 'block';
+                document.querySelector('.sidebar').style.display = 'none';
+                document.querySelector('.main-content').style.marginLeft = '0';
+            }
+            
+            // Mark sidebar item as active
+            event.currentTarget.classList.add('active');
+        }
+        
+        function toggleFilters() {
+            const filters = document.getElementById('filters');
+            filters.style.display = filters.style.display === 'none' ? 'block' : 'none';
+        }
+        
+        function toggleNotifications() {
+            const notifs = document.getElementById('notifications');
+            notifs.style.display = notifs.style.display === 'none' ? 'block' : 'none';
+        }
+        
+        function toggleRefereeView() {
+            const referee = document.getElementById('referee-view');
+            referee.style.display = referee.style.display === 'none' ? 'block' : 'none';
+        }
+        
+        function selectAll() {
+            document.querySelectorAll('.capture-checkbox').forEach(cb => {
+                cb.checked = true;
+            });
+        }
+        
+        // Simulate live notifications
+        setTimeout(() => {
+            const notif = document.createElement('div');
+            notif.className = 'notification-card success';
+            notif.innerHTML = '<strong>✅ Nuevo Resultado</strong><p style="font-size: 13px; margin-top: 5px;">Los Vikingos vs Los Espartanos - Completado</p>';
+            notif.style.animation = 'slideIn 0.3s ease';
+            document.getElementById('notifications').prepend(notif);
+            
+            // Update badge
+            const badge = document.querySelector('.notification-badge');
+            badge.textContent = parseInt(badge.textContent) + 1;
+        }, 5000);
+        
+        // Auto-rotate TV display
+        let tvRotation = 0;
+        setInterval(() => {
+            if (document.getElementById('tv-view').style.display === 'block') {
+                // Rotate between different groups/categories
+                tvRotation = (tvRotation + 1) % 3;
+                // In real app, this would update the displayed data
+            }
+        }, 10000);
+    </script>
+</body>
+</html>

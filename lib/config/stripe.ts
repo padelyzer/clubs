@@ -1,0 +1,428 @@
+import Stripe from 'stripe'
+
+// Validate environment variables
+if (!process.env.STRIPE_SECRET_KEY) {
+  throw new Error('STRIPE_SECRET_KEY is required')
+}
+
+if (!process.env.STRIPE_WEBHOOK_SECRET) {
+  throw new Error('STRIPE_WEBHOOK_SECRET is required')
+}
+
+// Initialize Stripe with proper configuration
+export const stripe = new Stripe(process.env.STRIPE_SECRET_KEY, {
+  apiVersion: '2024-12-18.acacia',
+  typescript: true,
+  maxNetworkRetries: 3,
+  timeout: 30000, // 30 seconds
+  telemetry: process.env.NODE_ENV === 'production'
+})
+
+// Stripe configuration constants
+export const STRIPE_CONFIG = {
+  currency: 'mxn',
+  country: 'MX',
+  supportedPaymentMethods: ['card', 'oxxo'] as const, // SPEI removed per user request
+  maxRetries: 3,
+  timeoutMs: 30000
+}
+
+// Platform fee configuration (2.5% default)
+export const PLATFORM_FEE_PERCENTAGE = Number(process.env.PLATFORM_FEE_PERCENTAGE) || 2.5
+
+// Validate platform fee percentage
+if (PLATFORM_FEE_PERCENTAGE < 0 || PLATFORM_FEE_PERCENTAGE > 10) {
+  throw new Error('PLATFORM_FEE_PERCENTAGE must be between 0 and 10')
+}
+
+/**
+ * Calculate application fee for platform commission
+ */
+export async function calculateApplicationFee(
+  amount: number, 
+  commissionRate?: number
+): Promise<number> {
+  const rate = commissionRate || (PLATFORM_FEE_PERCENTAGE / 100)
+  return Math.round(amount * rate)
+}
+
+// Stripe error types for better error handling
+export interface StripeErrorResponse {
+  success: false
+  error: {
+    type: string
+    code?: string
+    message: string
+    param?: string
+    decline_code?: string
+  }
+  retryable: boolean
+}
+
+export interface StripeSuccessResponse<T> {
+  success: true
+  data: T
+}
+
+export type StripeResponse<T> = StripeSuccessResponse<T> | StripeErrorResponse
+
+/**
+ * Create Stripe Connect account with error handling
+ */
+export async function createConnectAccount(
+  email: string, 
+  country: string = STRIPE_CONFIG.country
+): Promise<StripeResponse<Stripe.Account>> {
+  try {
+    const account = await stripe.accounts.create({
+      type: 'express',
+      country,
+      email,
+      business_type: 'company',
+      capabilities: {
+        card_payments: { requested: true },
+        transfers: { requested: true },
+        oxxo_payments: { requested: true },
+      },
+      settings: {
+        payouts: {
+          statement_descriptor: 'PADELYZER',
+        },
+      },
+    })
+    
+    return { success: true, data: account }
+  } catch (error) {
+    return handleStripeError(error)
+  }
+}
+
+/**
+ * Create account onboarding link with error handling
+ */
+export async function createAccountLink(
+  accountId: string, 
+  refreshUrl: string, 
+  returnUrl: string
+): Promise<StripeResponse<Stripe.AccountLink>> {
+  try {
+    const accountLink = await stripe.accountLinks.create({
+      account: accountId,
+      refresh_url: refreshUrl,
+      return_url: returnUrl,
+      type: 'account_onboarding',
+    })
+    
+    return { success: true, data: accountLink }
+  } catch (error) {
+    return handleStripeError(error)
+  }
+}
+
+/**
+ * Get account status with error handling
+ */
+export async function getAccountStatus(
+  accountId: string
+): Promise<StripeResponse<{
+  chargesEnabled: boolean
+  detailsSubmitted: boolean
+  payoutsEnabled: boolean
+  requirements: Stripe.Account.Requirements | null
+  accountType: string | null
+  country: string | null
+  defaultCurrency: string | null
+}>> {
+  try {
+    const account = await stripe.accounts.retrieve(accountId)
+    
+    return {
+      success: true,
+      data: {
+        chargesEnabled: account.charges_enabled,
+        detailsSubmitted: account.details_submitted,
+        payoutsEnabled: account.payouts_enabled,
+        requirements: account.requirements,
+        accountType: account.type,
+        country: account.country,
+        defaultCurrency: account.default_currency,
+      }
+    }
+  } catch (error) {
+    return handleStripeError(error)
+  }
+}
+
+/**
+ * Create dashboard login link with error handling
+ */
+export async function createDashboardLink(
+  accountId: string
+): Promise<StripeResponse<Stripe.LoginLink>> {
+  try {
+    const link = await stripe.accounts.createLoginLink(accountId)
+    return { success: true, data: link }
+  } catch (error) {
+    return handleStripeError(error)
+  }
+}
+
+
+/**
+ * Create payment intent with comprehensive error handling
+ */
+export async function createPaymentIntent({
+  amount,
+  currency = STRIPE_CONFIG.currency,
+  connectedAccountId,
+  applicationFeeAmount,
+  paymentMethods = [...STRIPE_CONFIG.supportedPaymentMethods],
+  metadata = {},
+  automaticPaymentMethods = true,
+}: {
+  amount: number
+  currency?: string
+  connectedAccountId: string
+  applicationFeeAmount?: number
+  paymentMethods?: string[]
+  metadata?: Record<string, string>
+  automaticPaymentMethods?: boolean
+}): Promise<StripeResponse<Stripe.PaymentIntent>> {
+  try {
+    // Validate amount
+    if (amount < 50) { // Minimum 50 centavos
+      throw new Error('Amount must be at least 50 centavos')
+    }
+
+    const paymentIntentData: Stripe.PaymentIntentCreateParams = {
+      amount,
+      currency,
+      payment_method_types: paymentMethods,
+      application_fee_amount: applicationFeeAmount,
+      metadata: {
+        ...metadata,
+        created_at: new Date().toISOString(),
+        platform: 'padelyzer'
+      },
+      transfer_data: {
+        destination: connectedAccountId,
+      },
+    }
+
+    // Add automatic payment methods if enabled
+    if (automaticPaymentMethods) {
+      paymentIntentData.automatic_payment_methods = {
+        enabled: true,
+        allow_redirects: 'never'
+      }
+    }
+
+    const paymentIntent = await stripe.paymentIntents.create(paymentIntentData)
+    return { success: true, data: paymentIntent }
+  } catch (error) {
+    return handleStripeError(error)
+  }
+}
+
+export async function createDirectPaymentIntent({
+  amount,
+  currency = 'mxn',
+  connectedAccountId,
+  applicationFeeAmount,
+  paymentMethods = ['card', 'oxxo'],
+  metadata = {},
+}: {
+  amount: number
+  currency?: string
+  connectedAccountId: string
+  applicationFeeAmount?: number
+  paymentMethods?: string[]
+  metadata?: Record<string, string>
+}) {
+  const paymentIntent = await stripe.paymentIntents.create({
+    amount,
+    currency,
+    payment_method_types: paymentMethods,
+    application_fee_amount: applicationFeeAmount,
+    metadata,
+  }, {
+    stripeAccount: connectedAccountId,
+  })
+
+  return paymentIntent
+}
+
+/**
+ * Retrieve payment intent with error handling
+ */
+export async function retrievePaymentIntent(
+  paymentIntentId: string, 
+  connectedAccountId?: string
+): Promise<StripeResponse<Stripe.PaymentIntent>> {
+  try {
+    const options = connectedAccountId ? { stripeAccount: connectedAccountId } : {}
+    const paymentIntent = await stripe.paymentIntents.retrieve(paymentIntentId, options)
+    return { success: true, data: paymentIntent }
+  } catch (error) {
+    return handleStripeError(error)
+  }
+}
+
+/**
+ * Create transfer with error handling
+ */
+export async function createTransfer({
+  amount,
+  destination,
+  transferGroup,
+  metadata = {},
+}: {
+  amount: number
+  destination: string
+  transferGroup?: string
+  metadata?: Record<string, string>
+}): Promise<StripeResponse<Stripe.Transfer>> {
+  try {
+    const transfer = await stripe.transfers.create({
+      amount,
+      currency: STRIPE_CONFIG.currency,
+      destination,
+      transfer_group: transferGroup,
+      metadata: {
+        ...metadata,
+        created_at: new Date().toISOString(),
+        platform: 'padelyzer'
+      },
+    })
+
+    return { success: true, data: transfer }
+  } catch (error) {
+    return handleStripeError(error)
+  }
+}
+
+/**
+ * Construct webhook event with error handling
+ */
+export function constructWebhookEvent(
+  body: string | Buffer, 
+  signature: string
+): StripeResponse<Stripe.Event> {
+  try {
+    const webhookSecret = process.env.STRIPE_WEBHOOK_SECRET!
+    const event = stripe.webhooks.constructEvent(body, signature, webhookSecret)
+    return { success: true, data: event }
+  } catch (error) {
+    return {
+      success: false,
+      error: {
+        type: 'webhook_signature_verification_failed',
+        message: 'Webhook signature verification failed',
+      },
+      retryable: false
+    }
+  }
+}
+
+/**
+ * Handle Stripe errors with proper categorization
+ */
+function handleStripeError(error: any): StripeErrorResponse {
+  if (error.type) {
+    // This is a Stripe error
+    return {
+      success: false,
+      error: {
+        type: error.type,
+        code: error.code,
+        message: error.message,
+        param: error.param,
+        decline_code: error.decline_code,
+      },
+      retryable: isRetryableError(error.type)
+    }
+  }
+
+  // This is a generic error
+  return {
+    success: false,
+    error: {
+      type: 'api_error',
+      message: error.message || 'An unexpected error occurred',
+    },
+    retryable: false
+  }
+}
+
+/**
+ * Determine if a Stripe error is retryable
+ */
+function isRetryableError(errorType: string): boolean {
+  const retryableErrors = [
+    'api_connection_error',
+    'api_error',
+    'rate_limit_error'
+  ]
+  
+  return retryableErrors.includes(errorType)
+}
+
+/**
+ * Retry wrapper for Stripe operations
+ */
+export async function withRetry<T>(
+  operation: () => Promise<StripeResponse<T>>,
+  maxRetries: number = STRIPE_CONFIG.maxRetries
+): Promise<StripeResponse<T>> {
+  let lastError: StripeErrorResponse
+  
+  for (let attempt = 1; attempt <= maxRetries; attempt++) {
+    try {
+      const result = await operation()
+      
+      if (result.success || !result.retryable) {
+        return result
+      }
+      
+      lastError = result
+      
+      if (attempt < maxRetries) {
+        // Exponential backoff: 1s, 2s, 4s
+        const delayMs = Math.pow(2, attempt - 1) * 1000
+        await new Promise(resolve => setTimeout(resolve, delayMs))
+      }
+    } catch (error) {
+      lastError = handleStripeError(error)
+      
+      if (!lastError.retryable || attempt === maxRetries) {
+        return lastError
+      }
+      
+      // Exponential backoff
+      const delayMs = Math.pow(2, attempt - 1) * 1000
+      await new Promise(resolve => setTimeout(resolve, delayMs))
+    }
+  }
+  
+  return lastError!
+}
+
+/**
+ * Get Stripe error message for user display
+ */
+export function getDisplayErrorMessage(error: StripeErrorResponse): string {
+  const errorMessages: Record<string, string> = {
+    'card_declined': 'Tu tarjeta fue rechazada. Intenta con otra tarjeta.',
+    'expired_card': 'Tu tarjeta ha expirado. Intenta con otra tarjeta.',
+    'incorrect_cvc': 'El código de seguridad es incorrecto.',
+    'insufficient_funds': 'Fondos insuficientes. Intenta con otra tarjeta.',
+    'invalid_expiry_month': 'El mes de expiración es inválido.',
+    'invalid_expiry_year': 'El año de expiración es inválido.',
+    'invalid_number': 'El número de tarjeta es inválido.',
+    'processing_error': 'Error procesando el pago. Intenta nuevamente.',
+    'rate_limit_error': 'Demasiadas solicitudes. Intenta en unos momentos.',
+  }
+  
+  return errorMessages[error.error.code || error.error.type] || 
+         'Error procesando el pago. Intenta nuevamente.'
+}

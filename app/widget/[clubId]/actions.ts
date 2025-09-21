@@ -1,0 +1,246 @@
+'use server'
+
+import { prisma } from '@/lib/config/prisma'
+import { z } from 'zod'
+import { sanitizeInput, validatePhoneNumber, validateEmail } from '@/lib/widget/security'
+import { sendWidgetBookingConfirmation, sendClubNotification } from '@/lib/widget/notifications'
+import { headers } from 'next/headers'
+
+// Rate limiting for widget bookings - simple in-memory cache
+const bookingAttempts = new Map<string, { count: number; resetTime: number }>()
+
+function checkRateLimit(identifier: string, limit = 5, windowMs = 300000) { // 5 attempts per 5 minutes
+  const now = Date.now()
+  const current = bookingAttempts.get(identifier) || { count: 0, resetTime: now + windowMs }
+  
+  if (current.resetTime < now) {
+    current.count = 1
+    current.resetTime = now + windowMs
+  } else {
+    current.count++
+  }
+  
+  bookingAttempts.set(identifier, current)
+  return current.count <= limit
+}
+
+const WidgetBookingSchema = z.object({
+  clubSlug: z.string(),
+  courtId: z.string().cuid(),
+  date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+  startTime: z.string().regex(/^\d{2}:\d{2}$/),
+  duration: z.number().min(60).max(180),
+  playerName: z.string().min(2).max(100),
+  playerEmail: z.string().email().optional().or(z.literal('')),
+  playerPhone: z.string().min(10),
+  paymentType: z.enum(['FULL', 'SPLIT']),
+})
+
+export async function createWidgetBooking(data: any) {
+  try {
+    // Rate limiting check
+    const headersList = await headers()
+    const ip = headersList.get('x-forwarded-for') || headersList.get('x-real-ip') || 'unknown'
+    
+    if (!checkRateLimit(ip)) {
+      return { error: 'Demasiados intentos. Intenta de nuevo en unos minutos.' }
+    }
+
+    // Validate input
+    const parsed = WidgetBookingSchema.safeParse(data)
+    if (!parsed.success) {
+      return { error: 'Datos inválidos: ' + parsed.error.message }
+    }
+
+    const bookingData = parsed.data
+
+    // Additional security validations
+    if (!validatePhoneNumber(bookingData.playerPhone)) {
+      return { error: 'Número de teléfono inválido' }
+    }
+
+    if (!validateEmail(bookingData.playerEmail)) {
+      return { error: 'Email inválido' }
+    }
+
+    // Sanitize inputs
+    bookingData.playerName = sanitizeInput(bookingData.playerName, 100)
+    bookingData.playerEmail = sanitizeInput(bookingData.playerEmail, 100)
+    bookingData.playerPhone = sanitizeInput(bookingData.playerPhone, 20)
+
+    // Validate booking is not in the past
+    const bookingDate = new Date(bookingData.date)
+    const now = new Date()
+    now.setHours(0, 0, 0, 0) // Start of today
+    
+    if (bookingDate < now) {
+      return { error: 'No se puede reservar en fechas pasadas' }
+    }
+
+    // Validate booking is not too far in the future (max 30 days)
+    const maxDate = new Date()
+    maxDate.setDate(maxDate.getDate() + 30)
+    
+    if (bookingDate > maxDate) {
+      return { error: 'No se puede reservar con más de 30 días de anticipación' }
+    }
+
+    // Get club
+    const club = await prisma.club.findFirst({
+      where: { 
+        OR: [
+          { slug: bookingData.clubSlug },
+          { id: bookingData.clubSlug }
+        ],
+        status: 'APPROVED',
+        active: true
+      },
+      include: { 
+        courts: true,
+        pricing: true 
+      }
+    })
+
+    if (!club) {
+      return { error: 'Club no encontrado' }
+    }
+
+    // Verify court belongs to club
+    const court = club.courts.find(c => c.id === bookingData.courtId)
+    if (!court) {
+      return { error: 'Cancha no encontrada' }
+    }
+
+    // Calculate end time
+    const [startHour, startMin] = bookingData.startTime.split(':').map(Number)
+    const endMinutes = startHour * 60 + startMin + bookingData.duration
+    const endHour = Math.floor(endMinutes / 60)
+    const endMin = endMinutes % 60
+    const endTime = `${endHour.toString().padStart(2, '0')}:${endMin.toString().padStart(2, '0')}`
+
+    // Check for conflicts
+    const conflictingBooking = await prisma.booking.findFirst({
+      where: {
+        courtId: bookingData.courtId,
+        date: new Date(bookingData.date),
+        status: { not: 'CANCELLED' },
+        OR: [
+          {
+            AND: [
+              { startTime: { lte: bookingData.startTime } },
+              { endTime: { gt: bookingData.startTime } }
+            ]
+          },
+          {
+            AND: [
+              { startTime: { lt: endTime } },
+              { endTime: { gte: endTime } }
+            ]
+          },
+          {
+            AND: [
+              { startTime: { gte: bookingData.startTime } },
+              { endTime: { lte: endTime } }
+            ]
+          }
+        ]
+      }
+    })
+
+    if (conflictingBooking) {
+      return { error: 'Este horario ya no está disponible' }
+    }
+
+    // Calculate price
+    const date = new Date(bookingData.date)
+    const dayOfWeek = date.getDay()
+    const matchingPrice = club.pricing.find(p => 
+      (p.dayOfWeek === null || p.dayOfWeek === dayOfWeek) &&
+      p.startTime <= bookingData.startTime &&
+      p.endTime > bookingData.startTime
+    )
+    
+    const basePrice = matchingPrice ? matchingPrice.price : 50000 // Default 500 MXN in cents
+    const price = Math.round(basePrice * (bookingData.duration / 60))
+
+    // Create booking
+    const booking = await prisma.booking.create({
+      data: {
+        clubId: club.id,
+        courtId: bookingData.courtId,
+        date: new Date(bookingData.date),
+        startTime: bookingData.startTime,
+        endTime: endTime,
+        duration: bookingData.duration,
+        playerName: bookingData.playerName,
+        playerEmail: bookingData.playerEmail || '',
+        playerPhone: bookingData.playerPhone,
+        price: price,
+        currency: 'MXN',
+        paymentStatus: 'pending',
+        paymentType: 'ONSITE', // Widget bookings are always paid onsite
+        status: 'CONFIRMED',
+        totalPlayers: 4,
+      },
+      include: {
+        court: {
+          select: {
+            name: true
+          }
+        }
+      }
+    })
+
+    // Create payment record
+    await prisma.payment.create({
+      data: {
+        bookingId: booking.id,
+        amount: price,
+        currency: 'MXN',
+        method: 'ONSITE',
+        status: 'pending',
+      }
+    })
+
+    // Prepare booking data for notifications
+    const notificationData = {
+      id: booking.id,
+      playerName: booking.playerName,
+      playerEmail: booking.playerEmail,
+      playerPhone: booking.playerPhone,
+      date: booking.date,
+      startTime: booking.startTime,
+      endTime: booking.endTime,
+      duration: booking.duration,
+      price: Math.round(booking.price / 100), // Convert from cents to MXN
+      court: booking.court,
+      club: {
+        name: club.name,
+        phone: club.phone,
+        address: club.address
+      }
+    }
+
+    // Send confirmation notifications (non-blocking)
+    try {
+      await Promise.all([
+        sendWidgetBookingConfirmation(notificationData),
+        sendClubNotification(notificationData)
+      ])
+    } catch (notificationError) {
+      // Don't fail the booking if notifications fail
+      console.error('Notification error:', notificationError)
+    }
+
+    return { 
+      success: true, 
+      bookingId: booking.id,
+      booking: notificationData,
+      message: `Reserva confirmada para ${bookingData.date} a las ${bookingData.startTime}. Te esperamos en ${club.name}!`
+    }
+
+  } catch (error) {
+    console.error('Widget booking error:', error)
+    return { error: 'Error interno. Intenta de nuevo.' }
+  }
+}

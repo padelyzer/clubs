@@ -1,0 +1,227 @@
+import { prisma } from '@/lib/config/prisma'
+import crypto from 'crypto'
+
+interface PaymentLinkData {
+  splitPaymentId: string
+  amount: number
+  description: string
+  playerName: string
+  playerEmail?: string
+  playerPhone: string
+  bookingId: string
+}
+
+interface PaymentLinkValidation {
+  isValid: boolean
+  reason?: string
+  bookingId?: string
+  splitPaymentId?: string
+  amount?: number
+  status?: string
+}
+
+export async function generatePaymentLink(data: PaymentLinkData): Promise<string> {
+  // Generate payment link pointing to our secure payment page
+  const baseUrl = process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000'
+  
+  // Create a signed token to prevent tampering
+  const token = generateSecureToken({
+    splitPaymentId: data.splitPaymentId,
+    bookingId: data.bookingId,
+    amount: data.amount,
+    timestamp: Date.now()
+  })
+  
+  // Create direct link to payment page with split payment ID and token
+  const paymentLink = `${baseUrl}/pay/${data.bookingId}?split=${data.splitPaymentId}&token=${token}`
+  
+  return paymentLink
+}
+
+export function generatePaymentId(): string {
+  const timestamp = Date.now().toString(36)
+  const randomStr = Math.random().toString(36).substring(2, 15)
+  return `pay_${timestamp}_${randomStr}`
+}
+
+/**
+ * Generate a secure token for payment link validation
+ */
+function generateSecureToken(data: any): string {
+  const secret = process.env.PAYMENT_TOKEN_SECRET || process.env.ENCRYPTION_KEY || 'fallback-payment-secret'
+  const payload = JSON.stringify(data)
+  const hash = crypto.createHmac('sha256', secret).update(payload).digest('hex')
+  const token = Buffer.from(`${payload}:${hash}`).toString('base64url')
+  return token
+}
+
+/**
+ * Verify a secure token
+ */
+function verifySecureToken(token: string): { valid: boolean; data?: any } {
+  try {
+    const secret = process.env.PAYMENT_TOKEN_SECRET || process.env.ENCRYPTION_KEY || 'fallback-payment-secret'
+    const decoded = Buffer.from(token, 'base64url').toString()
+    const [payload, hash] = decoded.split(':')
+    
+    const expectedHash = crypto.createHmac('sha256', secret).update(payload).digest('hex')
+    
+    if (hash === expectedHash) {
+      return { valid: true, data: JSON.parse(payload) }
+    }
+    
+    return { valid: false }
+  } catch (error) {
+    console.error('Token verification error:', error)
+    return { valid: false }
+  }
+}
+
+export async function validatePaymentLink(
+  paymentId: string, 
+  token?: string
+): Promise<PaymentLinkValidation> {
+  // Basic validation - check format
+  if (!paymentId || !paymentId.startsWith('pay_')) {
+    return { 
+      isValid: false, 
+      reason: 'Invalid payment ID format' 
+    }
+  }
+
+  // If token provided, verify it
+  if (token) {
+    const tokenResult = verifySecureToken(token)
+    if (!tokenResult.valid) {
+      return {
+        isValid: false,
+        reason: 'Invalid or tampered payment link'
+      }
+    }
+
+    // Check token expiration (24 hours)
+    const tokenData = tokenResult.data
+    const expirationTime = 24 * 60 * 60 * 1000 // 24 hours in milliseconds
+    if (Date.now() - tokenData.timestamp > expirationTime) {
+      return {
+        isValid: false,
+        reason: 'Payment link has expired'
+      }
+    }
+  }
+
+  // Check database for split payment record
+  try {
+    const splitPayment = await prisma.splitPayment.findUnique({
+      where: { id: paymentId },
+      include: {
+        booking: {
+          select: {
+            id: true,
+            status: true,
+            totalPrice: true
+          }
+        }
+      }
+    })
+
+    if (!splitPayment) {
+      return {
+        isValid: false,
+        reason: 'Payment record not found'
+      }
+    }
+
+    // Check if already paid
+    if (splitPayment.status === 'PAID') {
+      return {
+        isValid: false,
+        reason: 'Payment already completed',
+        status: 'PAID'
+      }
+    }
+
+    // Check if booking is still valid
+    if (splitPayment.booking.status === 'CANCELLED') {
+      return {
+        isValid: false,
+        reason: 'Booking has been cancelled',
+        status: 'CANCELLED'
+      }
+    }
+
+    return {
+      isValid: true,
+      bookingId: splitPayment.bookingId,
+      splitPaymentId: splitPayment.id,
+      amount: splitPayment.amount,
+      status: splitPayment.status
+    }
+  } catch (error) {
+    console.error('Database validation error:', error)
+    return {
+      isValid: false,
+      reason: 'Error validating payment'
+    }
+  }
+}
+
+export async function processPaymentCompletion(
+  paymentId: string,
+  splitPaymentId: string,
+  paymentIntentId?: string
+): Promise<{ success: boolean; error?: string }> {
+  try {
+    // First validate the payment link
+    const validation = await validatePaymentLink(paymentId)
+    
+    if (!validation.isValid) {
+      return {
+        success: false,
+        error: validation.reason || 'Invalid payment link'
+      }
+    }
+
+    // Verify with Stripe if payment intent provided
+    if (paymentIntentId) {
+      const stripe = await import('stripe').then(m => new m.default(
+        process.env.STRIPE_SECRET_KEY || '',
+        { apiVersion: '2024-12-18.acacia' }
+      ))
+      
+      const paymentIntent = await stripe.paymentIntents.retrieve(paymentIntentId)
+      
+      if (paymentIntent.status !== 'succeeded') {
+        return {
+          success: false,
+          error: `Payment not completed. Status: ${paymentIntent.status}`
+        }
+      }
+      
+      // Verify amount matches
+      if (validation.amount && paymentIntent.amount !== validation.amount) {
+        console.error('Payment amount mismatch:', {
+          expected: validation.amount,
+          received: paymentIntent.amount
+        })
+        return {
+          success: false,
+          error: 'Payment amount mismatch'
+        }
+      }
+    }
+    
+    // Import here to avoid circular dependency
+    const { processSplitPaymentCompletion } = await import('./split-payment')
+    
+    await processSplitPaymentCompletion(splitPaymentId)
+    
+    return { success: true }
+  } catch (error) {
+    console.error('Error processing payment completion:', error)
+    return { 
+      success: false, 
+      error: error instanceof Error ? error.message : 'Error processing payment' 
+    }
+  }
+}

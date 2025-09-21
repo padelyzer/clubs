@@ -1,0 +1,177 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Test Búsqueda en Ingresos</title>
+    <style>
+        body {
+            font-family: system-ui, -apple-system, sans-serif;
+            padding: 20px;
+            background: #f5f5f5;
+        }
+        .container {
+            max-width: 800px;
+            margin: 0 auto;
+            background: white;
+            padding: 30px;
+            border-radius: 12px;
+            box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+        }
+        h1 {
+            color: #182A01;
+            border-bottom: 2px solid #A4DF4E;
+            padding-bottom: 10px;
+        }
+        .test-section {
+            margin: 30px 0;
+            padding: 20px;
+            background: #f9fdf5;
+            border-radius: 8px;
+            border: 1px solid #A4DF4E;
+        }
+        h2 {
+            color: #516640;
+            margin-top: 0;
+        }
+        .step {
+            margin: 15px 0;
+            padding: 10px;
+            background: white;
+            border-radius: 6px;
+        }
+        .step-number {
+            display: inline-block;
+            width: 30px;
+            height: 30px;
+            background: #A4DF4E;
+            color: #182A01;
+            text-align: center;
+            line-height: 30px;
+            border-radius: 50%;
+            font-weight: bold;
+            margin-right: 10px;
+        }
+        a {
+            color: #22C55E;
+            text-decoration: none;
+            font-weight: 600;
+        }
+        a:hover {
+            text-decoration: underline;
+        }
+        .success {
+            color: #22C55E;
+            font-weight: bold;
+        }
+        .info {
+            background: #e8f7dc;
+            padding: 15px;
+            border-radius: 8px;
+            margin: 20px 0;
+            border-left: 4px solid #A4DF4E;
+        }
+        code {
+            background: #f0f9ff;
+            padding: 2px 6px;
+            border-radius: 3px;
+            font-family: 'Courier New', monospace;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🔍 Test de Búsqueda en Módulo de Ingresos</h1>
+
+        <div class="info">
+            <strong>✅ Ambas rutas han sido arregladas:</strong>
+            <ul>
+                <li>Ruta 1: <code>/dashboard/finance</code> → Click en "Ingresos"</li>
+                <li>Ruta 2: <code>/c/basic5-club/dashboard/finance/income</code></li>
+            </ul>
+        </div>
+
+        <div class="test-section">
+            <h2>📍 Ruta 1: Dashboard Principal</h2>
+
+            <div class="step">
+                <span class="step-number">1</span>
+                <a href="http://localhost:3002/dashboard/finance" target="_blank">
+                    Abrir Dashboard de Finanzas
+                </a>
+            </div>
+
+            <div class="step">
+                <span class="step-number">2</span>
+                Haz click en el botón <strong>"Ingresos"</strong> en el menú lateral izquierdo
+            </div>
+
+            <div class="step">
+                <span class="step-number">3</span>
+                En el campo de búsqueda, escribe <code>juan</code> o <code>Juan Pérez</code>
+            </div>
+
+            <div class="step">
+                <span class="step-number">4</span>
+                <span class="success">Deberías ver la transacción de Juan Pérez ($750)</span>
+            </div>
+        </div>
+
+        <div class="test-section">
+            <h2>📍 Ruta 2: Club Específico</h2>
+
+            <div class="step">
+                <span class="step-number">1</span>
+                <a href="http://localhost:3002/c/basic5-club/dashboard/finance/income" target="_blank">
+                    Abrir Ingresos Directamente
+                </a>
+            </div>
+
+            <div class="step">
+                <span class="step-number">2</span>
+                En el campo de búsqueda, escribe <code>juan</code> o <code>Juan Pérez</code>
+            </div>
+
+            <div class="step">
+                <span class="step-number">3</span>
+                <span class="success">Deberías ver la transacción de Juan Pérez ($750)</span>
+            </div>
+        </div>
+
+        <div class="info">
+            <strong>💡 Información de la Transacción:</strong>
+            <ul>
+                <li><strong>Cliente:</strong> Juan Pérez</li>
+                <li><strong>Monto:</strong> $750.00 (90 minutos a $500/hora)</li>
+                <li><strong>Fecha:</strong> 10 de Septiembre 2024</li>
+                <li><strong>Cancha:</strong> Cancha 1</li>
+                <li><strong>Horario:</strong> 11:30 - 13:00</li>
+                <li><strong>Posición en lista:</strong> #289 de 626 transacciones</li>
+            </ul>
+        </div>
+
+        <div class="test-section" style="background: #fff9e6; border-color: #fbbf24;">
+            <h2>🎯 Funciones Adicionales</h2>
+
+            <div class="step">
+                <strong>Búsquedas que puedes probar:</strong>
+                <ul>
+                    <li>Por nombre: <code>juan</code>, <code>pérez</code></li>
+                    <li>Por categoría: <code>reservas</code></li>
+                    <li>Por referencia: <code>tx_1758</code></li>
+                    <li>Por descripción: <code>cancha</code></li>
+                </ul>
+            </div>
+
+            <div class="step">
+                <strong>Si no aparecen resultados:</strong>
+                <ul>
+                    <li>Verifica que el término esté bien escrito</li>
+                    <li>La búsqueda no distingue mayúsculas/minúsculas</li>
+                    <li>Aparecerá un mensaje "No se encontraron transacciones"</li>
+                </ul>
+            </div>
+        </div>
+    </div>
+</body>
+</html>

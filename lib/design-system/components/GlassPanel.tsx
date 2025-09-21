@@ -1,0 +1,261 @@
+'use client';
+
+import React, { forwardRef } from 'react';
+import { cn } from '@/lib/utils';
+
+export interface GlassPanelProps extends React.HTMLAttributes<HTMLDivElement> {
+  /**
+   * Blur intensity for the glass effect
+   */
+  blur?: 'none' | 'sm' | 'base' | 'md' | 'lg' | 'xl';
+  
+  /**
+   * Opacity of the glass background
+   */
+  opacity?: 'low' | 'medium' | 'high';
+  
+  /**
+   * Border style
+   */
+  border?: boolean;
+  
+  /**
+   * Shadow style
+   */
+  shadow?: 'none' | 'sm' | 'base' | 'md' | 'lg' | 'xl';
+  
+  /**
+   * Padding size
+   */
+  padding?: 'none' | 'sm' | 'base' | 'md' | 'lg' | 'xl';
+  
+  /**
+   * Border radius
+   */
+  radius?: 'none' | 'sm' | 'base' | 'md' | 'lg' | 'xl' | 'full';
+  
+  /**
+   * Animation on hover
+   */
+  hoverEffect?: boolean;
+  
+  /**
+   * As a specific HTML element
+   */
+  as?: React.ElementType;
+}
+
+/**
+ * GlassPanel Component
+ * Creates a glassmorphism effect panel inspired by Linear's UI
+ */
+export const GlassPanel = forwardRef<HTMLDivElement, GlassPanelProps>(
+  (
+    {
+      blur = 'base',
+      opacity = 'medium',
+      border = true,
+      shadow = 'base',
+      padding = 'base',
+      radius = 'lg',
+      hoverEffect = false,
+      as: Component = 'div',
+      className,
+      children,
+      ...props
+    },
+    ref
+  ) => {
+    const blurClasses = {
+      none: '',
+      sm: 'backdrop-blur-sm',
+      base: 'backdrop-blur',
+      md: 'backdrop-blur-md',
+      lg: 'backdrop-blur-lg',
+      xl: 'backdrop-blur-xl',
+    };
+    
+    const opacityClasses = {
+      low: 'bg-white/30 dark:bg-gray-900/30',
+      medium: 'bg-white/50 dark:bg-gray-900/50',
+      high: 'bg-white/70 dark:bg-gray-900/70',
+    };
+    
+    const shadowClasses = {
+      none: '',
+      sm: 'shadow-sm',
+      base: 'shadow',
+      md: 'shadow-md',
+      lg: 'shadow-lg',
+      xl: 'shadow-xl',
+    };
+    
+    const paddingClasses = {
+      none: '',
+      sm: 'p-3',
+      base: 'p-4',
+      md: 'p-6',
+      lg: 'p-8',
+      xl: 'p-10',
+    };
+    
+    const radiusClasses = {
+      none: '',
+      sm: 'rounded',
+      base: 'rounded-md',
+      md: 'rounded-lg',
+      lg: 'rounded-xl',
+      xl: 'rounded-2xl',
+      full: 'rounded-full',
+    };
+    
+    return (
+      <Component
+        ref={ref}
+        className={cn(
+          // Base styles
+          'relative overflow-hidden',
+          
+          // Glass effect
+          blurClasses[blur],
+          opacityClasses[opacity],
+          
+          // Border
+          border && 'border border-white/20 dark:border-white/10',
+          
+          // Shadow
+          shadowClasses[shadow],
+          
+          // Padding
+          paddingClasses[padding],
+          
+          // Radius
+          radiusClasses[radius],
+          
+          // Hover effect
+          hoverEffect && [
+            'transition-all duration-200',
+            'hover:bg-white/60 dark:hover:bg-gray-900/60',
+            'hover:shadow-lg',
+            'hover:backdrop-blur-lg',
+            'hover:border-white/30 dark:hover:border-white/20',
+          ],
+          
+          // User classes
+          className
+        )}
+        {...props}
+      >
+        {/* Inner glow effect */}
+        <div 
+          className="absolute inset-0 bg-gradient-to-br from-white/10 via-transparent to-transparent pointer-events-none"
+          aria-hidden="true"
+        />
+        
+        {/* Content */}
+        <div className="relative z-10">
+          {children}
+        </div>
+      </Component>
+    );
+  }
+);
+
+GlassPanel.displayName = 'GlassPanel';
+
+/**
+ * Glass Card variant with predefined styles
+ */
+export const GlassCard = forwardRef<HTMLDivElement, GlassPanelProps>(
+  ({ className, ...props }, ref) => {
+    return (
+      <GlassPanel
+        ref={ref}
+        blur="md"
+        opacity="high"
+        border
+        shadow="md"
+        padding="md"
+        radius="lg"
+        hoverEffect
+        className={cn('group', className)}
+        {...props}
+      />
+    );
+  }
+);
+
+GlassCard.displayName = 'GlassCard';
+
+/**
+ * Glass Modal backdrop
+ */
+export const GlassBackdrop = forwardRef<HTMLDivElement, Omit<GlassPanelProps, 'blur' | 'opacity'>>(
+  ({ className, ...props }, ref) => {
+    return (
+      <div
+        ref={ref}
+        className={cn(
+          'fixed inset-0 z-50',
+          'bg-black/20 backdrop-blur-sm',
+          'animate-in fade-in-0',
+          className
+        )}
+        {...props}
+      />
+    );
+  }
+);
+
+GlassBackdrop.displayName = 'GlassBackdrop';
+
+/**
+ * Glass Button variant
+ */
+export const GlassButton = forwardRef<HTMLButtonElement, React.ButtonHTMLAttributes<HTMLButtonElement> & {
+  variant?: 'default' | 'ghost' | 'subtle';
+  size?: 'sm' | 'base' | 'lg';
+}>(
+  ({ variant = 'default', size = 'base', className, children, ...props }, ref) => {
+    const variantClasses = {
+      default: 'bg-white/50 dark:bg-gray-900/50 hover:bg-white/70 dark:hover:bg-gray-900/70 border-white/20',
+      ghost: 'bg-transparent hover:bg-white/20 dark:hover:bg-gray-900/20 border-transparent',
+      subtle: 'bg-white/20 dark:bg-gray-900/20 hover:bg-white/30 dark:hover:bg-gray-900/30 border-white/10',
+    };
+    
+    const sizeClasses = {
+      sm: 'px-3 py-1.5 text-sm',
+      base: 'px-4 py-2 text-base',
+      lg: 'px-6 py-3 text-lg',
+    };
+    
+    return (
+      <button
+        ref={ref}
+        className={cn(
+          // Base styles
+          'relative inline-flex items-center justify-center',
+          'font-medium rounded-lg',
+          'backdrop-blur-md border',
+          'transition-all duration-200',
+          'focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500',
+          'disabled:opacity-50 disabled:cursor-not-allowed',
+          
+          // Variant styles
+          variantClasses[variant],
+          
+          // Size styles
+          sizeClasses[size],
+          
+          // User classes
+          className
+        )}
+        {...props}
+      >
+        {children}
+      </button>
+    );
+  }
+);
+
+GlassButton.displayName = 'GlassButton';

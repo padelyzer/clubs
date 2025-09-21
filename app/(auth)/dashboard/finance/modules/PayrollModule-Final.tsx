@@ -1,0 +1,686 @@
+'use client'
+
+import React, { useState, useEffect } from 'react'
+import { CardModern } from '@/components/design-system/CardModern'
+import {
+  Plus, Search, Filter, Download, Users,
+  UserCheck, Clock, DollarSign, Award,
+  Eye, Edit, ChevronLeft, ChevronRight, FileText,
+  TrendingUp, AlertCircle, Calendar, CheckCircle
+} from 'lucide-react'
+import { format } from 'date-fns'
+import { es } from 'date-fns/locale'
+
+// Función de formato de moneda
+const formatCurrency = (cents: number) => {
+  return new Intl.NumberFormat('es-MX', {
+    style: 'currency',
+    currency: 'MXN',
+    minimumFractionDigits: 2
+  }).format(cents / 100)
+}
+
+
+interface PayrollModuleFinalProps {
+  activeTab?: string
+}
+
+export default function PayrollModuleFinal({ activeTab = 'payroll-employees' }: PayrollModuleFinalProps) {
+  const [searchQuery, setSearchQuery] = useState('')
+  const [selectedPeriod, setSelectedPeriod] = useState(new Date())
+  const [currentTab, setCurrentTab] = useState<'employees' | 'instructors' | 'history'>('employees')
+  const [payrollData, setPayrollData] = useState<any[]>([])
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState('')
+
+  useEffect(() => {
+    console.log('💼 PayrollModule-Final mounted')
+    fetchPayrollData()
+  }, [selectedPeriod])
+
+  const fetchPayrollData = async () => {
+    console.log('📡 Fetching payroll data from API...')
+    setLoading(true)
+    setError('')
+
+    try {
+      const period = format(selectedPeriod, 'yyyy-MM')
+      const response = await fetch(`/api/finance/payroll?period=${period}`)
+
+      if (response.ok) {
+        const data = await response.json()
+        console.log('✅ API Data received:', data)
+
+        if (data.success && data.payroll && data.payroll.length > 0) {
+          setPayrollData(data.payroll)
+        } else {
+          setError('No hay datos de nómina para este periodo')
+          setPayrollData([])
+        }
+      } else {
+        setError(`Error del servidor: ${response.status}`)
+        setPayrollData([])
+      }
+    } catch (err) {
+      console.error('❌ Error fetching data:', err)
+      setError('Error al conectar con el servidor')
+      setPayrollData([])
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  // Filtrar datos según búsqueda
+  const filteredData = payrollData.filter(record =>
+    record.employeeName.toLowerCase().includes(searchQuery.toLowerCase()) ||
+    record.employeeRole.toLowerCase().includes(searchQuery.toLowerCase())
+  )
+
+  // Separar por tipo
+  const employees = filteredData.filter(r =>
+    !r.employeeRole.toLowerCase().includes('instructor') &&
+    !r.employeeRole.toLowerCase().includes('entrenador')
+  )
+
+  const instructors = filteredData.filter(r =>
+    r.employeeRole.toLowerCase().includes('instructor') ||
+    r.employeeRole.toLowerCase().includes('entrenador')
+  )
+
+  // Calcular totales
+  const totalPayroll = filteredData.reduce((sum, r) => sum + r.netAmount, 0)
+  const totalEmployees = employees.reduce((sum, r) => sum + r.netAmount, 0)
+  const totalInstructors = instructors.reduce((sum, r) => sum + r.netAmount, 0)
+  const totalBonuses = filteredData.reduce((sum, r) => sum + r.bonuses, 0)
+
+  const currentData = currentTab === 'employees' ? employees :
+                      currentTab === 'instructors' ? instructors :
+                      filteredData
+
+  const exportData = () => {
+    const csvContent = [
+      ['Empleado', 'Rol', 'Salario Base', 'Bonos', 'Deducciones', 'Neto', 'Estado'].join(','),
+      ...currentData.map(r => [
+        r.employeeName,
+        r.employeeRole,
+        (r.baseSalary / 100).toFixed(2),
+        (r.bonuses / 100).toFixed(2),
+        (r.deductions / 100).toFixed(2),
+        (r.netAmount / 100).toFixed(2),
+        r.status
+      ].join(','))
+    ].join('\n')
+
+    const blob = new Blob([csvContent], { type: 'text/csv' })
+    const url = window.URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    a.href = url
+    a.download = `nomina-${format(selectedPeriod, 'yyyy-MM')}.csv`
+    a.click()
+  }
+
+  return (
+    <div style={{ padding: '24px' }}>
+      {/* Header */}
+      <div style={{ marginBottom: '24px' }}>
+        <h1 style={{
+          fontSize: '28px',
+          fontWeight: 700,
+          color: '#182A01',
+          marginBottom: '8px'
+        }}>
+          Gestión de Nómina
+        </h1>
+        <p style={{ fontSize: '14px', color: '#516640' }}>
+          Administra pagos de empleados e instructores
+        </p>
+      </div>
+
+      {/* Mensaje de error si existe */}
+      {error && (
+        <CardModern variant="glass" style={{ marginBottom: '20px' }}>
+          <div style={{ padding: '16px' }}>
+            <div style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: '10px',
+              padding: '10px',
+              background: '#ffebee',
+              color: '#c62828',
+              borderRadius: '5px',
+              fontSize: '14px'
+            }}>
+              <AlertCircle style={{ width: '20px', height: '20px' }} />
+              {error}
+              <button
+                onClick={fetchPayrollData}
+                style={{
+                  marginLeft: 'auto',
+                  padding: '6px 12px',
+                  background: '#c62828',
+                  color: 'white',
+                  border: 'none',
+                  borderRadius: '4px',
+                  cursor: 'pointer',
+                  fontSize: '12px'
+                }}
+              >
+                Reintentar
+              </button>
+            </div>
+          </div>
+        </CardModern>
+      )}
+
+      {/* Stats Cards */}
+      <div style={{
+        display: 'grid',
+        gridTemplateColumns: 'repeat(4, 1fr)',
+        gap: '20px',
+        marginBottom: '32px'
+      }}>
+        <CardModern variant="glass">
+          <div style={{ padding: '24px' }}>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '12px' }}>
+              <div style={{
+                width: '40px',
+                height: '40px',
+                borderRadius: '10px',
+                background: 'rgba(164, 223, 78, 0.1)',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center'
+              }}>
+                <DollarSign style={{ width: '20px', height: '20px', color: '#A4DF4E' }} />
+              </div>
+              <span style={{ fontSize: '12px', color: '#A4DF4E', fontWeight: 600 }}>
+                {format(selectedPeriod, 'MMM', { locale: es })}
+              </span>
+            </div>
+            <p style={{ fontSize: '12px', color: '#516640', marginBottom: '4px' }}>Total Nómina</p>
+            <p style={{ fontSize: '24px', fontWeight: 700, color: '#182A01' }}>
+              {formatCurrency(totalPayroll)}
+            </p>
+          </div>
+        </CardModern>
+
+        <CardModern variant="glass">
+          <div style={{ padding: '24px' }}>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '12px' }}>
+              <div style={{
+                width: '40px',
+                height: '40px',
+                borderRadius: '10px',
+                background: 'rgba(59, 130, 246, 0.1)',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center'
+              }}>
+                <Users style={{ width: '20px', height: '20px', color: '#3B82F6' }} />
+              </div>
+              <span style={{ fontSize: '12px', color: '#3B82F6', fontWeight: 600 }}>
+                {employees.length}
+              </span>
+            </div>
+            <p style={{ fontSize: '12px', color: '#516640', marginBottom: '4px' }}>Empleados Fijos</p>
+            <p style={{ fontSize: '24px', fontWeight: 700, color: '#182A01' }}>
+              {formatCurrency(totalEmployees)}
+            </p>
+          </div>
+        </CardModern>
+
+        <CardModern variant="glass">
+          <div style={{ padding: '24px' }}>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '12px' }}>
+              <div style={{
+                width: '40px',
+                height: '40px',
+                borderRadius: '10px',
+                background: 'rgba(239, 68, 68, 0.1)',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center'
+              }}>
+                <UserCheck style={{ width: '20px', height: '20px', color: '#EF4444' }} />
+              </div>
+              <span style={{ fontSize: '12px', color: '#EF4444', fontWeight: 600 }}>
+                {instructors.length}
+              </span>
+            </div>
+            <p style={{ fontSize: '12px', color: '#516640', marginBottom: '4px' }}>Instructores</p>
+            <p style={{ fontSize: '24px', fontWeight: 700, color: '#182A01' }}>
+              {formatCurrency(totalInstructors)}
+            </p>
+          </div>
+        </CardModern>
+
+        <CardModern variant="glass">
+          <div style={{ padding: '24px' }}>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '12px' }}>
+              <div style={{
+                width: '40px',
+                height: '40px',
+                borderRadius: '10px',
+                background: 'rgba(251, 146, 60, 0.1)',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center'
+              }}>
+                <Award style={{ width: '20px', height: '20px', color: '#FB923C' }} />
+              </div>
+              <span style={{ fontSize: '12px', color: '#FB923C', fontWeight: 600 }}>+15%</span>
+            </div>
+            <p style={{ fontSize: '12px', color: '#516640', marginBottom: '4px' }}>Total Bonos</p>
+            <p style={{ fontSize: '24px', fontWeight: 700, color: '#182A01' }}>
+              {formatCurrency(totalBonuses)}
+            </p>
+          </div>
+        </CardModern>
+      </div>
+
+      {/* Main Content */}
+      <CardModern>
+        <div style={{ padding: '24px' }}>
+          {/* Controls */}
+          <div style={{
+            display: 'flex',
+            justifyContent: 'space-between',
+            alignItems: 'center',
+            marginBottom: '24px'
+          }}>
+            <div style={{ display: 'flex', gap: '12px', alignItems: 'center' }}>
+              {/* Period Selector */}
+              <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                <button
+                  onClick={() => {
+                    const newDate = new Date(selectedPeriod)
+                    newDate.setMonth(newDate.getMonth() - 1)
+                    setSelectedPeriod(newDate)
+                  }}
+                  style={{
+                    width: '32px',
+                    height: '32px',
+                    borderRadius: '8px',
+                    border: '1px solid rgba(164, 223, 78, 0.2)',
+                    background: 'white',
+                    cursor: 'pointer',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center'
+                  }}
+                >
+                  <ChevronLeft style={{ width: '16px', height: '16px', color: '#516640' }} />
+                </button>
+                <div style={{
+                  padding: '8px 16px',
+                  borderRadius: '8px',
+                  background: 'rgba(164, 223, 78, 0.1)',
+                  color: '#182A01',
+                  fontSize: '14px',
+                  fontWeight: 500,
+                  minWidth: '140px',
+                  textAlign: 'center'
+                }}>
+                  {format(selectedPeriod, 'MMMM yyyy', { locale: es })}
+                </div>
+                <button
+                  onClick={() => {
+                    const newDate = new Date(selectedPeriod)
+                    newDate.setMonth(newDate.getMonth() + 1)
+                    setSelectedPeriod(newDate)
+                  }}
+                  style={{
+                    width: '32px',
+                    height: '32px',
+                    borderRadius: '8px',
+                    border: '1px solid rgba(164, 223, 78, 0.2)',
+                    background: 'white',
+                    cursor: 'pointer',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center'
+                  }}
+                >
+                  <ChevronRight style={{ width: '16px', height: '16px', color: '#516640' }} />
+                </button>
+              </div>
+
+              {/* Search */}
+              <div style={{
+                position: 'relative',
+                width: '240px'
+              }}>
+                <Search style={{
+                  position: 'absolute',
+                  left: '12px',
+                  top: '50%',
+                  transform: 'translateY(-50%)',
+                  width: '16px',
+                  height: '16px',
+                  color: '#9CA3AF'
+                }} />
+                <input
+                  type="text"
+                  placeholder="Buscar empleado..."
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  style={{
+                    width: '100%',
+                    padding: '8px 12px 8px 36px',
+                    borderRadius: '8px',
+                    border: '1px solid #E5E7EB',
+                    fontSize: '14px',
+                    outline: 'none'
+                  }}
+                />
+              </div>
+            </div>
+
+            <div style={{ display: 'flex', gap: '8px' }}>
+              <button
+                onClick={fetchPayrollData}
+                disabled={loading}
+                style={{
+                  padding: '8px 16px',
+                  borderRadius: '8px',
+                  border: '1px solid rgba(164, 223, 78, 0.2)',
+                  background: 'white',
+                  color: '#516640',
+                  fontSize: '14px',
+                  fontWeight: 500,
+                  cursor: loading ? 'not-allowed' : 'pointer',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '8px',
+                  opacity: loading ? 0.6 : 1
+                }}
+              >
+                {loading ? (
+                  <Clock style={{ width: '16px', height: '16px', animation: 'spin 1s linear infinite' }} />
+                ) : (
+                  <TrendingUp style={{ width: '16px', height: '16px' }} />
+                )}
+                {loading ? 'Cargando...' : 'Actualizar'}
+              </button>
+              <button
+                onClick={exportData}
+                style={{
+                  padding: '8px 16px',
+                  borderRadius: '8px',
+                  border: '1px solid rgba(164, 223, 78, 0.2)',
+                  background: 'white',
+                  color: '#516640',
+                  fontSize: '14px',
+                  fontWeight: 500,
+                  cursor: 'pointer',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '8px'
+                }}
+              >
+                <Download style={{ width: '16px', height: '16px' }} />
+                Exportar
+              </button>
+            </div>
+          </div>
+
+          {/* Tabs */}
+          <div style={{
+            display: 'flex',
+            gap: '4px',
+            borderBottom: '1px solid #E5E7EB',
+            marginBottom: '24px'
+          }}>
+            <button
+              onClick={() => setCurrentTab('employees')}
+              style={{
+                padding: '12px 24px',
+                background: 'none',
+                border: 'none',
+                borderBottom: currentTab === 'employees' ? '2px solid #A4DF4E' : 'none',
+                color: currentTab === 'employees' ? '#182A01' : '#9CA3AF',
+                fontSize: '14px',
+                fontWeight: currentTab === 'employees' ? 600 : 400,
+                cursor: 'pointer',
+                marginBottom: '-1px'
+              }}
+            >
+              Empleados Fijos ({employees.length})
+            </button>
+            <button
+              onClick={() => setCurrentTab('instructors')}
+              style={{
+                padding: '12px 24px',
+                background: 'none',
+                border: 'none',
+                borderBottom: currentTab === 'instructors' ? '2px solid #A4DF4E' : 'none',
+                color: currentTab === 'instructors' ? '#182A01' : '#9CA3AF',
+                fontSize: '14px',
+                fontWeight: currentTab === 'instructors' ? 600 : 400,
+                cursor: 'pointer',
+                marginBottom: '-1px'
+              }}
+            >
+              Instructores ({instructors.length})
+            </button>
+            <button
+              onClick={() => setCurrentTab('history')}
+              style={{
+                padding: '12px 24px',
+                background: 'none',
+                border: 'none',
+                borderBottom: currentTab === 'history' ? '2px solid #A4DF4E' : 'none',
+                color: currentTab === 'history' ? '#182A01' : '#9CA3AF',
+                fontSize: '14px',
+                fontWeight: currentTab === 'history' ? 600 : 400,
+                cursor: 'pointer',
+                marginBottom: '-1px'
+              }}
+            >
+              Historial de Pagos
+            </button>
+          </div>
+
+          {/* Table */}
+          {loading ? (
+            <div style={{ textAlign: 'center', padding: '40px', color: '#666' }}>
+              Cargando datos...
+            </div>
+          ) : currentData.length === 0 ? (
+            <div style={{ textAlign: 'center', padding: '40px', color: '#666' }}>
+              No hay registros para mostrar
+            </div>
+          ) : (
+            <div style={{ overflowX: 'auto' }}>
+              <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+                <thead>
+                  <tr style={{ borderBottom: '1px solid #E5E7EB' }}>
+                    <th style={{
+                      padding: '12px',
+                      textAlign: 'left',
+                      fontSize: '12px',
+                      fontWeight: 600,
+                      color: '#6B7280',
+                      textTransform: 'uppercase'
+                    }}>
+                      Empleado
+                    </th>
+                    <th style={{
+                      padding: '12px',
+                      textAlign: 'left',
+                      fontSize: '12px',
+                      fontWeight: 600,
+                      color: '#6B7280',
+                      textTransform: 'uppercase'
+                    }}>
+                      Rol
+                    </th>
+                    <th style={{
+                      padding: '12px',
+                      textAlign: 'right',
+                      fontSize: '12px',
+                      fontWeight: 600,
+                      color: '#6B7280',
+                      textTransform: 'uppercase'
+                    }}>
+                      Salario Base
+                    </th>
+                    <th style={{
+                      padding: '12px',
+                      textAlign: 'right',
+                      fontSize: '12px',
+                      fontWeight: 600,
+                      color: '#6B7280',
+                      textTransform: 'uppercase'
+                    }}>
+                      Bonos
+                    </th>
+                    <th style={{
+                      padding: '12px',
+                      textAlign: 'right',
+                      fontSize: '12px',
+                      fontWeight: 600,
+                      color: '#6B7280',
+                      textTransform: 'uppercase'
+                    }}>
+                      Deducciones
+                    </th>
+                    <th style={{
+                      padding: '12px',
+                      textAlign: 'right',
+                      fontSize: '12px',
+                      fontWeight: 600,
+                      color: '#6B7280',
+                      textTransform: 'uppercase'
+                    }}>
+                      Neto a Pagar
+                    </th>
+                    <th style={{
+                      padding: '12px',
+                      textAlign: 'center',
+                      fontSize: '12px',
+                      fontWeight: 600,
+                      color: '#6B7280',
+                      textTransform: 'uppercase'
+                    }}>
+                      Estado
+                    </th>
+                    <th style={{
+                      padding: '12px',
+                      textAlign: 'center',
+                      fontSize: '12px',
+                      fontWeight: 600,
+                      color: '#6B7280',
+                      textTransform: 'uppercase'
+                    }}>
+                      Acciones
+                    </th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {currentData.map((record, index) => (
+                    <tr key={record.id} style={{ borderBottom: '1px solid #F3F4F6' }}>
+                      <td style={{ padding: '16px 12px' }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                          <div style={{
+                            width: '36px',
+                            height: '36px',
+                            borderRadius: '8px',
+                            background: '#F3F4F6',
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            color: '#6B7280',
+                            fontSize: '14px',
+                            fontWeight: 600
+                          }}>
+                            {record.employeeName.split(' ').map(n => n[0]).join('').slice(0, 2).toUpperCase()}
+                          </div>
+                          <div>
+                            <p style={{ fontSize: '14px', fontWeight: 600, color: '#111827' }}>
+                              {record.employeeName}
+                            </p>
+                          </div>
+                        </div>
+                      </td>
+                      <td style={{ padding: '16px 12px', fontSize: '14px', color: '#6B7280' }}>
+                        {record.employeeRole}
+                      </td>
+                      <td style={{ padding: '16px 12px', textAlign: 'right', fontSize: '14px', color: '#111827' }}>
+                        {formatCurrency(record.baseSalary)}
+                      </td>
+                      <td style={{ padding: '16px 12px', textAlign: 'right', fontSize: '14px', color: '#10B981' }}>
+                        +{formatCurrency(record.bonuses)}
+                      </td>
+                      <td style={{ padding: '16px 12px', textAlign: 'right', fontSize: '14px', color: '#EF4444' }}>
+                        -{formatCurrency(record.deductions)}
+                      </td>
+                      <td style={{
+                        padding: '16px 12px',
+                        textAlign: 'right',
+                        fontSize: '16px',
+                        fontWeight: 600,
+                        color: '#111827'
+                      }}>
+                        {formatCurrency(record.netAmount)}
+                      </td>
+                      <td style={{ padding: '16px 12px', textAlign: 'center' }}>
+                        <span style={{
+                          padding: '4px 12px',
+                          borderRadius: '12px',
+                          fontSize: '12px',
+                          fontWeight: 500,
+                          background: record.status === 'paid' ? '#D1FAE5' :
+                                     record.status === 'pending' ? '#FEF3C7' : '#DBEAFE',
+                          color: record.status === 'paid' ? '#065F46' :
+                                 record.status === 'pending' ? '#92400E' : '#1E40AF'
+                        }}>
+                          {record.status === 'paid' ? 'Pagado' :
+                           record.status === 'pending' ? 'Pendiente' : 'Aprobado'}
+                        </span>
+                      </td>
+                      <td style={{ padding: '16px 12px' }}>
+                        <div style={{ display: 'flex', gap: '8px', justifyContent: 'center' }}>
+                          <button
+                            style={{
+                              width: '32px',
+                              height: '32px',
+                              borderRadius: '6px',
+                              border: '1px solid #E5E7EB',
+                              background: 'white',
+                              cursor: 'pointer',
+                              display: 'flex',
+                              alignItems: 'center',
+                              justifyContent: 'center'
+                            }}
+                          >
+                            <Eye style={{ width: '14px', height: '14px', color: '#6B7280' }} />
+                          </button>
+                          <button
+                            style={{
+                              width: '32px',
+                              height: '32px',
+                              borderRadius: '6px',
+                              border: '1px solid #E5E7EB',
+                              background: 'white',
+                              cursor: 'pointer',
+                              display: 'flex',
+                              alignItems: 'center',
+                              justifyContent: 'center'
+                            }}
+                          >
+                            <Edit style={{ width: '14px', height: '14px', color: '#6B7280' }} />
+                          </button>
+                        </div>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </div>
+      </CardModern>
+    </div>
+  )
+}

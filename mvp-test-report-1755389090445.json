@@ -1,0 +1,77 @@
+{
+  "timestamp": "2025-08-17T00:04:50.442Z",
+  "environment": {
+    "serverUrl": "http://localhost:3002",
+    "nodeVersion": "v20.19.4",
+    "platform": "darwin"
+  },
+  "summary": {
+    "total": 12,
+    "passed": 11,
+    "failed": 0,
+    "warnings": 1,
+    "successRate": "91.67"
+  },
+  "details": [
+    {
+      "name": "Server Connection",
+      "status": "passed",
+      "error": null
+    },
+    {
+      "name": "Database Connection",
+      "status": "passed",
+      "error": null
+    },
+    {
+      "name": "Environment Variables",
+      "status": "passed",
+      "error": null
+    },
+    {
+      "name": "File Structure",
+      "status": "passed",
+      "error": null
+    },
+    {
+      "name": "Database Schema",
+      "status": "passed",
+      "error": null
+    },
+    {
+      "name": "Users in Database",
+      "status": "passed",
+      "error": null
+    },
+    {
+      "name": "Club Registration Page",
+      "status": "passed",
+      "error": null
+    },
+    {
+      "name": "Login Page",
+      "status": "passed",
+      "error": null
+    },
+    {
+      "name": "Widget Functionality",
+      "status": "passed",
+      "error": null
+    },
+    {
+      "name": "Protected Routes Security",
+      "status": "passed",
+      "error": null
+    },
+    {
+      "name": "Public API",
+      "status": "warning",
+      "error": null
+    },
+    {
+      "name": "Mobile App Structure",
+      "status": "passed",
+      "error": null
+    }
+  ]
+}

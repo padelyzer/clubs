@@ -1,0 +1,346 @@
+import { NextRequest, NextResponse } from 'next/server'
+import { constructWebhookEvent } from '@/lib/config/stripe'
+import { prisma } from '@/lib/config/prisma'
+import { processSplitPaymentCompletion } from '@/lib/payments/split-payment'
+import { onPaymentCompleted, onBookingConfirmed } from '@/lib/whatsapp/notification-hooks'
+import { headers } from 'next/headers'
+
+export async function POST(request: NextRequest) {
+  try {
+    const body = await request.text()
+    const headersList = await headers()
+    const signature = headersList.get('stripe-signature')
+
+    if (!signature) {
+      console.error('Missing stripe-signature header')
+      return NextResponse.json(
+        { error: 'Missing stripe-signature header' },
+        { status: 400 }
+      )
+    }
+
+    // Verify webhook signature
+    let event
+    try {
+      const response = constructWebhookEvent(body, signature)
+      if (!response.success || !response.data) {
+        console.error('Webhook signature verification failed')
+        return NextResponse.json(
+          { error: 'Invalid signature' },
+          { status: 400 }
+        )
+      }
+      event = response.data
+    } catch (err) {
+      console.error('Webhook signature verification failed:', err)
+      return NextResponse.json(
+        { error: 'Invalid signature' },
+        { status: 400 }
+      )
+    }
+
+    console.log('Received Stripe webhook:', event.type, event.id)
+
+    // Handle the event
+    switch (event.type) {
+      case 'payment_intent.succeeded':
+        await handlePaymentIntentSucceeded(event.data.object)
+        break
+
+      case 'payment_intent.payment_failed':
+        await handlePaymentIntentFailed(event.data.object)
+        break
+
+      case 'payment_intent.canceled':
+        await handlePaymentIntentCanceled(event.data.object)
+        break
+
+      case 'account.updated':
+        await handleAccountUpdated(event.data.object)
+        break
+
+      case 'charge.succeeded':
+        await handleChargeSucceeded(event.data.object)
+        break
+
+      case 'charge.failed':
+        await handleChargeFailed(event.data.object)
+        break
+
+      case 'transfer.created':
+        await handleTransferCreated(event.data.object)
+        break
+
+      default:
+        console.log(`Unhandled event type: ${event.type}`)
+    }
+
+    return NextResponse.json({ received: true })
+
+  } catch (error) {
+    console.error('Error processing webhook:', error)
+    return NextResponse.json(
+      { error: 'Webhook processing failed' },
+      { status: 500 }
+    )
+  }
+}
+
+async function handlePaymentIntentSucceeded(paymentIntent: any) {
+  try {
+    const metadata = paymentIntent.metadata
+    const bookingId = metadata.booking_id
+    const splitPaymentId = metadata.split_payment_id
+    const paymentType = metadata.payment_type
+
+    console.log('Payment succeeded:', {
+      paymentIntentId: paymentIntent.id,
+      bookingId,
+      splitPaymentId,
+      paymentType,
+      amount: paymentIntent.amount
+    })
+
+    if (paymentType === 'split' && splitPaymentId) {
+      // Handle split payment completion
+      const result = await processSplitPaymentCompletion(splitPaymentId)
+      
+      // Update split payment with charge details
+      await prisma.splitPayment.update({
+        where: { id: splitPaymentId },
+        data: {
+          status: 'completed',
+          stripeChargeId: paymentIntent.latest_charge,
+          completedAt: new Date(),
+        }
+      })
+
+      console.log('Split payment completed:', {
+        splitPaymentId,
+        isFullyPaid: result.isFullyPaid,
+        completedPayments: result.completedPayments
+      })
+
+      // Send WhatsApp notification for completed payment
+      try {
+        await onPaymentCompleted(splitPaymentId)
+      } catch (notificationError) {
+        console.error('Error sending payment completion notification:', notificationError)
+      }
+
+      // If all payments are complete, send booking confirmation
+      if (result.isFullyPaid && bookingId) {
+        try {
+          await onBookingConfirmed(bookingId)
+        } catch (notificationError) {
+          console.error('Error sending booking confirmation notification:', notificationError)
+        }
+      }
+
+    } else if (bookingId) {
+      // Handle full payment completion
+      await prisma.payment.update({
+        where: { bookingId },
+        data: {
+          status: 'completed',
+          stripeChargeId: paymentIntent.latest_charge,
+          completedAt: new Date(),
+        }
+      })
+
+      // Update booking status
+      await prisma.booking.update({
+        where: { id: bookingId },
+        data: {
+          paymentStatus: 'completed',
+          status: 'CONFIRMED',
+        }
+      })
+
+      console.log('Full payment completed for booking:', bookingId)
+
+      // Send WhatsApp notification for booking confirmation
+      try {
+        await onBookingConfirmed(bookingId)
+      } catch (notificationError) {
+        console.error('Error sending booking confirmation notification:', notificationError)
+      }
+    }
+
+  } catch (error) {
+    console.error('Error handling payment_intent.succeeded:', error)
+    throw error
+  }
+}
+
+async function handlePaymentIntentFailed(paymentIntent: any) {
+  try {
+    const metadata = paymentIntent.metadata
+    const bookingId = metadata.booking_id
+    const splitPaymentId = metadata.split_payment_id
+    const paymentType = metadata.payment_type
+
+    console.log('Payment failed:', {
+      paymentIntentId: paymentIntent.id,
+      bookingId,
+      splitPaymentId,
+      lastError: paymentIntent.last_payment_error
+    })
+
+    if (paymentType === 'split' && splitPaymentId) {
+      await prisma.splitPayment.update({
+        where: { id: splitPaymentId },
+        data: {
+          status: 'failed',
+        }
+      })
+    } else if (bookingId) {
+      await prisma.payment.update({
+        where: { bookingId },
+        data: {
+          status: 'failed',
+        }
+      })
+
+      await prisma.booking.update({
+        where: { id: bookingId },
+        data: {
+          paymentStatus: 'failed',
+        }
+      })
+    }
+
+  } catch (error) {
+    console.error('Error handling payment_intent.payment_failed:', error)
+    throw error
+  }
+}
+
+async function handlePaymentIntentCanceled(paymentIntent: any) {
+  try {
+    const metadata = paymentIntent.metadata
+    const bookingId = metadata.booking_id
+    const splitPaymentId = metadata.split_payment_id
+    const paymentType = metadata.payment_type
+
+    console.log('Payment canceled:', {
+      paymentIntentId: paymentIntent.id,
+      bookingId,
+      splitPaymentId
+    })
+
+    if (paymentType === 'split' && splitPaymentId) {
+      await prisma.splitPayment.update({
+        where: { id: splitPaymentId },
+        data: {
+          status: 'cancelled',
+        }
+      })
+    } else if (bookingId) {
+      await prisma.payment.update({
+        where: { bookingId },
+        data: {
+          status: 'cancelled',
+        }
+      })
+
+      await prisma.booking.update({
+        where: { id: bookingId },
+        data: {
+          paymentStatus: 'cancelled',
+        }
+      })
+    }
+
+  } catch (error) {
+    console.error('Error handling payment_intent.canceled:', error)
+    throw error
+  }
+}
+
+async function handleAccountUpdated(account: any) {
+  try {
+    console.log('Account updated:', {
+      accountId: account.id,
+      chargesEnabled: account.charges_enabled,
+      payoutsEnabled: account.payouts_enabled,
+      detailsSubmitted: account.details_submitted
+    })
+
+    // Update club with latest account status
+    await prisma.club.updateMany({
+      where: { stripeAccountId: account.id },
+      data: {
+        stripeChargesEnabled: account.charges_enabled,
+        stripePayoutsEnabled: account.payouts_enabled,
+        stripeDetailsSubmitted: account.details_submitted,
+        stripeOnboardingCompleted: account.details_submitted,
+        stripeRequirements: JSON.stringify(account.requirements),
+      }
+    })
+
+  } catch (error) {
+    console.error('Error handling account.updated:', error)
+    throw error
+  }
+}
+
+async function handleChargeSucceeded(charge: any) {
+  try {
+    console.log('Charge succeeded:', {
+      chargeId: charge.id,
+      amount: charge.amount,
+      applicationFee: charge.application_fee_amount,
+      transferData: charge.transfer_data
+    })
+
+    // Additional logging for successful charges
+    // This can be used for analytics and reporting
+
+  } catch (error) {
+    console.error('Error handling charge.succeeded:', error)
+    throw error
+  }
+}
+
+async function handleChargeFailed(charge: any) {
+  try {
+    console.log('Charge failed:', {
+      chargeId: charge.id,
+      failureCode: charge.failure_code,
+      failureMessage: charge.failure_message
+    })
+
+    // Additional handling for failed charges
+    // Could trigger notifications or retry logic
+
+  } catch (error) {
+    console.error('Error handling charge.failed:', error)
+    throw error
+  }
+}
+
+async function handleTransferCreated(transfer: any) {
+  try {
+    console.log('Transfer created:', {
+      transferId: transfer.id,
+      amount: transfer.amount,
+      destination: transfer.destination,
+      transferGroup: transfer.transfer_group
+    })
+
+    // Update payment records with transfer information
+    if (transfer.metadata?.booking_id) {
+      await prisma.payment.updateMany({
+        where: { bookingId: transfer.metadata.booking_id },
+        data: {
+          stripeTransferId: transfer.id,
+        }
+      })
+    }
+
+  } catch (error) {
+    console.error('Error handling transfer.created:', error)
+    throw error
+  }
+}

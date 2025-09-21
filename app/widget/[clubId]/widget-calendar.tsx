@@ -1,0 +1,253 @@
+'use client'
+
+import { useState, useCallback, useTransition } from 'react'
+import { format, addDays, isSameDay } from 'date-fns'
+import { es } from 'date-fns/locale'
+import { useRouter, useSearchParams } from 'next/navigation'
+import { ChevronLeft, ChevronRight, Loader2 } from 'lucide-react'
+import { WidgetBookingModal } from './widget-booking-modal'
+
+interface WidgetCalendarProps {
+  club: any
+  courts: any[]
+  bookings: any[]
+  weekStart: Date
+  isEmbedded: boolean
+}
+
+export function WidgetCalendar({ 
+  club, 
+  courts, 
+  bookings, 
+  weekStart, 
+  isEmbedded 
+}: WidgetCalendarProps) {
+  const [selectedSlot, setSelectedSlot] = useState<any>(null)
+  const [showModal, setShowModal] = useState(false)
+  const [isPending, startTransition] = useTransition()
+  const router = useRouter()
+  const searchParams = useSearchParams()
+
+  const weekDays = Array.from({ length: 7 }, (_, i) => addDays(weekStart, i))
+  const timeSlots = generateTimeSlots()
+
+  // Navigate without page reload
+  const navigateWeek = useCallback((direction: 'prev' | 'next') => {
+    startTransition(() => {
+      const newDate = direction === 'prev' 
+        ? addDays(weekStart, -7)
+        : addDays(weekStart, 7)
+      
+      const params = new URLSearchParams(searchParams.toString())
+      params.set('date', format(newDate, 'yyyy-MM-dd'))
+      if (isEmbedded) params.set('embedded', 'true')
+      
+      router.push(`?${params.toString()}`, { scroll: false })
+    })
+  }, [weekStart, isEmbedded, router, searchParams])
+
+  function handleSlotClick(court: any, date: Date, time: string) {
+    // Check if slot is available
+    const isBooked = bookings.some(booking =>
+      booking.courtId === court.id &&
+      isSameDay(new Date(booking.date), date) &&
+      booking.startTime <= time &&
+      booking.endTime > time
+    )
+
+    if (!isBooked) {
+      setSelectedSlot({ court, date, time })
+      setShowModal(true)
+    }
+  }
+
+  return (
+    <>
+      <div className={`bg-[var(--bg-primary)] rounded-[var(--radius-lg)] shadow-[var(--shadow-md)] border border-[var(--border-primary)] ${isEmbedded ? '' : 'overflow-hidden'}`}>
+        {/* Widget Header */}
+        <div className="bg-[var(--accent-primary)] text-[var(--text-inverse)] p-[var(--spacing-4)]">
+          <div className="flex items-center">
+            {club.logo && (
+              <img 
+                src={club.logo} 
+                alt={club.name}
+                className="w-10 h-10 rounded-full mr-3"
+              />
+            )}
+            <div>
+              <h2 className="text-lg font-semibold">{club.name}</h2>
+              <p className="text-[var(--text-inverse)]/80 text-sm">Selecciona día y hora</p>
+            </div>
+          </div>
+        </div>
+
+        {/* Calendar Navigation */}
+        <div className="p-[var(--spacing-4)] border-b border-[var(--border-primary)]">
+          <div className="flex items-center justify-between">
+            <h3 className="font-semibold text-[var(--text-primary)]">
+              {format(weekStart, 'dd MMM', { locale: es })} - {format(addDays(weekStart, 6), 'dd MMM yyyy', { locale: es })}
+            </h3>
+            <div className="flex items-center gap-2">
+              {isPending && (
+                <Loader2 className="h-4 w-4 animate-spin text-[var(--text-tertiary)]" />
+              )}
+              <button 
+                onClick={() => navigateWeek('prev')}
+                disabled={isPending}
+                className="p-2 hover:bg-[var(--bg-secondary)] rounded-[var(--radius-md)] transition-[var(--transition-base)] disabled:opacity-50 disabled:cursor-not-allowed"
+                aria-label="Semana anterior"
+              >
+                <ChevronLeft className="h-4 w-4" />
+              </button>
+              <button 
+                onClick={() => navigateWeek('next')}
+                disabled={isPending}
+                className="p-2 hover:bg-[var(--bg-secondary)] rounded-[var(--radius-md)] transition-[var(--transition-base)] disabled:opacity-50 disabled:cursor-not-allowed"
+                aria-label="Semana siguiente"
+              >
+                <ChevronRight className="h-4 w-4" />
+              </button>
+            </div>
+          </div>
+        </div>
+
+        {/* Simplified Calendar Grid */}
+        <div className={`p-[var(--spacing-4)] ${isPending ? 'opacity-60 pointer-events-none' : ''} transition-opacity duration-200`}>
+          <div className="grid grid-cols-7 gap-2 mb-4">
+            {weekDays.map(day => (
+              <div key={day.toISOString()} className="text-center">
+                <div className="font-medium text-[var(--text-primary)] text-sm">
+                  {format(day, 'EEE', { locale: es })}
+                </div>
+                <div className="text-[var(--text-secondary)] text-xs">
+                  {format(day, 'dd')}
+                </div>
+              </div>
+            ))}
+          </div>
+
+          {/* Available Slots by Day */}
+          <div className="space-y-4">
+            {weekDays.map(day => {
+              const daySlots = getAvailableSlotsForDay(day, courts, bookings, club.pricing)
+              
+              if (daySlots.length === 0) {
+                return (
+                  <div key={day.toISOString()} className="text-center py-[var(--spacing-4)] text-[var(--text-tertiary)]">
+                    <div className="font-medium">{format(day, 'EEEE dd', { locale: es })}</div>
+                    <div className="text-sm">Sin disponibilidad</div>
+                  </div>
+                )
+              }
+
+              return (
+                <div key={day.toISOString()}>
+                  <h4 className="font-medium text-[var(--text-primary)] mb-[var(--spacing-2)]">
+                    {format(day, 'EEEE dd', { locale: es })}
+                  </h4>
+                  <div className="grid grid-cols-2 md:grid-cols-3 gap-[var(--spacing-2)]">
+                    {daySlots.slice(0, 6).map((slot, index) => (
+                      <button
+                        key={index}
+                        onClick={() => handleSlotClick(slot.court, day, slot.time)}
+                        className="p-[var(--spacing-3)] border border-[var(--success)]/20 bg-[var(--success-wash)] rounded-[var(--radius-lg)] hover:bg-[var(--success-wash)] hover:border-[var(--success)]/30 transition-[var(--transition-base)] text-left"
+                      >
+                        <div className="font-medium text-sm text-[var(--text-primary)]">
+                          {slot.time}
+                        </div>
+                        <div className="text-xs text-[var(--text-secondary)]">
+                          {slot.court.name}
+                        </div>
+                        <div className="text-xs text-[var(--success)] font-medium">
+                          ${slot.price}
+                        </div>
+                      </button>
+                    ))}
+                  </div>
+                  {daySlots.length > 6 && (
+                    <div className="text-xs text-[var(--text-tertiary)] mt-[var(--spacing-2)]">
+                      +{daySlots.length - 6} horarios más disponibles
+                    </div>
+                  )}
+                </div>
+              )
+            })}
+          </div>
+        </div>
+
+        {/* Footer */}
+        <div className="bg-[var(--bg-secondary)] p-[var(--spacing-4)] text-center border-t border-[var(--border-primary)]">
+          <p className="text-xs text-[var(--text-tertiary)]">
+            ¿Preguntas? Llama al{' '}
+            <a href={`tel:${club.phone}`} className="text-[var(--accent-primary)] hover:underline">
+              {club.phone}
+            </a>
+          </p>
+        </div>
+      </div>
+
+      {/* Booking Modal */}
+      {showModal && (
+        <WidgetBookingModal
+          slot={selectedSlot}
+          club={club}
+          onClose={() => setShowModal(false)}
+          onSuccess={() => {
+            setShowModal(false)
+            window.location.reload()
+          }}
+          isEmbedded={isEmbedded}
+        />
+      )}
+    </>
+  )
+}
+
+function generateTimeSlots() {
+  const slots = []
+  for (let hour = 7; hour <= 22; hour++) {
+    slots.push(`${hour.toString().padStart(2, '0')}:00`)
+    if (hour < 22) {
+      slots.push(`${hour.toString().padStart(2, '0')}:30`)
+    }
+  }
+  return slots
+}
+
+function getAvailableSlotsForDay(date: Date, courts: any[], bookings: any[], pricing: any[]) {
+  const slots: any[] = []
+  const timeSlots = generateTimeSlots()
+
+  courts.forEach(court => {
+    timeSlots.forEach(time => {
+      const isBooked = bookings.some(booking =>
+        booking.courtId === court.id &&
+        isSameDay(new Date(booking.date), date) &&
+        booking.startTime <= time &&
+        booking.endTime > time
+      )
+
+      if (!isBooked) {
+        slots.push({
+          court,
+          time,
+          price: calculatePriceForSlot(court, date, time, pricing)
+        })
+      }
+    })
+  })
+
+  return slots.sort((a, b) => a.time.localeCompare(b.time))
+}
+
+function calculatePriceForSlot(court: any, date: Date, time: string, pricing: any[]) {
+  // Simplified pricing - get first matching price or default
+  const dayOfWeek = date.getDay()
+  const matchingPrice = pricing.find(p => 
+    (p.dayOfWeek === null || p.dayOfWeek === dayOfWeek) &&
+    p.startTime <= time &&
+    p.endTime > time
+  )
+  
+  return matchingPrice ? Math.round(matchingPrice.price / 100) : 500
+}

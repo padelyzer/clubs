@@ -1,0 +1,269 @@
+import { NextRequest, NextResponse } from 'next/server'
+import { requireAuthAPI } from '@/lib/auth/actions'
+import { generateSplitPaymentLinks, resendSplitPaymentNotification, getSplitPaymentStatus } from '@/lib/payments/split-payment'
+import { onPaymentCompleted, onBookingConfirmed } from '@/lib/whatsapp/notification-hooks'
+import { prisma } from '@/lib/config/prisma'
+import { z } from 'zod'
+import { v4 as uuidv4 } from 'uuid'
+
+// GET - Get split payment status
+export async function GET(
+  request: NextRequest,
+  { params }: { params: Promise<{ id: string }> }
+) {
+  try {
+    const session = await requireAuthAPI()
+    
+    if (!session) {
+      return NextResponse.json(
+        { success: false, error: 'No autorizado' },
+        { status: 401 }
+      )
+    }
+    const { id: bookingId } = await params
+
+    const status = await getSplitPaymentStatus(bookingId)
+
+    return NextResponse.json({ 
+      success: true, 
+      status 
+    })
+
+  } catch (error) {
+    console.error('Error fetching split payment status:', error)
+    return NextResponse.json(
+      { success: false, error: error instanceof Error ? error.message : 'Error al obtener estado de pagos' },
+      { status: 500 }
+    )
+  }
+}
+
+// POST - Generate split payment links
+export async function POST(
+  request: NextRequest,
+  { params }: { params: Promise<{ id: string }> }
+) {
+  try {
+    const session = await requireAuthAPI()
+    
+    if (!session) {
+      return NextResponse.json(
+        { success: false, error: 'No autorizado' },
+        { status: 401 }
+      )
+    }
+    const { id: bookingId } = await params
+
+    const paymentLinks = await generateSplitPaymentLinks(bookingId)
+
+    return NextResponse.json({ 
+      success: true, 
+      paymentLinks,
+      message: 'Links de pago generados y notificaciones enviadas' 
+    })
+
+  } catch (error) {
+    console.error('Error generating split payment links:', error)
+    return NextResponse.json(
+      { success: false, error: error instanceof Error ? error.message : 'Error al generar links de pago' },
+      { status: 500 }
+    )
+  }
+}
+
+// PUT - Resend notification OR mark split payment as complete
+export async function PUT(
+  request: NextRequest,
+  { params }: { params: Promise<{ id: string }> }
+) {
+  try {
+    const session = await requireAuthAPI()
+    
+    if (!session) {
+      return NextResponse.json(
+        { success: false, error: 'No autorizado' },
+        { status: 401 }
+      )
+    }
+    const { id: bookingId } = await params
+    const body = await request.json()
+    const { splitPaymentId, action, paymentMethod, transactionId, referenceNumber } = body
+
+    if (!splitPaymentId) {
+      return NextResponse.json(
+        { success: false, error: 'splitPaymentId es requerido' },
+        { status: 400 }
+      )
+    }
+
+    // Handle marking payment as complete
+    if (action === 'complete') {
+      // Verify the split payment exists and belongs to this booking or bookingGroup
+      const splitPayment = await prisma.splitPayment.findFirst({
+        where: {
+          id: splitPaymentId,
+          OR: [
+            { bookingId },
+            { bookingGroupId: bookingId }
+          ]
+        },
+        include: {
+          Booking: {
+            include: {
+              Court: true
+            }
+          },
+          BookingGroup: {
+            include: {
+              bookings: {
+                include: {
+                  Court: true
+                }
+              }
+            }
+          }
+        }
+      })
+
+      if (!splitPayment) {
+        return NextResponse.json(
+          { success: false, error: 'Pago dividido no encontrado' },
+          { status: 404 }
+        )
+      }
+
+      if (splitPayment.status === 'completed') {
+        return NextResponse.json(
+          { success: false, error: 'Este pago ya fue completado' },
+          { status: 400 }
+        )
+      }
+
+      // Update the split payment
+      const chargeId = referenceNumber 
+        ? `${paymentMethod?.toUpperCase()}_${referenceNumber}`
+        : transactionId || `MANUAL_${Date.now()}`
+        
+      await prisma.splitPayment.update({
+        where: { id: splitPaymentId },
+        data: {
+          status: 'completed',
+          completedAt: new Date(),
+          stripeChargeId: chargeId,
+          updatedAt: new Date()
+        }
+      })
+
+      // Determine if it's a booking or bookingGroup
+      const isGroup = !!splitPayment.BookingGroup
+      const bookingData = isGroup ? splitPayment.BookingGroup : splitPayment.Booking
+      const courtInfo = isGroup 
+        ? splitPayment.BookingGroup.bookings.map(b => b.Court.name).join(', ')
+        : splitPayment.Booking.Court.name
+
+      // Check if all split payments are now complete
+      const allSplitPayments = await prisma.splitPayment.findMany({
+        where: isGroup 
+          ? { bookingGroupId: bookingId }
+          : { bookingId }
+      })
+
+      // Create individual transaction for this split payment
+      const paymentMethodForTransaction = paymentMethod?.toLowerCase() || 'manual'
+      const transactionDescription = `Pago dividido - ${splitPayment.playerName} - ${courtInfo}`
+      const transactionReference = referenceNumber 
+        ? `${paymentMethod?.toUpperCase()}_${referenceNumber}`
+        : chargeId
+
+      const completedCount = allSplitPayments.filter(sp => sp.status === 'completed').length
+
+      await prisma.transaction.create({
+        data: {
+          id: uuidv4(),
+          clubId: bookingData.clubId,
+          type: 'INCOME',
+          category: 'BOOKING',
+          amount: splitPayment.amount,
+          currency: 'MXN',
+          description: transactionDescription,
+          reference: transactionReference,
+          bookingId: isGroup ? null : bookingId,
+          date: new Date(),
+          createdBy: 'SPLIT_PAYMENT_SYSTEM',
+          notes: `Pago ${paymentMethodForTransaction} - Jugador ${completedCount} de ${allSplitPayments.length}. Fecha reserva: ${bookingData.date.toLocaleDateString('es-MX')} ${bookingData.startTime}`,
+          metadata: isGroup ? { bookingGroupId: bookingId } : null,
+          createdAt: new Date(),
+          updatedAt: new Date()
+        }
+      })
+
+      console.log(`💰 Transaction created for split payment: ${splitPayment.playerName} - $${(splitPayment.amount / 100).toFixed(2)} MXN`)
+
+      const allComplete = completedCount === allSplitPayments.length
+
+      // If all payments are complete, update booking or bookingGroup payment status only (no auto check-in)
+      if (allComplete) {
+        if (isGroup) {
+          await prisma.bookingGroup.update({
+            where: { id: bookingId },
+            data: {
+              status: 'CONFIRMED',
+              updatedAt: new Date()
+            }
+          })
+        } else {
+          await prisma.booking.update({
+            where: { id: bookingId },
+            data: {
+              paymentStatus: 'completed',
+              updatedAt: new Date()
+            }
+          })
+        }
+        
+        console.log(`✅ All ${allSplitPayments.length} split payments completed for ${isGroup ? 'bookingGroup' : 'booking'} ${bookingId} - Payment status updated to completed`)
+        
+        // Send booking confirmation notification when all payments are complete
+        try {
+          await onBookingConfirmed(bookingId)
+        } catch (notificationError) {
+          console.error('Error sending booking confirmation notification:', notificationError)
+        }
+      }
+
+      // Send individual payment completion notification
+      try {
+        await onPaymentCompleted(splitPaymentId)
+      } catch (notificationError) {
+        console.error('Error sending payment completion notification:', notificationError)
+      }
+
+      return NextResponse.json({
+        success: true,
+        message: allComplete 
+          ? `¡Todos los pagos completados! La reserva está pagada en su totalidad` 
+          : `Pago de ${splitPayment.playerName} registrado exitosamente`,
+        completedCount,
+        totalCount: allSplitPayments.length,
+        allComplete,
+        paymentCompleted: allComplete
+      })
+    }
+
+    // Default action: resend notification
+    const result = await resendSplitPaymentNotification(splitPaymentId)
+
+    return NextResponse.json({ 
+      ...result,
+      success: true,
+      message: 'Notificación reenviada exitosamente' 
+    })
+
+  } catch (error) {
+    console.error('Error processing split payment action:', error)
+    return NextResponse.json(
+      { success: false, error: error instanceof Error ? error.message : 'Error al procesar acción' },
+      { status: 500 }
+    )
+  }
+}

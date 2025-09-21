@@ -1,0 +1,64 @@
+import { prisma } from '@/lib/config/prisma'
+
+/**
+ * Sincroniza el contador de estudiantes de una clase con las inscripciones reales
+ * @param classId ID de la clase
+ * @returns Número actual de estudiantes
+ */
+export async function syncClassStudentCounter(classId: string): Promise<number> {
+  try {
+    // Contar inscripciones confirmadas
+    const actualCount = await prisma.classBooking.count({
+      where: { 
+        classId,
+        status: { not: 'CANCELLED' }
+      }
+    })
+
+    // Actualizar el contador en la clase
+    await prisma.class.update({
+      where: { id: classId },
+      data: { currentStudents: actualCount }
+    })
+
+    return actualCount
+  } catch (error) {
+    console.error('Error syncing class student counter:', error)
+    throw error
+  }
+}
+
+/**
+ * Verifica si una clase está llena
+ * @param classId ID de la clase
+ * @returns true si la clase está llena
+ */
+export async function isClassFull(classId: string): Promise<boolean> {
+  const classItem = await prisma.class.findUnique({
+    where: { id: classId },
+    select: { maxStudents: true, currentStudents: true }
+  })
+
+  if (!classItem) {
+    throw new Error('Clase no encontrada')
+  }
+
+  return classItem.currentStudents >= classItem.maxStudents
+}
+
+/**
+ * Actualiza contadores de todas las clases (para mantenimiento)
+ */
+export async function syncAllClassCounters(): Promise<void> {
+  const classes = await prisma.class.findMany({
+    select: { id: true }
+  })
+
+  console.log(`Sincronizando contadores de ${classes.length} clases...`)
+
+  for (const classItem of classes) {
+    await syncClassStudentCounter(classItem.id)
+  }
+
+  console.log('✅ Todos los contadores sincronizados')
+}

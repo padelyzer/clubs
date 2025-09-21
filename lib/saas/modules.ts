@@ -1,0 +1,434 @@
+import { prisma } from '@/lib/config/prisma'
+
+export type ModuleCode = 'bookings' | 'customers' | 'tournaments' | 'classes' | 'finance'
+
+export interface ModuleAccess {
+  hasAccess: boolean
+  isInGracePeriod: boolean
+  gracePeriodEnd?: Date
+  needsPayment: boolean
+}
+
+export interface PricingCalculation {
+  moduleId: string
+  moduleCode: string
+  moduleName: string
+  tierName: string
+  basePrice: number
+  discountApplied: number
+  finalPrice: number
+  currency: string
+}
+
+/**
+ * Verifica si un club tiene acceso a un módulo específico
+ */
+export async function hasModuleAccess(
+  clubId: string, 
+  moduleCode: ModuleCode
+): Promise<ModuleAccess> {
+  try {
+    const clubModule = await prisma.clubModule.findFirst({
+      where: {
+        clubId,
+        module: { code: moduleCode }
+      },
+      include: {
+        module: true
+      }
+    })
+
+    if (!clubModule || !clubModule.isEnabled) {
+      return {
+        hasAccess: false,
+        isInGracePeriod: false,
+        needsPayment: false
+      }
+    }
+
+    const now = new Date()
+    
+    // Verificar período de gracia
+    if (clubModule.gracePeriodEnd && now <= clubModule.gracePeriodEnd) {
+      return {
+        hasAccess: true,
+        isInGracePeriod: true,
+        gracePeriodEnd: clubModule.gracePeriodEnd,
+        needsPayment: false
+      }
+    }
+
+    // Verificar si está al día con pagos
+    const currentMonth = new Date(now.getFullYear(), now.getMonth(), 1)
+    const billing = await prisma.clubModuleBilling.findFirst({
+      where: {
+        clubId,
+        moduleId: clubModule.moduleId,
+        billingPeriod: currentMonth,
+        status: 'PAID'
+      }
+    })
+
+    return {
+      hasAccess: !!billing,
+      isInGracePeriod: false,
+      needsPayment: !billing
+    }
+  } catch (error) {
+    console.error('Error checking module access:', error)
+    return {
+      hasAccess: false,
+      isInGracePeriod: false,
+      needsPayment: true
+    }
+  }
+}
+
+/**
+ * Obtiene todos los módulos disponibles con su estado para un club
+ */
+export async function getClubModulesStatus(clubId: string) {
+  try {
+    const modules = await prisma.saasModule.findMany({
+      include: {
+        clubModules: {
+          where: { clubId }
+        },
+        pricingTiers: {
+          orderBy: { minCourts: 'asc' }
+        }
+      },
+      orderBy: { sortOrder: 'asc' }
+    })
+
+    const moduleStatuses = await Promise.all(
+      modules.map(async (module) => {
+        const clubModule = module.clubModules[0]
+        const access = await hasModuleAccess(clubId, module.code as ModuleCode)
+        
+        return {
+          id: module.id,
+          code: module.code,
+          name: module.name,
+          description: module.description,
+          scalesWithCourts: module.scalesWithCourts,
+          isEnabled: clubModule?.isEnabled || false,
+          enabledAt: clubModule?.enabledAt,
+          access,
+          pricingTiers: module.pricingTiers
+        }
+      })
+    )
+
+    return moduleStatuses
+  } catch (error) {
+    console.error('Error getting club modules status:', error)
+    return []
+  }
+}
+
+/**
+ * Calcula el precio de un módulo para un club basado en número de canchas
+ */
+export async function calculateModulePrice(
+  clubId: string,
+  moduleCode: ModuleCode
+): Promise<PricingCalculation | null> {
+  try {
+    // Obtener número de canchas del club
+    const courtsCount = await prisma.court.count({
+      where: {
+        clubId,
+        active: true
+      }
+    })
+
+    // Obtener módulo y sus tiers
+    const module = await prisma.saasModule.findUnique({
+      where: { code: moduleCode },
+      include: {
+        pricingTiers: {
+          where: { isActive: true },
+          orderBy: { minCourts: 'asc' }
+        }
+      }
+    })
+
+    if (!module) {
+      throw new Error(`Module ${moduleCode} not found`)
+    }
+
+    // Encontrar el tier apropiado
+    let selectedTier = null
+    for (const tier of module.pricingTiers) {
+      if (courtsCount >= tier.minCourts && 
+          (tier.maxCourts === null || courtsCount <= tier.maxCourts)) {
+        selectedTier = tier
+        break
+      }
+    }
+
+    if (!selectedTier) {
+      throw new Error(`No pricing tier found for ${courtsCount} courts`)
+    }
+
+    // Buscar descuentos aplicables
+    const now = new Date()
+    const applicableDiscounts = await prisma.moduleDiscount.findMany({
+      where: {
+        isActive: true,
+        validFrom: { lte: now },
+        OR: [
+          { validUntil: null },
+          { validUntil: { gte: now } }
+        ],
+        OR: [
+          { minCourts: null },
+          { minCourts: { lte: courtsCount } }
+        ],
+        OR: [
+          { moduleIds: { isEmpty: true } },
+          { moduleIds: { has: module.id } }
+        ],
+        OR: [
+          { maxUses: null },
+          { currentUses: { lt: prisma.moduleDiscount.fields.maxUses } }
+        ]
+      }
+    })
+
+    // Aplicar el mejor descuento
+    let bestDiscount = 0
+    for (const discount of applicableDiscounts) {
+      let discountAmount = 0
+      if (discount.discountType === 'PERCENTAGE') {
+        discountAmount = (selectedTier.price * discount.discountValue) / 100
+      } else {
+        discountAmount = discount.discountValue
+      }
+      
+      if (discountAmount > bestDiscount) {
+        bestDiscount = discountAmount
+      }
+    }
+
+    const finalPrice = Math.max(0, selectedTier.price - bestDiscount)
+
+    return {
+      moduleId: module.id,
+      moduleCode: module.code,
+      moduleName: module.name,
+      tierName: selectedTier.name,
+      basePrice: selectedTier.price,
+      discountApplied: bestDiscount,
+      finalPrice,
+      currency: selectedTier.currency
+    }
+  } catch (error) {
+    console.error('Error calculating module price:', error)
+    return null
+  }
+}
+
+/**
+ * Activa un módulo para un club
+ */
+export async function enableModuleForClub(
+  clubId: string,
+  moduleCode: ModuleCode,
+  gracePeriodDays: number = 7
+): Promise<boolean> {
+  try {
+    const module = await prisma.saasModule.findUnique({
+      where: { code: moduleCode }
+    })
+
+    if (!module) {
+      throw new Error(`Module ${moduleCode} not found`)
+    }
+
+    const gracePeriodEnd = new Date()
+    gracePeriodEnd.setDate(gracePeriodEnd.getDate() + gracePeriodDays)
+
+    await prisma.clubModule.upsert({
+      where: {
+        clubId_moduleId: {
+          clubId,
+          moduleId: module.id
+        }
+      },
+      update: {
+        isEnabled: true,
+        enabledAt: new Date(),
+        gracePeriodEnd,
+        disabledAt: null
+      },
+      create: {
+        clubId,
+        moduleId: module.id,
+        isEnabled: true,
+        enabledAt: new Date(),
+        gracePeriodEnd
+      }
+    })
+
+    return true
+  } catch (error) {
+    console.error('Error enabling module:', error)
+    return false
+  }
+}
+
+/**
+ * Desactiva un módulo para un club
+ */
+export async function disableModuleForClub(
+  clubId: string,
+  moduleCode: ModuleCode,
+  exportData: boolean = true
+): Promise<boolean> {
+  try {
+    const module = await prisma.saasModule.findUnique({
+      where: { code: moduleCode }
+    })
+
+    if (!module) {
+      throw new Error(`Module ${moduleCode} not found`)
+    }
+
+    await prisma.clubModule.update({
+      where: {
+        clubId_moduleId: {
+          clubId,
+          moduleId: module.id
+        }
+      },
+      data: {
+        isEnabled: false,
+        disabledAt: new Date(),
+        gracePeriodEnd: null,
+        lastExportAt: exportData ? new Date() : undefined
+      }
+    })
+
+    // TODO: Implementar exportación de datos CSV
+    if (exportData) {
+      await exportModuleDataToCSV(clubId, moduleCode)
+    }
+
+    return true
+  } catch (error) {
+    console.error('Error disabling module:', error)
+    return false
+  }
+}
+
+/**
+ * Exporta datos del módulo a CSV (placeholder)
+ */
+async function exportModuleDataToCSV(
+  clubId: string,
+  moduleCode: ModuleCode
+): Promise<void> {
+  // TODO: Implementar exportación real basada en el módulo
+  console.log(`Exporting ${moduleCode} data for club ${clubId} to CSV`)
+  
+  switch (moduleCode) {
+    case 'bookings':
+      // Exportar reservas
+      break
+    case 'customers':
+      // Exportar clientes
+      break
+    case 'tournaments':
+      // Exportar torneos
+      break
+    case 'classes':
+      // Exportar clases
+      break
+    case 'finance':
+      // Exportar datos financieros
+      break
+  }
+}
+
+/**
+ * Genera facturación mensual para todos los clubes
+ */
+export async function generateMonthlyBilling(
+  year: number,
+  month: number
+): Promise<void> {
+  try {
+    const billingPeriod = new Date(year, month - 1, 1) // month is 0-indexed
+    
+    const activeClubModules = await prisma.clubModule.findMany({
+      where: {
+        isEnabled: true,
+        OR: [
+          { gracePeriodEnd: null },
+          { gracePeriodEnd: { lt: new Date() } }
+        ]
+      },
+      include: {
+        club: true,
+        module: true
+      }
+    })
+
+    for (const clubModule of activeClubModules) {
+      // Verificar si ya existe facturación para este período
+      const existingBilling = await prisma.clubModuleBilling.findUnique({
+        where: {
+          clubId_moduleId_billingPeriod: {
+            clubId: clubModule.clubId,
+            moduleId: clubModule.moduleId,
+            billingPeriod
+          }
+        }
+      })
+
+      if (existingBilling) {
+        continue // Ya existe facturación para este período
+      }
+
+      // Calcular precio
+      const pricing = await calculateModulePrice(
+        clubModule.clubId,
+        clubModule.module.code as ModuleCode
+      )
+
+      if (!pricing) {
+        console.error(`Could not calculate pricing for club ${clubModule.clubId}, module ${clubModule.module.code}`)
+        continue
+      }
+
+      // Contar canchas activas
+      const courtsCount = await prisma.court.count({
+        where: {
+          clubId: clubModule.clubId,
+          active: true
+        }
+      })
+
+      // Crear registro de facturación
+      await prisma.clubModuleBilling.create({
+        data: {
+          clubId: clubModule.clubId,
+          moduleId: clubModule.moduleId,
+          billingPeriod,
+          courtsCount,
+          tierUsed: pricing.tierName,
+          basePrice: pricing.basePrice,
+          discountApplied: pricing.discountApplied,
+          finalPrice: pricing.finalPrice,
+          currency: pricing.currency,
+          status: 'PENDING'
+        }
+      })
+    }
+  } catch (error) {
+    console.error('Error generating monthly billing:', error)
+    throw error
+  }
+}

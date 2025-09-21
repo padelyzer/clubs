@@ -1,0 +1,916 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Padelyzer - Configuración Mock</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+            background: linear-gradient(135deg, #F5FFF8 0%, #E8FFF1 100%);
+            min-height: 100vh;
+            margin: 0;
+            display: flex;
+        }
+
+        /* Sidebar */
+        .sidebar {
+            width: 240px;
+            background: white;
+            border-right: 1px solid #E0FFE8;
+            display: flex;
+            flex-direction: column;
+            height: 100vh;
+            position: fixed;
+            left: 0;
+            top: 0;
+        }
+
+        .sidebar-header {
+            padding: 24px;
+            border-bottom: 1px solid #E0FFE8;
+        }
+
+        .sidebar-logo {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+        }
+
+        .sidebar-logo-icon {
+            width: 36px;
+            height: 36px;
+            background: linear-gradient(135deg, #A4DF4E, #66E7AA);
+            border-radius: 10px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: white;
+            font-weight: bold;
+            font-size: 18px;
+        }
+
+        .sidebar-logo-text {
+            font-size: 18px;
+            font-weight: 600;
+            color: #182A01;
+        }
+
+        .sidebar-nav {
+            flex: 1;
+            padding: 16px;
+            overflow-y: auto;
+        }
+
+        .sidebar-link {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            padding: 12px 16px;
+            color: #6B7280;
+            text-decoration: none;
+            border-radius: 8px;
+            margin-bottom: 4px;
+            transition: all 0.2s;
+            font-size: 14px;
+        }
+
+        .sidebar-link:hover {
+            background: #F5FFF8;
+            color: #182A01;
+        }
+
+        .sidebar-link.active {
+            background: linear-gradient(135deg, rgba(164, 223, 78, 0.15), rgba(102, 231, 170, 0.15));
+            color: #182A01;
+            font-weight: 500;
+        }
+
+        .sidebar-icon {
+            width: 20px;
+            height: 20px;
+            opacity: 0.7;
+        }
+
+        .sidebar-link.active .sidebar-icon {
+            opacity: 1;
+        }
+
+        .sidebar-footer {
+            padding: 16px;
+            border-top: 1px solid #E0FFE8;
+        }
+
+        .user-profile {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            padding: 8px;
+            border-radius: 8px;
+            transition: background 0.2s;
+        }
+
+        .user-profile:hover {
+            background: #F5FFF8;
+        }
+
+        .user-avatar {
+            width: 32px;
+            height: 32px;
+            background: linear-gradient(135deg, #A4DF4E, #66E7AA);
+            border-radius: 50%;
+        }
+
+        .user-info {
+            flex: 1;
+        }
+
+        .user-name {
+            font-size: 13px;
+            font-weight: 500;
+            color: #182A01;
+        }
+
+        .user-role {
+            font-size: 11px;
+            color: #6B7280;
+        }
+
+        /* Main Content Area */
+        .main-wrapper {
+            flex: 1;
+            margin-left: 240px;
+            display: flex;
+            flex-direction: column;
+            min-height: 100vh;
+        }
+
+        /* Header */
+        .header {
+            background: white;
+            padding: 20px 40px;
+            border-bottom: 1px solid #E0FFE8;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .page-breadcrumb {
+            font-size: 14px;
+            color: #6B7280;
+        }
+
+        .breadcrumb-separator {
+            margin: 0 8px;
+            color: #CBD5E1;
+        }
+
+        .breadcrumb-current {
+            color: #182A01;
+            font-weight: 500;
+        }
+
+        .header-actions {
+            display: flex;
+            align-items: center;
+            gap: 16px;
+        }
+
+        /* Main Container */
+        .main-container {
+            flex: 1;
+            padding: 32px 40px;
+            max-width: 1400px;
+            width: 100%;
+        }
+
+        /* Page Title */
+        .page-header {
+            margin-bottom: 32px;
+        }
+
+        .page-title {
+            font-size: 28px;
+            font-weight: 600;
+            color: #182A01;
+            margin-bottom: 8px;
+        }
+
+        .page-subtitle {
+            color: #6B7280;
+            font-size: 14px;
+        }
+
+        /* Tabs Container */
+        .tabs-container {
+            background: white;
+            border-radius: 16px;
+            box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
+            overflow: hidden;
+        }
+
+        /* Tab Navigation */
+        .tab-nav {
+            display: flex;
+            background: linear-gradient(to bottom, #FAFAFA, #F9FAFB);
+            border-bottom: 1px solid rgba(102, 231, 170, 0.2);
+            padding: 12px 24px 0;
+            gap: 6px;
+            overflow-x: auto;
+            scrollbar-width: none;
+            position: relative;
+        }
+
+        .tab-nav::-webkit-scrollbar {
+            display: none;
+        }
+
+        .tab-nav::after {
+            content: '';
+            position: absolute;
+            bottom: 0;
+            left: 0;
+            right: 0;
+            height: 1px;
+            background: linear-gradient(to right, transparent, rgba(102, 231, 170, 0.1), transparent);
+        }
+
+        .tab-button {
+            padding: 12px 20px;
+            background: transparent;
+            border: none;
+            border-radius: 12px 12px 0 0;
+            color: #6B7280;
+            font-size: 13px;
+            font-weight: 500;
+            cursor: pointer;
+            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+            white-space: nowrap;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            position: relative;
+            margin-bottom: -1px;
+        }
+
+        .tab-button::before {
+            content: '';
+            position: absolute;
+            bottom: 0;
+            left: 50%;
+            transform: translateX(-50%) scaleX(0);
+            width: calc(100% - 24px);
+            height: 3px;
+            background: linear-gradient(135deg, #A4DF4E, #66E7AA);
+            border-radius: 3px 3px 0 0;
+            transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+
+        .tab-button:hover {
+            color: #374151;
+            background: linear-gradient(to bottom, rgba(102, 231, 170, 0.05), rgba(102, 231, 170, 0.02));
+        }
+
+        .tab-button:hover::before {
+            transform: translateX(-50%) scaleX(0.5);
+        }
+
+        .tab-button.active {
+            color: #182A01;
+            background: white;
+            box-shadow: 0 -2px 8px rgba(102, 231, 170, 0.1), 
+                        0 2px 4px rgba(0, 0, 0, 0.02);
+            font-weight: 600;
+        }
+
+        .tab-button.active::before {
+            transform: translateX(-50%) scaleX(1);
+        }
+
+        .tab-button.active::after {
+            content: '';
+            position: absolute;
+            bottom: -1px;
+            left: 0;
+            right: 0;
+            height: 2px;
+            background: white;
+            z-index: 1;
+        }
+
+        .tab-icon {
+            width: 16px;
+            height: 16px;
+            opacity: 0.6;
+            transition: all 0.3s;
+        }
+
+        .tab-button:hover .tab-icon {
+            opacity: 0.8;
+            transform: translateY(-1px);
+        }
+
+        .tab-button.active .tab-icon {
+            opacity: 1;
+            color: #66E7AA;
+        }
+
+        /* Tab Badge */
+        .tab-badge {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            min-width: 18px;
+            height: 18px;
+            padding: 0 6px;
+            background: linear-gradient(135deg, #A4DF4E, #66E7AA);
+            color: white;
+            font-size: 10px;
+            font-weight: 600;
+            border-radius: 9px;
+            margin-left: 4px;
+        }
+
+        /* Tab Content */
+        .tab-content {
+            padding: 32px;
+            min-height: 500px;
+        }
+
+        /* Form Sections */
+        .form-section {
+            margin-bottom: 32px;
+        }
+
+        .section-title {
+            font-size: 18px;
+            font-weight: 600;
+            color: #182A01;
+            margin-bottom: 20px;
+            padding-bottom: 12px;
+            border-bottom: 1px solid #E0FFE8;
+        }
+
+        .form-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+            gap: 20px;
+        }
+
+        .form-group {
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+        }
+
+        .form-label {
+            font-size: 13px;
+            font-weight: 500;
+            color: #374151;
+        }
+
+        .form-input {
+            padding: 10px 14px;
+            border: 1px solid #E5E7EB;
+            border-radius: 8px;
+            font-size: 14px;
+            transition: all 0.2s;
+        }
+
+        .form-input:focus {
+            outline: none;
+            border-color: #66E7AA;
+            box-shadow: 0 0 0 3px rgba(102, 231, 170, 0.1);
+        }
+
+        /* Schedule Grid */
+        .schedule-grid {
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+        }
+
+        .schedule-row {
+            display: grid;
+            grid-template-columns: 140px 1fr 1fr;
+            gap: 16px;
+            align-items: center;
+            padding: 16px;
+            background: #F5FFF8;
+            border: 1px solid #E0FFE8;
+            border-radius: 12px;
+        }
+
+        .day-label {
+            font-weight: 500;
+            color: #182A01;
+        }
+
+        /* Payment Cards */
+        .payment-card {
+            padding: 20px;
+            background: #F5FFF8;
+            border: 1px solid #E0FFE8;
+            border-radius: 12px;
+            margin-bottom: 16px;
+        }
+
+        .payment-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 16px;
+        }
+
+        .payment-title {
+            font-size: 16px;
+            font-weight: 600;
+            color: #182A01;
+        }
+
+        /* Toggle Switch */
+        .toggle-switch {
+            position: relative;
+            width: 48px;
+            height: 24px;
+            background: #CBD5E1;
+            border-radius: 12px;
+            cursor: pointer;
+            transition: background 0.3s;
+        }
+
+        .toggle-switch.active {
+            background: #66E7AA;
+        }
+
+        .toggle-slider {
+            position: absolute;
+            top: 3px;
+            left: 3px;
+            width: 18px;
+            height: 18px;
+            background: white;
+            border-radius: 50%;
+            transition: transform 0.3s;
+        }
+
+        .toggle-switch.active .toggle-slider {
+            transform: translateX(24px);
+        }
+
+        /* Action Buttons */
+        .action-bar {
+            display: flex;
+            justify-content: flex-end;
+            gap: 12px;
+            padding: 24px 32px;
+            background: #FAFAFA;
+            border-top: 1px solid #E5E7EB;
+            margin: 0 -32px -32px;
+        }
+
+        .btn {
+            padding: 10px 20px;
+            border: none;
+            border-radius: 8px;
+            font-size: 14px;
+            font-weight: 500;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+
+        .btn-secondary {
+            background: white;
+            color: #374151;
+            border: 1px solid #E5E7EB;
+        }
+
+        .btn-secondary:hover {
+            background: #F9FAFB;
+        }
+
+        .btn-primary {
+            background: linear-gradient(135deg, #A4DF4E, #66E7AA);
+            color: white;
+        }
+
+        .btn-primary:hover {
+            transform: translateY(-1px);
+            box-shadow: 0 4px 12px rgba(102, 231, 170, 0.3);
+        }
+
+        /* Responsive */
+        @media (max-width: 768px) {
+            .main-container {
+                padding: 20px;
+            }
+
+            .tab-nav {
+                padding: 0 16px;
+            }
+
+            .tab-button {
+                padding: 14px 16px;
+                font-size: 13px;
+            }
+
+            .tab-content {
+                padding: 20px;
+            }
+
+            .form-grid {
+                grid-template-columns: 1fr;
+            }
+
+            .schedule-row {
+                grid-template-columns: 1fr;
+                gap: 12px;
+            }
+
+            .day-label {
+                font-size: 14px;
+                margin-bottom: 8px;
+            }
+        }
+
+        /* Status Badge */
+        .status-badge {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            padding: 4px 12px;
+            background: rgba(102, 231, 170, 0.1);
+            color: #10B981;
+            border-radius: 12px;
+            font-size: 12px;
+            font-weight: 500;
+        }
+
+        .status-dot {
+            width: 6px;
+            height: 6px;
+            background: #10B981;
+            border-radius: 50%;
+        }
+    </style>
+</head>
+<body>
+    <!-- Sidebar -->
+    <div class="sidebar">
+        <div class="sidebar-header">
+            <div class="sidebar-logo">
+                <div class="sidebar-logo-icon">P</div>
+                <div class="sidebar-logo-text">Padelyzer</div>
+            </div>
+        </div>
+        
+        <nav class="sidebar-nav">
+            <a href="#" class="sidebar-link">
+                <svg class="sidebar-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6"></path>
+                </svg>
+                Dashboard
+            </a>
+            <a href="#" class="sidebar-link">
+                <svg class="sidebar-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"></path>
+                </svg>
+                Reservas
+            </a>
+            <a href="#" class="sidebar-link">
+                <svg class="sidebar-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z"></path>
+                </svg>
+                Clientes
+            </a>
+            <a href="#" class="sidebar-link">
+                <svg class="sidebar-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"></path>
+                </svg>
+                Reportes
+            </a>
+            <a href="#" class="sidebar-link active">
+                <svg class="sidebar-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"></path>
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"></path>
+                </svg>
+                Configuración
+            </a>
+        </nav>
+        
+        <div class="sidebar-footer">
+            <div class="user-profile">
+                <div class="user-avatar"></div>
+                <div class="user-info">
+                    <div class="user-name">Juan Pérez</div>
+                    <div class="user-role">Club Owner</div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Main Wrapper -->
+    <div class="main-wrapper">
+        <!-- Header -->
+        <div class="header">
+            <div class="page-breadcrumb">
+                Dashboard <span class="breadcrumb-separator">›</span> <span class="breadcrumb-current">Configuración</span>
+            </div>
+            <div class="header-actions">
+                <span class="status-badge">
+                    <span class="status-dot"></span>
+                    Club Activo
+                </span>
+            </div>
+        </div>
+
+        <!-- Main Container -->
+        <div class="main-container">
+        <!-- Page Header -->
+        <div class="page-header">
+            <h1 class="page-title">Configuración</h1>
+            <p class="page-subtitle">Administra la configuración de tu club</p>
+        </div>
+
+        <!-- Tabs Container -->
+        <div class="tabs-container">
+            <!-- Tab Navigation -->
+            <div class="tab-nav">
+                <button class="tab-button active" onclick="switchTab('club')">
+                    <svg class="tab-icon" fill="currentColor" viewBox="0 0 20 20">
+                        <path fill-rule="evenodd" d="M4 4a2 2 0 012-2h8a2 2 0 012 2v12a1 1 0 110 2H6a1 1 0 110-2V4zm3 1h2v2H7V5zm2 4H7v2h2V9zm2-4h2v2h-2V5zm2 4h-2v2h2V9z" clip-rule="evenodd"/>
+                    </svg>
+                    Información
+                </button>
+                <button class="tab-button" onclick="switchTab('courts')">
+                    <svg class="tab-icon" fill="currentColor" viewBox="0 0 20 20">
+                        <path fill-rule="evenodd" d="M5.05 4.05a7 7 0 119.9 9.9L10 18.9l-4.95-4.95a7 7 0 010-9.9zM10 11a2 2 0 100-4 2 2 0 000 4z" clip-rule="evenodd"/>
+                    </svg>
+                    Canchas
+                    <span class="tab-badge">3</span>
+                </button>
+                <button class="tab-button" onclick="switchTab('schedule')">
+                    <svg class="tab-icon" fill="currentColor" viewBox="0 0 20 20">
+                        <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm1-12a1 1 0 10-2 0v4a1 1 0 00.293.707l2.828 2.829a1 1 0 101.415-1.415L11 9.586V6z" clip-rule="evenodd"/>
+                    </svg>
+                    Horarios
+                </button>
+                <button class="tab-button" onclick="switchTab('pricing')">
+                    <svg class="tab-icon" fill="currentColor" viewBox="0 0 20 20">
+                        <path d="M8.433 7.418c.155-.103.346-.196.567-.267v1.698a2.305 2.305 0 01-.567-.267C8.07 8.34 8 8.114 8 8c0-.114.07-.34.433-.582zM11 12.849v-1.698c.22.071.412.164.567.267.364.243.433.468.433.582 0 .114-.07.34-.433.582a2.305 2.305 0 01-.567.267z"/>
+                        <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm1-13a1 1 0 10-2 0v.092a4.535 4.535 0 00-1.676.662C6.602 6.234 6 7.009 6 8c0 .99.602 1.765 1.324 2.246.48.32 1.054.545 1.676.662v1.941c-.391-.127-.68-.317-.843-.504a1 1 0 10-1.51 1.31c.562.649 1.413 1.076 2.353 1.253V15a1 1 0 102 0v-.092a4.535 4.535 0 001.676-.662C13.398 13.766 14 12.991 14 12c0-.99-.602-1.765-1.324-2.246A4.535 4.535 0 0011 9.092V7.151c.391.127.68.317.843.504a1 1 0 101.511-1.31c-.563-.649-1.413-1.076-2.354-1.253V5z" clip-rule="evenodd"/>
+                    </svg>
+                    Precios
+                </button>
+                <button class="tab-button" onclick="switchTab('payments')">
+                    <svg class="tab-icon" fill="currentColor" viewBox="0 0 20 20">
+                        <path d="M4 4a2 2 0 00-2 2v1h16V6a2 2 0 00-2-2H4z"/>
+                        <path fill-rule="evenodd" d="M18 9H2v5a2 2 0 002 2h12a2 2 0 002-2V9zM4 13a1 1 0 011-1h1a1 1 0 110 2H5a1 1 0 01-1-1zm5-1a1 1 0 100 2h1a1 1 0 100-2H9z" clip-rule="evenodd"/>
+                    </svg>
+                    Pagos
+                </button>
+                <button class="tab-button" onclick="switchTab('notifications')">
+                    <svg class="tab-icon" fill="currentColor" viewBox="0 0 20 20">
+                        <path d="M10 2a6 6 0 00-6 6v3.586l-.707.707A1 1 0 004 14h12a1 1 0 00.707-1.707L16 11.586V8a6 6 0 00-6-6zM10 18a3 3 0 01-3-3h6a3 3 0 01-3 3z"/>
+                    </svg>
+                    Notificaciones
+                </button>
+            </div>
+
+            <!-- Tab Content -->
+            <div class="tab-content" id="club-content">
+                <div class="form-section">
+                    <h2 class="section-title">Información General</h2>
+                    <div class="form-grid">
+                        <div class="form-group">
+                            <label class="form-label">Nombre del Club</label>
+                            <input type="text" class="form-input" value="Club Padel Puebla">
+                        </div>
+                        <div class="form-group">
+                            <label class="form-label">RFC</label>
+                            <input type="text" class="form-input" value="CPP123456789">
+                        </div>
+                        <div class="form-group">
+                            <label class="form-label">Teléfono</label>
+                            <input type="tel" class="form-input" value="+52 222 123 4567">
+                        </div>
+                        <div class="form-group">
+                            <label class="form-label">Email</label>
+                            <input type="email" class="form-input" value="info@clubpadelpuebla.com">
+                        </div>
+                    </div>
+                </div>
+
+                <div class="form-section">
+                    <h2 class="section-title">Dirección</h2>
+                    <div class="form-grid">
+                        <div class="form-group">
+                            <label class="form-label">Calle y Número</label>
+                            <input type="text" class="form-input" value="Av. Juárez 123">
+                        </div>
+                        <div class="form-group">
+                            <label class="form-label">Colonia</label>
+                            <input type="text" class="form-input" value="Centro">
+                        </div>
+                        <div class="form-group">
+                            <label class="form-label">Ciudad</label>
+                            <input type="text" class="form-input" value="Puebla">
+                        </div>
+                        <div class="form-group">
+                            <label class="form-label">Estado</label>
+                            <input type="text" class="form-input" value="Puebla">
+                        </div>
+                        <div class="form-group">
+                            <label class="form-label">Código Postal</label>
+                            <input type="text" class="form-input" value="72000">
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Action Bar -->
+                <div class="action-bar">
+                    <button class="btn btn-secondary">Cancelar</button>
+                    <button class="btn btn-primary">Guardar Cambios</button>
+                </div>
+            </div>
+
+            <!-- Schedule Tab Content (Hidden by default) -->
+            <div class="tab-content" id="schedule-content" style="display: none;">
+                <div class="form-section">
+                    <h2 class="section-title">Horarios de Operación</h2>
+                    <div class="schedule-grid">
+                        <div class="schedule-row">
+                            <span class="day-label">Lunes</span>
+                            <div class="form-group">
+                                <label class="form-label">Apertura</label>
+                                <input type="time" class="form-input" value="07:00">
+                            </div>
+                            <div class="form-group">
+                                <label class="form-label">Cierre</label>
+                                <input type="time" class="form-input" value="22:00">
+                            </div>
+                        </div>
+                        <div class="schedule-row">
+                            <span class="day-label">Martes</span>
+                            <div class="form-group">
+                                <label class="form-label">Apertura</label>
+                                <input type="time" class="form-input" value="07:00">
+                            </div>
+                            <div class="form-group">
+                                <label class="form-label">Cierre</label>
+                                <input type="time" class="form-input" value="22:00">
+                            </div>
+                        </div>
+                        <div class="schedule-row">
+                            <span class="day-label">Miércoles</span>
+                            <div class="form-group">
+                                <label class="form-label">Apertura</label>
+                                <input type="time" class="form-input" value="07:00">
+                            </div>
+                            <div class="form-group">
+                                <label class="form-label">Cierre</label>
+                                <input type="time" class="form-input" value="22:00">
+                            </div>
+                        </div>
+                        <div class="schedule-row">
+                            <span class="day-label">Jueves</span>
+                            <div class="form-group">
+                                <label class="form-label">Apertura</label>
+                                <input type="time" class="form-input" value="07:00">
+                            </div>
+                            <div class="form-group">
+                                <label class="form-label">Cierre</label>
+                                <input type="time" class="form-input" value="22:00">
+                            </div>
+                        </div>
+                        <div class="schedule-row">
+                            <span class="day-label">Viernes</span>
+                            <div class="form-group">
+                                <label class="form-label">Apertura</label>
+                                <input type="time" class="form-input" value="07:00">
+                            </div>
+                            <div class="form-group">
+                                <label class="form-label">Cierre</label>
+                                <input type="time" class="form-input" value="23:00">
+                            </div>
+                        </div>
+                        <div class="schedule-row">
+                            <span class="day-label">Sábado</span>
+                            <div class="form-group">
+                                <label class="form-label">Apertura</label>
+                                <input type="time" class="form-input" value="08:00">
+                            </div>
+                            <div class="form-group">
+                                <label class="form-label">Cierre</label>
+                                <input type="time" class="form-input" value="23:00">
+                            </div>
+                        </div>
+                        <div class="schedule-row">
+                            <span class="day-label">Domingo</span>
+                            <div class="form-group">
+                                <label class="form-label">Apertura</label>
+                                <input type="time" class="form-input" value="08:00">
+                            </div>
+                            <div class="form-group">
+                                <label class="form-label">Cierre</label>
+                                <input type="time" class="form-input" value="21:00">
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Action Bar -->
+                <div class="action-bar">
+                    <button class="btn btn-secondary">Cancelar</button>
+                    <button class="btn btn-primary">Guardar Cambios</button>
+                </div>
+            </div>
+
+            <!-- Payments Tab Content (Hidden by default) -->
+            <div class="tab-content" id="payments-content" style="display: none;">
+                <div class="form-section">
+                    <h2 class="section-title">Métodos de Pago</h2>
+                    
+                    <div class="payment-card">
+                        <div class="payment-header">
+                            <h3 class="payment-title">Stripe</h3>
+                            <div class="toggle-switch active" onclick="toggleSwitch(this)">
+                                <div class="toggle-slider"></div>
+                            </div>
+                        </div>
+                        <div class="form-grid">
+                            <div class="form-group">
+                                <label class="form-label">Clave Pública</label>
+                                <input type="password" class="form-input" placeholder="pk_live_...">
+                            </div>
+                            <div class="form-group">
+                                <label class="form-label">Clave Secreta</label>
+                                <input type="password" class="form-input" placeholder="sk_live_...">
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="payment-card">
+                        <div class="payment-header">
+                            <h3 class="payment-title">Pagos en Efectivo</h3>
+                            <div class="toggle-switch active" onclick="toggleSwitch(this)">
+                                <div class="toggle-slider"></div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="payment-card">
+                        <div class="payment-header">
+                            <h3 class="payment-title">Transferencia Bancaria</h3>
+                            <div class="toggle-switch" onclick="toggleSwitch(this)">
+                                <div class="toggle-slider"></div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Action Bar -->
+                <div class="action-bar">
+                    <button class="btn btn-secondary">Cancelar</button>
+                    <button class="btn btn-primary">Guardar Cambios</button>
+                </div>
+            </div>
+        </div>
+        </div>
+    </div>
+
+    <script>
+        function switchTab(tabName) {
+            // Hide all content
+            document.querySelectorAll('.tab-content').forEach(content => {
+                content.style.display = 'none';
+            });
+            
+            // Remove active class from all tabs
+            document.querySelectorAll('.tab-button').forEach(button => {
+                button.classList.remove('active');
+            });
+            
+            // Show selected content
+            const contentId = tabName + '-content';
+            const content = document.getElementById(contentId);
+            if (content) {
+                content.style.display = 'block';
+            }
+            
+            // Add active class to clicked tab
+            event.target.closest('.tab-button').classList.add('active');
+        }
+
+        function toggleSwitch(element) {
+            element.classList.toggle('active');
+        }
+    </script>
+</body>
+</html>

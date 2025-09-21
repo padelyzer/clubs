@@ -1,0 +1,540 @@
+'use client'
+
+import { useState } from 'react'
+import { useRouter, useSearchParams } from 'next/navigation'
+import Link from 'next/link'
+import {
+  Search,
+  Filter,
+  Building2,
+  Users,
+  Calendar,
+  MapPin,
+  CheckCircle,
+  XCircle,
+  Clock,
+  Ban,
+  Eye,
+  Edit,
+  MoreHorizontal,
+  AlertTriangle,
+  Check,
+  LogIn,
+  ExternalLink,
+} from 'lucide-react'
+
+interface Club {
+  id: string
+  name: string
+  email: string
+  phone: string
+  city: string
+  state: string
+  status: string
+  active: boolean
+  createdAt: Date
+  stripeOnboardingCompleted: boolean
+  _count: {
+    User: number
+    Court: number
+    Booking: number
+  }
+}
+
+interface Stats {
+  total: number
+  pending: number
+  approved: number
+  rejected: number
+  suspended: number
+}
+
+interface ClubsManagementProps {
+  clubs: Club[]
+  stats: Stats
+  currentPage: number
+  totalPages: number
+  currentStatus: string
+  currentSearch: string
+}
+
+export default function ClubsManagement({
+  clubs,
+  stats,
+  currentPage,
+  totalPages,
+  currentStatus,
+  currentSearch
+}: ClubsManagementProps) {
+  const router = useRouter()
+  const searchParams = useSearchParams()
+  const [search, setSearch] = useState(currentSearch)
+  const [processingClub, setProcessingClub] = useState<string | null>(null)
+  const [confirmAction, setConfirmAction] = useState<{
+    clubId: string
+    action: 'approve' | 'reject' | 'suspend' | 'reactivate'
+    clubName: string
+  } | null>(null)
+
+  const handleSearch = (e: React.FormEvent) => {
+    e.preventDefault()
+    const params = new URLSearchParams(searchParams)
+    if (search) {
+      params.set('search', search)
+    } else {
+      params.delete('search')
+    }
+    params.delete('page') // Reset to first page
+    router.push(`/admin/clubs?${params.toString()}`)
+  }
+
+  const handleStatusFilter = (status: string) => {
+    const params = new URLSearchParams(searchParams)
+    if (status === 'all') {
+      params.delete('status')
+    } else {
+      params.set('status', status)
+    }
+    params.delete('page') // Reset to first page
+    router.push(`/admin/clubs?${params.toString()}`)
+  }
+
+  const handlePageChange = (page: number) => {
+    const params = new URLSearchParams(searchParams)
+    params.set('page', page.toString())
+    router.push(`/admin/clubs?${params.toString()}`)
+  }
+
+  const getStatusIcon = (status: string) => {
+    switch (status) {
+      case 'APPROVED':
+        return <CheckCircle className="w-4 h-4 text-green-600" />
+      case 'REJECTED':
+        return <XCircle className="w-4 h-4 text-red-600" />
+      case 'SUSPENDED':
+        return <Ban className="w-4 h-4 text-orange-600" />
+      default:
+        return <Clock className="w-4 h-4 text-yellow-600" />
+    }
+  }
+
+  const getStatusBadge = (status: string) => {
+    const baseClasses = "px-3 py-1.5 rounded-lg text-xs font-semibold inline-flex items-center gap-1.5"
+    switch (status) {
+      case 'APPROVED':
+        return `${baseClasses} bg-gradient-to-r from-emerald-100 to-emerald-200 text-emerald-800 border border-emerald-300`
+      case 'REJECTED':
+        return `${baseClasses} bg-gradient-to-r from-red-100 to-red-200 text-red-800 border border-red-300`
+      case 'SUSPENDED':
+        return `${baseClasses} bg-gradient-to-r from-orange-100 to-orange-200 text-orange-800 border border-orange-300`
+      default:
+        return `${baseClasses} bg-gradient-to-r from-amber-100 to-amber-200 text-amber-800 border border-amber-300`
+    }
+  }
+
+  const handleClubAction = async (clubId: string, action: 'approve' | 'reject' | 'suspend' | 'reactivate', clubName: string) => {
+    setConfirmAction({ clubId, action, clubName })
+  }
+
+  const executeClubAction = async () => {
+    if (!confirmAction) return
+
+    setProcessingClub(confirmAction.clubId)
+    setConfirmAction(null)
+
+    try {
+      const response = await fetch(`/api/admin/clubs/${confirmAction.clubId}/${confirmAction.action}`, {
+        method: 'POST'
+      })
+
+      if (!response.ok) {
+        throw new Error('Error al procesar la acción')
+      }
+
+      // Recargar la página para actualizar los datos
+      router.refresh()
+    } catch (error) {
+      console.error('Error:', error)
+      alert('Error al procesar la acción')
+    } finally {
+      setProcessingClub(null)
+    }
+  }
+
+
+  return (
+    <div className="space-y-6">
+      {/* Stats Overview */}
+      <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
+        {[
+          { 
+            label: 'Total', 
+            value: stats.total, 
+            status: 'all', 
+            icon: <Building2 className="w-5 h-5" />,
+            bgColor: 'bg-gradient-to-br from-blue-50 to-blue-100',
+            iconColor: 'text-blue-600',
+            borderColor: currentStatus === 'all' ? 'border-blue-300 shadow-lg shadow-blue-100' : 'border-gray-200'
+          },
+          { 
+            label: 'Pendientes', 
+            value: stats.pending, 
+            status: 'pending',
+            icon: <Clock className="w-5 h-5" />,
+            bgColor: 'bg-gradient-to-br from-amber-50 to-amber-100', 
+            iconColor: 'text-amber-600',
+            borderColor: currentStatus === 'pending' ? 'border-amber-300 shadow-lg shadow-amber-100' : 'border-gray-200'
+          },
+          { 
+            label: 'Aprobados', 
+            value: stats.approved, 
+            status: 'approved',
+            icon: <CheckCircle className="w-5 h-5" />,
+            bgColor: 'bg-gradient-to-br from-emerald-50 to-emerald-100',
+            iconColor: 'text-emerald-600',
+            borderColor: currentStatus === 'approved' ? 'border-emerald-300 shadow-lg shadow-emerald-100' : 'border-gray-200'
+          },
+          { 
+            label: 'Rechazados', 
+            value: stats.rejected, 
+            status: 'rejected',
+            icon: <XCircle className="w-5 h-5" />,
+            bgColor: 'bg-gradient-to-br from-red-50 to-red-100',
+            iconColor: 'text-red-600',
+            borderColor: currentStatus === 'rejected' ? 'border-red-300 shadow-lg shadow-red-100' : 'border-gray-200'
+          },
+          { 
+            label: 'Suspendidos', 
+            value: stats.suspended, 
+            status: 'suspended',
+            icon: <Ban className="w-5 h-5" />,
+            bgColor: 'bg-gradient-to-br from-orange-50 to-orange-100',
+            iconColor: 'text-orange-600',
+            borderColor: currentStatus === 'suspended' ? 'border-orange-300 shadow-lg shadow-orange-100' : 'border-gray-200'
+          }
+        ].map((stat) => (
+          <button
+            key={stat.status}
+            onClick={() => handleStatusFilter(stat.status)}
+            className={`group relative overflow-hidden rounded-xl border-2 transition-all duration-300 transform hover:scale-105 ${
+              stat.borderColor
+            } ${
+              currentStatus === stat.status || (currentStatus === 'all' && stat.status === 'all')
+                ? stat.bgColor
+                : 'bg-white hover:shadow-md'
+            }`}
+          >
+            <div className="p-5">
+              <div className="flex items-center justify-between mb-2">
+                <div className={`p-2 rounded-lg bg-white/80 ${stat.iconColor}`}>
+                  {stat.icon}
+                </div>
+                <span className="text-3xl font-bold text-gray-800">{stat.value}</span>
+              </div>
+              <div className="text-sm font-medium text-gray-600">{stat.label}</div>
+            </div>
+          </button>
+        ))}
+      </div>
+
+      {/* Search and Filters */}
+      <div className="bg-white rounded-xl p-6 shadow-sm border border-gray-100">
+        <div className="flex flex-col md:flex-row gap-4">
+          <form onSubmit={handleSearch} className="flex-1">
+            <div className="relative">
+              <Search className="absolute left-4 top-1/2 transform -translate-y-1/2 text-gray-400 w-5 h-5" />
+              <input
+                type="text"
+                placeholder="Buscar por nombre, email o ciudad..."
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+                className="w-full pl-12 pr-4 py-3 border border-gray-200 rounded-xl text-sm focus:ring-2 focus:ring-emerald-500 focus:border-transparent transition-all duration-200 hover:border-gray-300"
+              />
+            </div>
+          </form>
+          
+          <div className="flex gap-3">
+            <button 
+              onClick={handleSearch}
+              className="px-6 py-3 bg-gradient-to-r from-emerald-500 to-emerald-600 text-white rounded-xl font-medium transition-all duration-200 hover:from-emerald-600 hover:to-emerald-700 hover:shadow-lg hover:shadow-emerald-200"
+            >
+              <Search className="w-4 h-4 inline mr-2" />
+              Buscar
+            </button>
+            <Link 
+              href="/admin/clubs/new" 
+              style={{
+                padding: '12px 32px',
+                backgroundColor: '#9333ea',
+                color: 'white',
+                borderRadius: '12px',
+                fontWeight: '600',
+                transition: 'all 0.2s',
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: '8px',
+                textDecoration: 'none',
+                border: '2px solid transparent'
+              }}
+              onMouseEnter={(e) => {
+                e.currentTarget.style.backgroundColor = '#7c3aed';
+                e.currentTarget.style.transform = 'scale(1.05)';
+                e.currentTarget.style.boxShadow = '0 10px 25px rgba(147, 51, 234, 0.3)';
+              }}
+              onMouseLeave={(e) => {
+                e.currentTarget.style.backgroundColor = '#9333ea';
+                e.currentTarget.style.transform = 'scale(1)';
+                e.currentTarget.style.boxShadow = 'none';
+              }}
+            >
+              <Building2 style={{ width: '20px', height: '20px', color: 'white' }} />
+              <span style={{ color: 'white' }}>Nuevo Club</span>
+            </Link>
+          </div>
+        </div>
+      </div>
+
+      {/* Clubs Table */}
+      <div className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
+        <div className="overflow-x-auto">
+          <table className="w-full">
+            <thead className="bg-gradient-to-r from-gray-50 to-gray-100 border-b border-gray-200">
+              <tr>
+                <th className="text-left py-4 px-6 font-semibold text-gray-800 text-sm uppercase tracking-wider">Club</th>
+                <th className="text-left py-4 px-6 font-semibold text-gray-800 text-sm uppercase tracking-wider">Ubicación</th>
+                <th className="text-center py-4 px-6 font-semibold text-gray-800 text-sm uppercase tracking-wider">Métricas</th>
+                <th className="text-center py-4 px-6 font-semibold text-gray-800 text-sm uppercase tracking-wider">Estado</th>
+                <th className="text-center py-4 px-6 font-semibold text-gray-800 text-sm uppercase tracking-wider">Stripe</th>
+                <th className="text-center py-4 px-6 font-semibold text-gray-800 text-sm uppercase tracking-wider">Acciones</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-gray-100">
+              {clubs.map((club) => (
+                <tr key={club.id} className="hover:bg-gradient-to-r hover:from-gray-50 hover:to-gray-100 transition-all duration-200 group">
+                  <td className="py-5 px-6">
+                    <div className="flex items-center gap-4">
+                      <div className="p-3 bg-gradient-to-br from-emerald-100 to-emerald-200 rounded-xl group-hover:shadow-md transition-all duration-200">
+                        <Building2 className="w-5 h-5 text-emerald-700" />
+                      </div>
+                      <div>
+                        <div className="font-semibold text-gray-900 text-base">{club.name}</div>
+                        <div className="text-sm text-gray-600 mt-1">{club.email}</div>
+                        <div className="text-xs text-gray-500 mt-0.5">{club.phone}</div>
+                      </div>
+                    </div>
+                  </td>
+                  
+                  <td className="py-5 px-6">
+                    <div className="flex items-center gap-2">
+                      <MapPin className="w-4 h-4 text-gray-500" />
+                      <span className="text-sm font-medium text-gray-700">{club.city}, {club.state}</span>
+                    </div>
+                  </td>
+                  
+                  <td className="py-5 px-6">
+                    <div className="flex justify-center gap-6">
+                      <div className="text-center">
+                        <div className="text-lg font-bold text-blue-600">{club._count.Court}</div>
+                        <div className="text-xs text-gray-500 font-medium">Canchas</div>
+                      </div>
+                      <div className="text-center">
+                        <div className="text-lg font-bold text-emerald-600">{club._count.User}</div>
+                        <div className="text-xs text-gray-500 font-medium">Usuarios</div>
+                      </div>
+                      <div className="text-center">
+                        <div className="text-lg font-bold text-purple-600">{club._count.Booking}</div>
+                        <div className="text-xs text-gray-500 font-medium">Reservas</div>
+                      </div>
+                    </div>
+                  </td>
+                  
+                  <td className="py-5 px-6 text-center">
+                    <span className={getStatusBadge(club.status)}>
+                      {getStatusIcon(club.status)}
+                      {club.status}
+                    </span>
+                  </td>
+                  
+                  <td className="py-5 px-6 text-center">
+                    <span className={`px-3 py-1.5 rounded-lg text-xs font-semibold inline-flex items-center gap-1.5 ${
+                      club.stripeOnboardingCompleted 
+                        ? 'bg-gradient-to-r from-green-100 to-green-200 text-green-800 border border-green-300' 
+                        : 'bg-gradient-to-r from-gray-100 to-gray-200 text-gray-700 border border-gray-300'
+                    }`}>
+                      {club.stripeOnboardingCompleted ? (
+                        <><Check className="w-3 h-3" /> Completo</>
+                      ) : (
+                        <><Clock className="w-3 h-3" /> Pendiente</>
+                      )}
+                    </span>
+                  </td>
+                  
+                  <td className="py-5 px-6">
+                    <div className="flex items-center justify-center gap-1">
+                      <Link 
+                        href={`/admin/clubs/${club.id}`}
+                        className="p-2 text-gray-500 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-all duration-200 group relative"
+                      >
+                        <Eye className="w-4 h-4" />
+                        <span className="absolute -top-8 left-1/2 transform -translate-x-1/2 bg-gray-800 text-white text-xs py-1 px-2 rounded opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap z-10">Ver detalles</span>
+                      </Link>
+                      <Link
+                        href={`/admin/clubs/${club.id}/edit`}
+                        className="p-2 text-gray-500 hover:text-emerald-600 hover:bg-emerald-50 rounded-lg transition-all duration-200 group relative"
+                      >
+                        <Edit className="w-4 h-4" />
+                        <span className="absolute -top-8 left-1/2 transform -translate-x-1/2 bg-gray-800 text-white text-xs py-1 px-2 rounded opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap z-10">Editar</span>
+                      </Link>
+
+                      {/* Acceder al Panel - Visible para clubs aprobados */}
+                      {club.status === 'APPROVED' && (
+                        <a 
+                          href={`/api/admin/clubs/${club.id}/access`}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="p-2 text-gray-500 hover:text-purple-600 hover:bg-purple-50 rounded-lg transition-all duration-200 group relative"
+                        >
+                          <LogIn className="w-4 h-4" />
+                          <span className="absolute -top-8 left-1/2 transform -translate-x-1/2 bg-gray-800 text-white text-xs py-1 px-2 rounded opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap z-10">Acceder al Panel</span>
+                        </a>
+                      )}
+                      
+                      {/* Aprobar - Para clubs pendientes */}
+                      {club.status === 'PENDING' && (
+                        <button 
+                          onClick={() => handleClubAction(club.id, 'approve', club.name)}
+                          disabled={processingClub === club.id}
+                          className="p-2 text-gray-500 hover:text-green-600 hover:bg-green-50 rounded-lg transition-all duration-200 group relative"
+                        >
+                          <CheckCircle className="w-4 h-4" />
+                          <span className="absolute -top-8 left-1/2 transform -translate-x-1/2 bg-gray-800 text-white text-xs py-1 px-2 rounded opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap z-10">Aprobar</span>
+                        </button>
+                      )}
+                      
+                      {/* Rechazar - Para clubs pendientes */}
+                      {club.status === 'PENDING' && (
+                        <button 
+                          onClick={() => handleClubAction(club.id, 'reject', club.name)}
+                          disabled={processingClub === club.id}
+                          className="p-2 text-gray-500 hover:text-red-600 hover:bg-red-50 rounded-lg transition-all duration-200 group relative"
+                        >
+                          <XCircle className="w-4 h-4" />
+                          <span className="absolute -top-8 left-1/2 transform -translate-x-1/2 bg-gray-800 text-white text-xs py-1 px-2 rounded opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap z-10">Rechazar</span>
+                        </button>
+                      )}
+                      
+                      {/* Suspender - Para clubs aprobados */}
+                      {club.status === 'APPROVED' && (
+                        <button 
+                          onClick={() => handleClubAction(club.id, 'suspend', club.name)}
+                          disabled={processingClub === club.id}
+                          className="p-2 text-gray-500 hover:text-orange-600 hover:bg-orange-50 rounded-lg transition-all duration-200 group relative"
+                        >
+                          <Ban className="w-4 h-4" />
+                          <span className="absolute -top-8 left-1/2 transform -translate-x-1/2 bg-gray-800 text-white text-xs py-1 px-2 rounded opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap z-10">Suspender</span>
+                        </button>
+                      )}
+                      
+                      {/* Reactivar - Para clubs suspendidos */}
+                      {club.status === 'SUSPENDED' && (
+                        <button 
+                          onClick={() => handleClubAction(club.id, 'reactivate', club.name)}
+                          disabled={processingClub === club.id}
+                          className="p-2 text-gray-500 hover:text-emerald-600 hover:bg-emerald-50 rounded-lg transition-all duration-200 group relative"
+                        >
+                          <CheckCircle className="w-4 h-4" />
+                          <span className="absolute -top-8 left-1/2 transform -translate-x-1/2 bg-gray-800 text-white text-xs py-1 px-2 rounded opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap z-10">Reactivar</span>
+                        </button>
+                      )}
+                    </div>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+
+        {/* Pagination */}
+        {totalPages > 1 && (
+          <div className="flex items-center justify-between px-6 py-3 bg-gray-50 border-t border-gray-200">
+            <div className="text-sm text-gray-700">
+              Página {currentPage} de {totalPages}
+            </div>
+            <div className="flex gap-2">
+              <button
+                onClick={() => handlePageChange(currentPage - 1)}
+                disabled={currentPage === 1}
+                className="btn btn-sm btn-ghost"
+              >
+                Anterior
+              </button>
+              <button
+                onClick={() => handlePageChange(currentPage + 1)}
+                disabled={currentPage === totalPages}
+                className="btn btn-sm btn-ghost"
+              >
+                Siguiente
+              </button>
+            </div>
+          </div>
+        )}
+      </div>
+
+      {/* Modal de Confirmación */}
+      {confirmAction && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-50">
+          <div className="bg-white rounded-xl p-6 max-w-md w-full mx-4">
+            <div className="flex items-start gap-4">
+              <div className={`p-3 rounded-lg ${
+                confirmAction.action === 'approve' ? 'bg-green-100' :
+                confirmAction.action === 'reject' ? 'bg-red-100' :
+                confirmAction.action === 'suspend' ? 'bg-orange-100' :
+                'bg-blue-100'
+              }`}>
+                <AlertTriangle className={`w-6 h-6 ${
+                  confirmAction.action === 'approve' ? 'text-green-600' :
+                  confirmAction.action === 'reject' ? 'text-red-600' :
+                  confirmAction.action === 'suspend' ? 'text-orange-600' :
+                  'text-blue-600'
+                }`} />
+              </div>
+              <div className="flex-1">
+                <h3 className="text-lg font-semibold text-gray-900">
+                  Confirmar Acción
+                </h3>
+                <p className="mt-2 text-sm text-gray-600">
+                  ¿Estás seguro que deseas {
+                    confirmAction.action === 'approve' ? 'aprobar' :
+                    confirmAction.action === 'reject' ? 'rechazar' :
+                    confirmAction.action === 'suspend' ? 'suspender' :
+                    'reactivar'
+                  } el club <strong>{confirmAction.clubName}</strong>?
+                </p>
+                <div className="mt-4 flex gap-3">
+                  <button
+                    onClick={executeClubAction}
+                    className={`px-4 py-2 rounded-lg font-medium text-white ${
+                      confirmAction.action === 'approve' ? 'bg-green-600 hover:bg-green-700' :
+                      confirmAction.action === 'reject' ? 'bg-red-600 hover:bg-red-700' :
+                      confirmAction.action === 'suspend' ? 'bg-orange-600 hover:bg-orange-700' :
+                      'bg-blue-600 hover:bg-blue-700'
+                    }`}
+                  >
+                    <Check className="w-4 h-4 inline mr-1" />
+                    Confirmar
+                  </button>
+                  <button
+                    onClick={() => setConfirmAction(null)}
+                    className="px-4 py-2 rounded-lg font-medium border border-gray-300 text-gray-700 hover:bg-gray-50"
+                  >
+                    Cancelar
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  )
+}

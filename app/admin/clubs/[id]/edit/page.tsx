@@ -1,0 +1,45 @@
+import { requireSuperAdmin } from '@/lib/auth/actions'
+import { prisma } from '@/lib/config/prisma'
+import { notFound } from 'next/navigation'
+import EditClubForm from './edit-club-form'
+
+export default async function EditClubPage({
+  params
+}: {
+  params: Promise<{ id: string }>
+}) {
+  await requireSuperAdmin()
+  const { id } = await params
+
+  const club = await prisma.club.findUnique({
+    where: { id },
+    include: {
+      _count: {
+        select: {
+          User: true,
+          Court: true,
+          Booking: true
+        }
+      }
+    }
+  })
+
+  if (!club) {
+    notFound()
+  }
+
+  return (
+    <div className="min-h-screen py-8 px-4 flex items-center justify-center">
+      <div className="max-w-3xl w-full">
+        <div className="mb-8 text-center">
+          <h1 className="text-3xl font-bold text-gray-900">Editar Club</h1>
+          <p className="mt-2 text-sm text-gray-600">
+            Modifica la información del club
+          </p>
+        </div>
+
+        <EditClubForm club={club} />
+      </div>
+    </div>
+  )
+}

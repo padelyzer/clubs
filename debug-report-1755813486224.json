@@ -1,0 +1,89 @@
+{
+  "timestamp": "2025-08-21T21:58:06.079Z",
+  "sections": {
+    "database": {
+      "status": "✅ Conectado",
+      "tableCounts": {
+        "users": 1,
+        "clubs": 1,
+        "courts": 5,
+        "bookings": 0,
+        "bookingGroups": 0,
+        "classes": 3,
+        "classBookings": 7,
+        "classInstructors": 4,
+        "players": 10,
+        "transactions": 26,
+        "payments": 0,
+        "splitPayments": 0,
+        "notifications": 4
+      }
+    },
+    "authentication": {
+      "totalUsers": 1,
+      "activeUsers": 1,
+      "usersWithSessions": 0,
+      "usersByRole": {
+        "CLUB_OWNER": 1
+      }
+    },
+    "bookings": {
+      "total": 0,
+      "byStatus": {},
+      "byPaymentStatus": {},
+      "withSplitPayments": 0,
+      "checkedIn": 0
+    },
+    "classes": {
+      "total": 3,
+      "byStatus": {
+        "SCHEDULED": 2,
+        "IN_PROGRESS": 1
+      },
+      "byType": {
+        "INDIVIDUAL": 1,
+        "GROUP": 2
+      },
+      "totalEnrollments": 7,
+      "averageEnrollments": 2.3,
+      "withNoEnrollments": 0,
+      "overCapacity": 0
+    },
+    "payments": {
+      "transactions": {
+        "total": 26,
+        "income": 18,
+        "expense": 8,
+        "totalIncome": 945000,
+        "totalExpense": 4465600
+      },
+      "payments": {
+        "total": 0,
+        "completed": 0,
+        "pending": 0,
+        "failed": 0
+      },
+      "splitPayments": {
+        "total": 0,
+        "completed": 0,
+        "pending": 0
+      }
+    },
+    "notifications": {
+      "total": 4,
+      "byStatus": {
+        "pending": 4
+      },
+      "byType": {
+        "WHATSAPP": 4
+      },
+      "pending": 4,
+      "failed": 0,
+      "sent": 0
+    },
+    "errors": [],
+    "recommendations": [
+      "✨ El sistema está funcionando correctamente sin errores críticos"
+    ]
+  }
+}

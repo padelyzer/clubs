@@ -1,0 +1,587 @@
+import { prisma } from '@/lib/config/prisma'
+import { AuditActions } from '@/lib/security/audit'
+import { getSmartDefaultTimezone } from '@/lib/utils/timezone-detection'
+
+interface ClubApprovalData {
+  clubId: string
+  approvedBy: string
+  planId?: string
+}
+
+interface ClubRegistrationNotification {
+  clubId: string
+  clubName: string
+  ownerEmail: string
+  city: string
+}
+
+/**
+ * Service for managing integration between club and admin modules
+ */
+export class ClubAdminIntegrationService {
+  /**
+   * Handle club approval with automatic subscription creation
+   */
+  static async approveClub(data: ClubApprovalData) {
+    const { clubId, approvedBy, planId } = data
+
+    return await prisma.$transaction(async (tx) => {
+      // Get default trial plan if no plan specified
+      let subscriptionPlanId = planId
+      if (!subscriptionPlanId) {
+        const trialPlan = await tx.subscriptionPlan.findFirst({
+          where: { 
+            name: 'trial',
+            isActive: true 
+          }
+        })
+        
+        if (!trialPlan) {
+          throw new Error('No hay plan trial disponible')
+        }
+        
+        subscriptionPlanId = trialPlan.id
+      }
+
+      // Update club status
+      const club = await tx.club.update({
+        where: { id: clubId },
+        data: {
+          status: 'APPROVED',
+          active: true,
+          approvedAt: new Date(),
+          approvedBy
+        }
+      })
+
+      // Create subscription
+      const subscription = await tx.clubSubscription.create({
+        data: {
+          clubId,
+          planId: subscriptionPlanId,
+          status: 'TRIALING',
+          currentPeriodStart: new Date(),
+          currentPeriodEnd: new Date(Date.now() + 14 * 24 * 60 * 60 * 1000), // 14 days trial
+          trialEndsAt: new Date(Date.now() + 14 * 24 * 60 * 60 * 1000),
+        }
+      })
+
+      // Detect smart timezone based on club location
+      const smartTimezone = getSmartDefaultTimezone({
+        city: club.city || '',
+        state: club.state || '',
+        country: club.country || 'Mexico'
+      })
+
+      // Create default ClubSettings with smart timezone detection
+      const clubSettingsId = `club_settings_${clubId}_${Date.now()}`
+      const clubSettings = await tx.clubSettings.create({
+        data: {
+          id: clubSettingsId,
+          clubId,
+          currency: 'MXN',
+          slotDuration: 90,
+          bufferTime: 15,
+          advanceBookingDays: 30,
+          allowSameDayBooking: true,
+          taxIncluded: true,
+          taxRate: 16,
+          cancellationFee: 0,
+          noShowFee: 50,
+          timezone: smartTimezone, // Intelligent timezone detection
+          acceptCash: true,
+          terminalEnabled: false,
+          transferEnabled: true,
+          updatedAt: new Date()
+        }
+      })
+
+      // Validate timezone configuration immediately after creation
+      const { validateTimezone } = await import('@/lib/utils/timezone-detection')
+      const { getDayBoundariesInTimezone, getNowInTimezone } = await import('@/lib/utils/timezone')
+      
+      if (!validateTimezone(clubSettings.timezone)) {
+        throw new Error(`Invalid timezone detected during club approval: ${clubSettings.timezone}`)
+      }
+      
+      // Test timezone functions work
+      try {
+        const now = getNowInTimezone(clubSettings.timezone)
+        const { start, end } = getDayBoundariesInTimezone('2025-12-25', clubSettings.timezone)
+        
+        if (!now || !start || !end) {
+          throw new Error(`Timezone functions failed for timezone: ${clubSettings.timezone}`)
+        }
+      } catch (timezoneError) {
+        throw new Error(`Timezone validation failed: ${timezoneError.message}`)
+      }
+
+      console.log(`✅ Club ${club.name} approved with validated timezone: ${clubSettings.timezone}`)
+
+      // Create admin notification
+      await tx.adminNotification.create({
+        data: {
+          type: 'CLUB_APPROVED',
+          title: 'Club Aprobado',
+          message: `El club ${club.name} ha sido aprobado con éxito`,
+          metadata: {
+            clubId,
+            clubName: club.name,
+            subscriptionId: subscription.id,
+            planId: subscriptionPlanId
+          },
+          userId: approvedBy,
+          priority: 'MEDIUM',
+          status: 'UNREAD'
+        }
+      })
+
+      // TODO: Send email notification to club owner
+      // await EmailService.sendClubApprovalEmail(club)
+
+      return { club, subscription }
+    })
+  }
+
+  /**
+   * Handle club rejection
+   */
+  static async rejectClub(clubId: string, rejectedBy: string, reason: string) {
+    return await prisma.$transaction(async (tx) => {
+      const club = await tx.club.update({
+        where: { id: clubId },
+        data: {
+          status: 'REJECTED',
+          active: false,
+          metadata: {
+            rejectedAt: new Date(),
+            rejectedBy,
+            rejectionReason: reason
+          }
+        }
+      })
+
+      // Create admin notification
+      await tx.adminNotification.create({
+        data: {
+          type: 'CLUB_REJECTED',
+          title: 'Club Rechazado',
+          message: `El club ${club.name} ha sido rechazado`,
+          metadata: {
+            clubId,
+            clubName: club.name,
+            reason
+          },
+          userId: rejectedBy,
+          priority: 'LOW',
+          status: 'UNREAD'
+        }
+      })
+
+      // TODO: Send rejection email to club owner
+      // await EmailService.sendClubRejectionEmail(club, reason)
+
+      return club
+    })
+  }
+
+  /**
+   * Notify admin of new club registration
+   */
+  static async notifyNewClubRegistration(data: ClubRegistrationNotification) {
+    const { clubId, clubName, ownerEmail, city } = data
+
+    // Get all super admins
+    const superAdmins = await prisma.user.findMany({
+      where: { role: 'SUPER_ADMIN' }
+    })
+
+    // Create notification for each super admin
+    await Promise.all(
+      superAdmins.map(admin =>
+        prisma.adminNotification.create({
+          data: {
+            type: 'NEW_CLUB_REGISTRATION',
+            title: 'Nuevo Club Registrado',
+            message: `${clubName} se ha registrado y está pendiente de aprobación`,
+            metadata: {
+              clubId,
+              clubName,
+              ownerEmail,
+              city
+            },
+            userId: admin.id,
+            priority: 'HIGH',
+            status: 'UNREAD'
+          }
+        })
+      )
+    )
+
+    // TODO: Send email to super admins
+    // await EmailService.notifyAdminsNewClub(data)
+  }
+
+  /**
+   * Handle subscription upgrade/downgrade
+   */
+  static async changeSubscriptionPlan(
+    subscriptionId: string,
+    newPlanId: string,
+    changedBy: string
+  ) {
+    return await prisma.$transaction(async (tx) => {
+      const subscription = await tx.clubSubscription.findUnique({
+        where: { id: subscriptionId },
+        include: {
+          club: true,
+          plan: true
+        }
+      })
+
+      if (!subscription) {
+        throw new Error('Suscripción no encontrada')
+      }
+
+      const newPlan = await tx.subscriptionPlan.findUnique({
+        where: { id: newPlanId }
+      })
+
+      if (!newPlan) {
+        throw new Error('Plan no encontrado')
+      }
+
+      // Update subscription
+      const updatedSubscription = await tx.clubSubscription.update({
+        where: { id: subscriptionId },
+        data: {
+          planId: newPlanId,
+          metadata: {
+            previousPlanId: subscription.planId,
+            previousPlanName: subscription.plan.displayName,
+            changedAt: new Date(),
+            changedBy
+          }
+        }
+      })
+
+      // Create notification
+      await tx.adminNotification.create({
+        data: {
+          type: 'SUBSCRIPTION_CHANGED',
+          title: 'Cambio de Plan',
+          message: `${subscription.club.name} cambió de ${subscription.plan.displayName} a ${newPlan.displayName}`,
+          metadata: {
+            clubId: subscription.clubId,
+            clubName: subscription.club.name,
+            oldPlan: subscription.plan.displayName,
+            newPlan: newPlan.displayName,
+            priceChange: newPlan.price - subscription.plan.price
+          },
+          userId: changedBy,
+          priority: 'MEDIUM',
+          status: 'UNREAD'
+        }
+      })
+
+      return updatedSubscription
+    })
+  }
+
+  /**
+   * Handle subscription cancellation
+   */
+  static async cancelSubscription(
+    subscriptionId: string,
+    cancelledBy: string,
+    reason?: string
+  ) {
+    return await prisma.$transaction(async (tx) => {
+      const subscription = await tx.clubSubscription.findUnique({
+        where: { id: subscriptionId },
+        include: { club: true }
+      })
+
+      if (!subscription) {
+        throw new Error('Suscripción no encontrada')
+      }
+
+      // Update subscription
+      const cancelledSubscription = await tx.clubSubscription.update({
+        where: { id: subscriptionId },
+        data: {
+          status: 'CANCELLED',
+          cancelledAt: new Date(),
+          metadata: {
+            cancelledBy,
+            cancellationReason: reason
+          }
+        }
+      })
+
+      // Deactivate club
+      await tx.club.update({
+        where: { id: subscription.clubId },
+        data: { active: false }
+      })
+
+      // Create notification
+      await tx.adminNotification.create({
+        data: {
+          type: 'SUBSCRIPTION_CANCELLED',
+          title: 'Suscripción Cancelada',
+          message: `${subscription.club.name} ha cancelado su suscripción`,
+          metadata: {
+            clubId: subscription.clubId,
+            clubName: subscription.club.name,
+            reason
+          },
+          userId: cancelledBy,
+          priority: 'HIGH',
+          status: 'UNREAD'
+        }
+      })
+
+      return cancelledSubscription
+    })
+  }
+
+  /**
+   * Check and enforce subscription limits
+   */
+  static async checkSubscriptionLimits(clubId: string) {
+    const subscription = await prisma.clubSubscription.findFirst({
+      where: {
+        clubId,
+        status: { in: ['ACTIVE', 'TRIALING'] }
+      },
+      include: { plan: true }
+    })
+
+    if (!subscription) {
+      return {
+        hasActiveSubscription: false,
+        limits: null,
+        usage: null,
+        canAdd: {
+          users: false,
+          courts: false,
+          bookings: false
+        }
+      }
+    }
+
+    // Get current usage
+    const [userCount, courtCount, monthlyBookings] = await Promise.all([
+      prisma.user.count({ where: { clubId } }),
+      prisma.court.count({ where: { clubId } }),
+      prisma.booking.count({
+        where: {
+          clubId,
+          date: {
+            gte: new Date(new Date().getFullYear(), new Date().getMonth(), 1)
+          }
+        }
+      })
+    ])
+
+    const plan = subscription.plan
+    const limits = {
+      maxUsers: plan.maxUsers,
+      maxCourts: plan.maxCourts,
+      maxBookings: plan.maxBookings
+    }
+
+    const usage = {
+      users: userCount,
+      courts: courtCount,
+      bookings: monthlyBookings
+    }
+
+    const canAdd = {
+      users: !plan.maxUsers || userCount < plan.maxUsers,
+      courts: !plan.maxCourts || courtCount < plan.maxCourts,
+      bookings: !plan.maxBookings || monthlyBookings < plan.maxBookings
+    }
+
+    return {
+      hasActiveSubscription: true,
+      subscription,
+      limits,
+      usage,
+      canAdd
+    }
+  }
+
+  /**
+   * Generate subscription invoice
+   */
+  static async generateInvoice(subscriptionId: string) {
+    const subscription = await prisma.clubSubscription.findUnique({
+      where: { id: subscriptionId },
+      include: {
+        club: true,
+        plan: true
+      }
+    })
+
+    if (!subscription) {
+      throw new Error('Suscripción no encontrada')
+    }
+
+    // Calculate invoice number
+    const lastInvoice = await prisma.subscriptionInvoice.findFirst({
+      orderBy: { invoiceNumber: 'desc' }
+    })
+    
+    const nextInvoiceNumber = lastInvoice 
+      ? (parseInt(lastInvoice.invoiceNumber.replace('INV-', '')) + 1).toString().padStart(6, '0')
+      : '000001'
+
+    // Create invoice
+    const invoice = await prisma.subscriptionInvoice.create({
+      data: {
+        subscriptionId,
+        invoiceNumber: `INV-${nextInvoiceNumber}`,
+        amount: subscription.plan.price,
+        currency: subscription.plan.currency,
+        status: 'PENDING',
+        dueDate: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000), // 7 days
+        billingPeriodStart: subscription.currentPeriodStart,
+        billingPeriodEnd: subscription.currentPeriodEnd,
+        metadata: {
+          clubName: subscription.club.name,
+          planName: subscription.plan.displayName,
+          generatedAt: new Date()
+        }
+      }
+    })
+
+    // Create notification
+    await prisma.adminNotification.create({
+      data: {
+        type: 'INVOICE_GENERATED',
+        title: 'Factura Generada',
+        message: `Factura ${invoice.invoiceNumber} generada para ${subscription.club.name}`,
+        metadata: {
+          invoiceId: invoice.id,
+          invoiceNumber: invoice.invoiceNumber,
+          amount: invoice.amount,
+          clubName: subscription.club.name
+        },
+        priority: 'MEDIUM',
+        status: 'UNREAD'
+      }
+    })
+
+    return invoice
+  }
+
+  /**
+   * Process payment for invoice
+   */
+  static async processInvoicePayment(
+    invoiceId: string,
+    paymentMethod: string,
+    transactionId: string
+  ) {
+    return await prisma.$transaction(async (tx) => {
+      const invoice = await tx.subscriptionInvoice.update({
+        where: { id: invoiceId },
+        data: {
+          status: 'PAID',
+          paidAt: new Date(),
+          paymentMethod,
+          transactionId
+        },
+        include: {
+          subscription: {
+            include: { club: true }
+          }
+        }
+      })
+
+      // Update subscription period
+      await tx.clubSubscription.update({
+        where: { id: invoice.subscriptionId },
+        data: {
+          currentPeriodStart: new Date(),
+          currentPeriodEnd: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000), // 30 days
+          status: 'ACTIVE'
+        }
+      })
+
+      // Create notification
+      await tx.adminNotification.create({
+        data: {
+          type: 'PAYMENT_RECEIVED',
+          title: 'Pago Recibido',
+          message: `Pago recibido para factura ${invoice.invoiceNumber}`,
+          metadata: {
+            invoiceId,
+            invoiceNumber: invoice.invoiceNumber,
+            amount: invoice.amount,
+            clubName: invoice.subscription.club.name,
+            paymentMethod,
+            transactionId
+          },
+          priority: 'LOW',
+          status: 'UNREAD'
+        }
+      })
+
+      return invoice
+    })
+  }
+
+  /**
+   * Get integration dashboard stats
+   */
+  static async getIntegrationStats() {
+    const [
+      pendingClubs,
+      activeSubscriptions,
+      trialSubscriptions,
+      pendingInvoices,
+      monthlyRevenue,
+      recentNotifications
+    ] = await Promise.all([
+      prisma.club.count({ where: { status: 'PENDING' } }),
+      prisma.clubSubscription.count({ where: { status: 'ACTIVE' } }),
+      prisma.clubSubscription.count({ where: { status: 'TRIALING' } }),
+      prisma.subscriptionInvoice.count({ where: { status: 'PENDING' } }),
+      prisma.subscriptionInvoice.aggregate({
+        where: {
+          status: 'PAID',
+          paidAt: {
+            gte: new Date(new Date().getFullYear(), new Date().getMonth(), 1)
+          }
+        },
+        _sum: { amount: true }
+      }),
+      prisma.adminNotification.findMany({
+        where: {
+          type: {
+            in: [
+              'NEW_CLUB_REGISTRATION',
+              'CLUB_APPROVED',
+              'SUBSCRIPTION_CANCELLED',
+              'PAYMENT_OVERDUE'
+            ]
+          }
+        },
+        orderBy: { createdAt: 'desc' },
+        take: 5
+      })
+    ])
+
+    return {
+      pendingClubs,
+      activeSubscriptions,
+      trialSubscriptions,
+      pendingInvoices,
+      monthlyRevenue: monthlyRevenue._sum.amount || 0,
+      recentNotifications
+    }
+  }
+}

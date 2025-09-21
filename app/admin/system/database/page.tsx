@@ -1,0 +1,661 @@
+import { requireSuperAdmin } from '@/lib/auth/actions'
+import { prisma } from '@/lib/config/prisma'
+import { Database, HardDrive, Activity, BarChart, RefreshCw, Download, Settings, AlertTriangle, CheckCircle, Clock, Trash2, Archive, Shield, Zap, TrendingUp } from 'lucide-react'
+
+export default async function DatabaseManagementPage() {
+  await requireSuperAdmin()
+
+  // Obtener estadísticas reales de la base de datos
+  const [
+    userCount,
+    clubCount,
+    bookingCount,
+    subscriptionCount,
+    totalTables
+  ] = await Promise.all([
+    prisma.user.count(),
+    prisma.club.count(),
+    prisma.booking.count(),
+    prisma.clubSubscription.count(),
+    // Simular conteo de tablas
+    Promise.resolve(15)
+  ])
+
+  // Estadísticas simuladas de la base de datos
+  const dbStats = [
+    {
+      title: 'Tamaño de BD',
+      value: '2.4 GB',
+      subtitle: 'Uso total del disco',
+      icon: <HardDrive size={24} />,
+      color: 'blue',
+      bgColor: '#3b82f6',
+      trend: 12.3
+    },
+    {
+      title: 'Conexiones Activas',
+      value: '18',
+      subtitle: 'De 100 máximo',
+      icon: <Activity size={24} />,
+      color: 'green',
+      bgColor: '#10b981',
+      trend: -5.2
+    },
+    {
+      title: 'Consultas/seg',
+      value: '247',
+      subtitle: 'Promedio último minuto',
+      icon: <Zap size={24} />,
+      color: 'purple',
+      bgColor: '#8b5cf6',
+      trend: 23.1
+    },
+    {
+      title: 'Tiempo Respuesta',
+      value: '12 ms',
+      subtitle: 'Promedio consultas',
+      icon: <Clock size={24} />,
+      color: 'orange',
+      bgColor: '#f97316',
+      trend: -8.7
+    },
+    {
+      title: 'Cache Hit Rate',
+      value: '94.2%',
+      subtitle: 'Eficiencia cache',
+      icon: <TrendingUp size={24} />,
+      color: 'green',
+      bgColor: '#10b981',
+      trend: 2.1
+    },
+    {
+      title: 'Tablas Activas',
+      value: totalTables.toString(),
+      subtitle: 'Esquema principal',
+      icon: <Database size={24} />,
+      color: 'indigo',
+      bgColor: '#6366f1',
+      trend: 0
+    }
+  ]
+
+  // Información de las tablas principales
+  const tableInfo = [
+    {
+      name: 'users',
+      records: userCount,
+      size: '145 MB',
+      growth: '+12%',
+      lastBackup: new Date(Date.now() - 6 * 60 * 60 * 1000),
+      status: 'healthy'
+    },
+    {
+      name: 'clubs',
+      records: clubCount,
+      size: '89 MB',
+      growth: '+8%',
+      lastBackup: new Date(Date.now() - 6 * 60 * 60 * 1000),
+      status: 'healthy'
+    },
+    {
+      name: 'bookings',
+      records: bookingCount,
+      size: '512 MB',
+      growth: '+25%',
+      lastBackup: new Date(Date.now() - 6 * 60 * 60 * 1000),
+      status: 'warning'
+    },
+    {
+      name: 'club_subscriptions',
+      records: subscriptionCount,
+      size: '23 MB',
+      growth: '+5%',
+      lastBackup: new Date(Date.now() - 6 * 60 * 60 * 1000),
+      status: 'healthy'
+    },
+    {
+      name: 'courts',
+      records: 247,
+      size: '34 MB',
+      growth: '+3%',
+      lastBackup: new Date(Date.now() - 6 * 60 * 60 * 1000),
+      status: 'healthy'
+    },
+    {
+      name: 'payments',
+      records: 1834,
+      size: '67 MB',
+      growth: '+18%',
+      lastBackup: new Date(Date.now() - 6 * 60 * 60 * 1000),
+      status: 'healthy'
+    },
+    {
+      name: 'sessions',
+      records: 423,
+      size: '12 MB',
+      growth: '-2%',
+      lastBackup: new Date(Date.now() - 6 * 60 * 60 * 1000),
+      status: 'healthy'
+    }
+  ]
+
+  // Historial de backups
+  const backupHistory = [
+    {
+      id: 1,
+      date: new Date(Date.now() - 6 * 60 * 60 * 1000),
+      type: 'full',
+      size: '2.4 GB',
+      duration: '23m 45s',
+      status: 'completed'
+    },
+    {
+      id: 2,
+      date: new Date(Date.now() - 30 * 60 * 60 * 1000),
+      type: 'incremental',
+      size: '145 MB',
+      duration: '3m 12s',
+      status: 'completed'
+    },
+    {
+      id: 3,
+      date: new Date(Date.now() - 54 * 60 * 60 * 1000),
+      type: 'incremental',
+      size: '98 MB',
+      duration: '2m 34s',
+      status: 'completed'
+    },
+    {
+      id: 4,
+      date: new Date(Date.now() - 78 * 60 * 60 * 1000),
+      type: 'incremental',
+      size: '76 MB',
+      duration: '2m 18s',
+      status: 'completed'
+    }
+  ]
+
+  const getStatusIcon = (status: string) => {
+    switch (status) {
+      case 'healthy':
+        return <CheckCircle size={16} color="#10b981" />
+      case 'warning':
+        return <AlertTriangle size={16} color="#f59e0b" />
+      case 'error':
+        return <AlertTriangle size={16} color="#ef4444" />
+      default:
+        return <Clock size={16} color="#6b7280" />
+    }
+  }
+
+  const getBackupBadge = (type: string) => {
+    const colors = {
+      full: { color: '#3b82f6', bg: '#dbeafe' },
+      incremental: { color: '#10b981', bg: '#d1fae5' },
+      differential: { color: '#8b5cf6', bg: '#e9d5ff' }
+    }
+    const config = colors[type as keyof typeof colors] || colors.incremental
+    
+    return (
+      <span style={{
+        padding: '2px 8px',
+        borderRadius: '12px',
+        fontSize: '11px',
+        fontWeight: '500',
+        color: config.color,
+        background: config.bg
+      }}>
+        {type.charAt(0).toUpperCase() + type.slice(1)}
+      </span>
+    )
+  }
+
+  return (
+    <div style={{ 
+      padding: '24px', 
+      background: '#f5f5f5', 
+      minHeight: '100vh',
+      width: '100%'
+    }}>
+      <div style={{
+        maxWidth: '1400px',
+        margin: '0 auto'
+      }}>
+        {/* Header */}
+        <div style={{
+          background: 'white',
+          borderRadius: '12px',
+          padding: '24px',
+          marginBottom: '24px',
+          boxShadow: '0 1px 3px rgba(0,0,0,0.1)'
+        }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+            <div>
+              <h1 style={{ fontSize: '28px', fontWeight: 'bold', marginBottom: '8px' }}>
+                Gestión de Base de Datos
+              </h1>
+              <p style={{ color: '#6b7280', fontSize: '14px' }}>
+                Administra, monitorea y mantén la integridad de la base de datos
+              </p>
+            </div>
+            <div style={{ display: 'flex', gap: '12px' }}>
+              <button style={{
+                padding: '8px 16px',
+                background: '#f3f4f6',
+                border: '1px solid #e5e7eb',
+                borderRadius: '8px',
+                cursor: 'pointer',
+                display: 'flex',
+                alignItems: 'center',
+                gap: '8px',
+                fontSize: '14px',
+                color: '#374151'
+              }}>
+                <Settings size={16} />
+                Configurar
+              </button>
+              <button style={{
+                padding: '8px 16px',
+                background: '#3b82f6',
+                color: 'white',
+                border: 'none',
+                borderRadius: '8px',
+                cursor: 'pointer',
+                display: 'flex',
+                alignItems: 'center',
+                gap: '8px',
+                fontSize: '14px'
+              }}>
+                <Archive size={16} />
+                Crear Backup
+              </button>
+              <button style={{
+                padding: '8px 16px',
+                background: '#10b981',
+                color: 'white',
+                border: 'none',
+                borderRadius: '8px',
+                cursor: 'pointer',
+                display: 'flex',
+                alignItems: 'center',
+                gap: '8px',
+                fontSize: '14px'
+              }}>
+                <RefreshCw size={16} />
+                Actualizar
+              </button>
+            </div>
+          </div>
+        </div>
+
+        {/* Database Statistics */}
+        <div style={{
+          display: 'grid',
+          gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))',
+          gap: '20px',
+          marginBottom: '24px'
+        }}>
+          {dbStats.map((stat, index) => (
+            <div key={index} style={{
+              background: 'white',
+              borderRadius: '12px',
+              padding: '20px',
+              boxShadow: '0 1px 3px rgba(0,0,0,0.1)',
+              position: 'relative',
+              overflow: 'hidden'
+            }}>
+              <div style={{
+                display: 'flex',
+                justifyContent: 'space-between',
+                alignItems: 'flex-start',
+                marginBottom: '12px'
+              }}>
+                <div>
+                  <p style={{ fontSize: '12px', color: '#6b7280', marginBottom: '4px' }}>
+                    {stat.title}
+                  </p>
+                  <p style={{ fontSize: '24px', fontWeight: 'bold' }}>
+                    {stat.value}
+                  </p>
+                </div>
+                <div style={{
+                  width: '48px',
+                  height: '48px',
+                  background: `${stat.bgColor}15`,
+                  borderRadius: '12px',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  color: stat.bgColor
+                }}>
+                  {stat.icon}
+                </div>
+              </div>
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                <p style={{ fontSize: '12px', color: '#6b7280' }}>
+                  {stat.subtitle}
+                </p>
+                {stat.trend !== 0 && (
+                  <div style={{ 
+                    display: 'flex', 
+                    alignItems: 'center', 
+                    gap: '4px',
+                    fontSize: '12px',
+                    color: stat.trend > 0 ? (stat.title === 'Tiempo Respuesta' ? '#ef4444' : '#10b981') : '#ef4444'
+                  }}>
+                    <TrendingUp size={12} style={{ 
+                      transform: stat.trend < 0 ? 'rotate(180deg)' : 'none' 
+                    }} />
+                    {Math.abs(stat.trend)}%
+                  </div>
+                )}
+              </div>
+            </div>
+          ))}
+        </div>
+
+        <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr', gap: '24px' }}>
+          {/* Tables Information */}
+          <div style={{
+            background: 'white',
+            borderRadius: '12px',
+            padding: '24px',
+            boxShadow: '0 1px 3px rgba(0,0,0,0.1)'
+          }}>
+            <h2 style={{ fontSize: '20px', fontWeight: 'bold', marginBottom: '20px' }}>
+              Estado de Tablas Principales
+            </h2>
+            
+            <div style={{ overflowX: 'auto' }}>
+              <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+                <thead>
+                  <tr style={{ borderBottom: '1px solid #e5e7eb' }}>
+                    <th style={{ textAlign: 'left', padding: '12px 0', fontSize: '12px', color: '#6b7280', fontWeight: '500' }}>
+                      Tabla
+                    </th>
+                    <th style={{ textAlign: 'left', padding: '12px 0', fontSize: '12px', color: '#6b7280', fontWeight: '500' }}>
+                      Registros
+                    </th>
+                    <th style={{ textAlign: 'left', padding: '12px 0', fontSize: '12px', color: '#6b7280', fontWeight: '500' }}>
+                      Tamaño
+                    </th>
+                    <th style={{ textAlign: 'left', padding: '12px 0', fontSize: '12px', color: '#6b7280', fontWeight: '500' }}>
+                      Crecimiento
+                    </th>
+                    <th style={{ textAlign: 'left', padding: '12px 0', fontSize: '12px', color: '#6b7280', fontWeight: '500' }}>
+                      Estado
+                    </th>
+                    <th style={{ textAlign: 'left', padding: '12px 0', fontSize: '12px', color: '#6b7280', fontWeight: '500' }}>
+                      Acciones
+                    </th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {tableInfo.map((table, index) => (
+                    <tr key={index} style={{ borderBottom: '1px solid #f3f4f6' }}>
+                      <td style={{ padding: '16px 0' }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                          <Database size={16} color="#6366f1" />
+                          <code style={{ 
+                            fontWeight: '500',
+                            background: '#f3f4f6',
+                            padding: '2px 6px',
+                            borderRadius: '4px',
+                            fontSize: '13px'
+                          }}>
+                            {table.name}
+                          </code>
+                        </div>
+                      </td>
+                      <td style={{ padding: '16px 0', fontWeight: '500' }}>
+                        {table.records.toLocaleString()}
+                      </td>
+                      <td style={{ padding: '16px 0', fontSize: '14px', color: '#6b7280' }}>
+                        {table.size}
+                      </td>
+                      <td style={{ padding: '16px 0' }}>
+                        <span style={{
+                          fontSize: '12px',
+                          fontWeight: '500',
+                          color: table.growth.startsWith('+') ? '#10b981' : '#ef4444'
+                        }}>
+                          {table.growth}
+                        </span>
+                      </td>
+                      <td style={{ padding: '16px 0' }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                          {getStatusIcon(table.status)}
+                          <span style={{
+                            fontSize: '12px',
+                            color: table.status === 'healthy' ? '#10b981' : '#f59e0b'
+                          }}>
+                            {table.status === 'healthy' ? 'Saludable' : 'Advertencia'}
+                          </span>
+                        </div>
+                      </td>
+                      <td style={{ padding: '16px 0' }}>
+                        <div style={{ display: 'flex', gap: '8px' }}>
+                          <button style={{
+                            padding: '4px 8px',
+                            background: '#f3f4f6',
+                            border: 'none',
+                            borderRadius: '4px',
+                            cursor: 'pointer',
+                            fontSize: '12px'
+                          }}>
+                            Analizar
+                          </button>
+                          <button style={{
+                            padding: '4px 8px',
+                            background: '#3b82f6',
+                            color: 'white',
+                            border: 'none',
+                            borderRadius: '4px',
+                            cursor: 'pointer',
+                            fontSize: '12px'
+                          }}>
+                            Optimizar
+                          </button>
+                        </div>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </div>
+
+          {/* Backup History */}
+          <div style={{
+            background: 'white',
+            borderRadius: '12px',
+            padding: '24px',
+            boxShadow: '0 1px 3px rgba(0,0,0,0.1)'
+          }}>
+            <h2 style={{ fontSize: '18px', fontWeight: 'bold', marginBottom: '16px' }}>
+              Historial de Backups
+            </h2>
+            
+            <div>
+              {backupHistory.map((backup) => (
+                <div key={backup.id} style={{
+                  padding: '16px',
+                  border: '1px solid #e5e7eb',
+                  borderRadius: '8px',
+                  marginBottom: '12px'
+                }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '8px' }}>
+                    <div>
+                      {getBackupBadge(backup.type)}
+                    </div>
+                    <CheckCircle size={16} color="#10b981" />
+                  </div>
+                  
+                  <div style={{ marginBottom: '8px' }}>
+                    <p style={{ fontSize: '13px', fontWeight: '500', marginBottom: '2px' }}>
+                      {backup.date.toLocaleString('es-MX')}
+                    </p>
+                    <p style={{ fontSize: '12px', color: '#6b7280' }}>
+                      Tamaño: {backup.size} | Duración: {backup.duration}
+                    </p>
+                  </div>
+                  
+                  <div style={{ display: 'flex', gap: '8px' }}>
+                    <button style={{
+                      padding: '4px 8px',
+                      background: '#f3f4f6',
+                      border: 'none',
+                      borderRadius: '4px',
+                      cursor: 'pointer',
+                      fontSize: '11px',
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: '4px'
+                    }}>
+                      <Download size={10} />
+                      Descargar
+                    </button>
+                    <button style={{
+                      padding: '4px 8px',
+                      background: '#10b981',
+                      color: 'white',
+                      border: 'none',
+                      borderRadius: '4px',
+                      cursor: 'pointer',
+                      fontSize: '11px'
+                    }}>
+                      Restaurar
+                    </button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+
+        {/* Maintenance Operations */}
+        <div style={{
+          background: 'white',
+          borderRadius: '12px',
+          padding: '24px',
+          marginTop: '24px',
+          boxShadow: '0 1px 3px rgba(0,0,0,0.1)'
+        }}>
+          <h2 style={{ fontSize: '20px', fontWeight: 'bold', marginBottom: '20px' }}>
+            Operaciones de Mantenimiento
+          </h2>
+          
+          <div style={{
+            display: 'grid',
+            gridTemplateColumns: 'repeat(auto-fit, minmax(250px, 1fr))',
+            gap: '16px'
+          }}>
+            <button style={{
+              padding: '20px',
+              background: 'linear-gradient(135deg, #3b82f6, #1d4ed8)',
+              color: 'white',
+              border: 'none',
+              borderRadius: '12px',
+              cursor: 'pointer',
+              display: 'flex',
+              alignItems: 'center',
+              gap: '12px',
+              transition: 'transform 0.2s',
+              textAlign: 'left'
+            }}
+            onMouseEnter={(e) => {
+              e.currentTarget.style.transform = 'translateY(-2px)'
+            }}
+            onMouseLeave={(e) => {
+              e.currentTarget.style.transform = 'translateY(0)'
+            }}>
+              <Archive size={20} />
+              <div>
+                <h4 style={{ fontWeight: 'bold', marginBottom: '4px' }}>Crear Backup Completo</h4>
+                <p style={{ fontSize: '12px', opacity: 0.8 }}>Respaldo completo de la base de datos</p>
+              </div>
+            </button>
+
+            <button style={{
+              padding: '20px',
+              background: 'linear-gradient(135deg, #10b981, #047857)',
+              color: 'white',
+              border: 'none',
+              borderRadius: '12px',
+              cursor: 'pointer',
+              display: 'flex',
+              alignItems: 'center',
+              gap: '12px',
+              transition: 'transform 0.2s',
+              textAlign: 'left'
+            }}
+            onMouseEnter={(e) => {
+              e.currentTarget.style.transform = 'translateY(-2px)'
+            }}
+            onMouseLeave={(e) => {
+              e.currentTarget.style.transform = 'translateY(0)'
+            }}>
+              <RefreshCw size={20} />
+              <div>
+                <h4 style={{ fontWeight: 'bold', marginBottom: '4px' }}>Optimizar Tablas</h4>
+                <p style={{ fontSize: '12px', opacity: 0.8 }}>Reorganizar y optimizar estructura</p>
+              </div>
+            </button>
+
+            <button style={{
+              padding: '20px',
+              background: 'linear-gradient(135deg, #f59e0b, #d97706)',
+              color: 'white',
+              border: 'none',
+              borderRadius: '12px',
+              cursor: 'pointer',
+              display: 'flex',
+              alignItems: 'center',
+              gap: '12px',
+              transition: 'transform 0.2s',
+              textAlign: 'left'
+            }}
+            onMouseEnter={(e) => {
+              e.currentTarget.style.transform = 'translateY(-2px)'
+            }}
+            onMouseLeave={(e) => {
+              e.currentTarget.style.transform = 'translateY(0)'
+            }}>
+              <Trash2 size={20} />
+              <div>
+                <h4 style={{ fontWeight: 'bold', marginBottom: '4px' }}>Limpiar Logs Antiguos</h4>
+                <p style={{ fontSize: '12px', opacity: 0.8 }}>Eliminar registros de más de 90 días</p>
+              </div>
+            </button>
+
+            <button style={{
+              padding: '20px',
+              background: 'linear-gradient(135deg, #8b5cf6, #7c3aed)',
+              color: 'white',
+              border: 'none',
+              borderRadius: '12px',
+              cursor: 'pointer',
+              display: 'flex',
+              alignItems: 'center',
+              gap: '12px',
+              transition: 'transform 0.2s',
+              textAlign: 'left'
+            }}
+            onMouseEnter={(e) => {
+              e.currentTarget.style.transform = 'translateY(-2px)'
+            }}
+            onMouseLeave={(e) => {
+              e.currentTarget.style.transform = 'translateY(0)'
+            }}>
+              <Shield size={20} />
+              <div>
+                <h4 style={{ fontWeight: 'bold', marginBottom: '4px' }}>Verificar Integridad</h4>
+                <p style={{ fontSize: '12px', opacity: 0.8 }}>Comprobar consistencia de datos</p>
+              </div>
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  )
+}

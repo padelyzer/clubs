@@ -1,0 +1,592 @@
+'use client'
+
+import React, { useState, useEffect } from 'react'
+import { CardModern } from '@/components/design-system/CardModern'
+import {
+  Calendar, MapPin, Clock, Users, TrendingUp,
+  Filter, Search, Eye, Download, ChevronLeft,
+  ChevronRight, DollarSign, Activity, Loader2, Home
+} from 'lucide-react'
+import { formatCurrency } from '@/lib/design-system/localization'
+import { format } from 'date-fns'
+import { es } from 'date-fns/locale'
+
+interface BookingTransaction {
+  id: string
+  playerName: string
+  courtName: string
+  date: string
+  startTime: string
+  endTime: string
+  amount: number
+  paymentMethod: string
+  status: string
+  duration: number
+  reference: string
+}
+
+export default function BookingsIncomeModule() {
+  const [transactions, setTransactions] = useState<BookingTransaction[]>([])
+  const [loading, setLoading] = useState(true)
+  const [selectedDate, setSelectedDate] = useState(new Date())
+  const [currentPage, setCurrentPage] = useState(1)
+  const [searchQuery, setSearchQuery] = useState('')
+  const itemsPerPage = 20
+  const [stats, setStats] = useState({
+    totalBookings: 0,
+    totalRevenue: 0,
+    avgPrice: 0,
+    peakHour: '',
+    mostUsedCourt: '',
+    topPaymentMethod: ''
+  })
+
+  useEffect(() => {
+    fetchBookingTransactions()
+  }, [selectedDate])
+
+  const fetchBookingTransactions = async () => {
+    try {
+      setLoading(true)
+      // Fetch booking-specific transactions
+      const response = await fetch('/api/finance/transactions?type=INCOME&category=BOOKING&period=month&limit=500')
+      if (response.ok) {
+        const data = await response.json()
+        
+        // Map and enhance booking data (note: API returns Booking with capital B)
+        const bookingTrans = data.transactions?.map((t: any) => ({
+          id: t.id,
+          playerName: t.Booking?.playerName || 'Cliente',
+          courtName: t.Booking?.Court?.name || 'Cancha',
+          date: t.date,
+          startTime: t.Booking?.startTime || '00:00',
+          endTime: t.Booking?.endTime || '00:00',
+          amount: t.amount || 0,
+          paymentMethod: extractPaymentMethod(t),
+          status: t.Booking?.status || 'CONFIRMED',
+          duration: t.Booking?.duration || 90,
+          reference: t.reference || t.id.substring(0, 8)
+        })) || []
+        
+        setTransactions(bookingTrans)
+        calculateStats(bookingTrans)
+      }
+    } catch (error) {
+      console.error('Error fetching booking transactions:', error)
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  const extractPaymentMethod = (transaction: any) => {
+    if (transaction.Booking?.Payment?.[0]?.method) {
+      return transaction.Booking.Payment[0].method
+    }
+    if (transaction.notes) {
+      const match = transaction.notes.match(/Método de pago:\s*([^|]+)/i)
+      if (match) return match[1].trim()
+    }
+    return 'Efectivo'
+  }
+
+  const calculateStats = (bookings: BookingTransaction[]) => {
+    const totalRevenue = bookings.reduce((sum, b) => sum + b.amount, 0)
+    const avgPrice = bookings.length > 0 ? totalRevenue / bookings.length : 0
+    
+    // Calculate peak hour
+    const hourCounts = bookings.reduce((acc, b) => {
+      const hour = b.startTime.split(':')[0]
+      acc[hour] = (acc[hour] || 0) + 1
+      return acc
+    }, {} as Record<string, number>)
+    
+    const peakHour = Object.entries(hourCounts).sort((a, b) => b[1] - a[1])[0]?.[0] || '16'
+    
+    // Calculate most used court
+    const courtCounts = bookings.reduce((acc, b) => {
+      acc[b.courtName] = (acc[b.courtName] || 0) + 1
+      return acc
+    }, {} as Record<string, number>)
+    
+    const mostUsedCourt = Object.entries(courtCounts).sort((a, b) => b[1] - a[1])[0]?.[0] || 'Cancha 1'
+    
+    // Calculate top payment method
+    const methodCounts = bookings.reduce((acc, b) => {
+      acc[b.paymentMethod] = (acc[b.paymentMethod] || 0) + 1
+      return acc
+    }, {} as Record<string, number>)
+    
+    const topPaymentMethod = Object.entries(methodCounts).sort((a, b) => b[1] - a[1])[0]?.[0] || 'Efectivo'
+    
+    setStats({
+      totalBookings: bookings.length,
+      totalRevenue,
+      avgPrice,
+      peakHour: `${peakHour}:00`,
+      mostUsedCourt,
+      topPaymentMethod
+    })
+  }
+
+  if (loading) {
+    return (
+      <div style={{ 
+        padding: '32px',
+        display: 'flex', 
+        justifyContent: 'center', 
+        alignItems: 'center', 
+        height: '400px' 
+      }}>
+        <Loader2 size={32} className="animate-spin" color="#66E7AA" />
+      </div>
+    )
+  }
+
+  return (
+    <div style={{ padding: '32px' }}>
+      {/* Breadcrumbs */}
+      <div style={{ 
+        display: 'flex', 
+        alignItems: 'center', 
+        gap: '8px',
+        marginBottom: '24px',
+        fontSize: '14px',
+        color: '#516640'
+      }}>
+        <button
+          onClick={() => window.dispatchEvent(new CustomEvent('navigate-to-income'))}
+          style={{
+            display: 'flex',
+            alignItems: 'center',
+            gap: '4px',
+            background: 'none',
+            border: 'none',
+            color: '#516640',
+            cursor: 'pointer',
+            padding: 0,
+            fontSize: '14px',
+            transition: 'color 0.2s'
+          }}
+          onMouseEnter={(e) => {
+            e.currentTarget.style.color = '#A4DF4E'
+          }}
+          onMouseLeave={(e) => {
+            e.currentTarget.style.color = '#516640'
+          }}
+        >
+          <Home style={{ width: '14px', height: '14px' }} />
+          Ingresos
+        </button>
+        <ChevronRight style={{ width: '14px', height: '14px' }} />
+        <span style={{ color: '#182A01', fontWeight: 500 }}>Reservas</span>
+      </div>
+
+      {/* Header */}
+      <div style={{ marginBottom: '32px' }}>
+        <h2 style={{
+          fontSize: '28px',
+          fontWeight: 700,
+          color: '#182A01',
+          margin: '0 0 8px 0'
+        }}>
+          Ingresos por Reservas
+        </h2>
+        <p style={{
+          fontSize: '16px',
+          color: '#516640'
+        }}>
+          Análisis detallado de ingresos por reservas de canchas
+        </p>
+      </div>
+
+      {/* Stats Cards - 4 principales */}
+      <div style={{
+        display: 'grid',
+        gridTemplateColumns: 'repeat(4, 1fr)',
+        gap: '20px',
+        marginBottom: '32px'
+      }}>
+        <CardModern variant="glass">
+          <div style={{ padding: '24px' }}>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '12px' }}>
+              <div style={{
+                width: '40px',
+                height: '40px',
+                borderRadius: '10px',
+                background: 'rgba(164, 223, 78, 0.1)',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center'
+              }}>
+                <Calendar style={{ width: '20px', height: '20px', color: '#A4DF4E' }} />
+              </div>
+              <span style={{ fontSize: '24px', fontWeight: 700, color: '#182A01' }}>
+                {stats.totalBookings}
+              </span>
+            </div>
+            <p style={{ fontSize: '12px', color: '#516640', marginBottom: '4px' }}>Total Reservas</p>
+            <p style={{ fontSize: '14px', color: '#22C55E', fontWeight: 600 }}>
+              Este mes
+            </p>
+          </div>
+        </CardModern>
+
+        <CardModern variant="glass">
+          <div style={{ padding: '24px' }}>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '12px' }}>
+              <div style={{
+                width: '40px',
+                height: '40px',
+                borderRadius: '10px',
+                background: 'rgba(34, 197, 94, 0.1)',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center'
+              }}>
+                <DollarSign style={{ width: '20px', height: '20px', color: '#22C55E' }} />
+              </div>
+            </div>
+            <p style={{ fontSize: '12px', color: '#516640', marginBottom: '4px' }}>Ingresos Totales</p>
+            <p style={{ fontSize: '24px', fontWeight: 700, color: '#182A01' }}>
+              {formatCurrency(stats.totalRevenue / 100)}
+            </p>
+          </div>
+        </CardModern>
+
+        <CardModern variant="glass">
+          <div style={{ padding: '24px' }}>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '12px' }}>
+              <div style={{
+                width: '40px',
+                height: '40px',
+                borderRadius: '10px',
+                background: 'rgba(59, 130, 246, 0.1)',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center'
+              }}>
+                <TrendingUp style={{ width: '20px', height: '20px', color: '#3B82F6' }} />
+              </div>
+            </div>
+            <p style={{ fontSize: '12px', color: '#516640', marginBottom: '4px' }}>Precio Promedio</p>
+            <p style={{ fontSize: '24px', fontWeight: 700, color: '#182A01' }}>
+              {formatCurrency(stats.avgPrice / 100)}
+            </p>
+          </div>
+        </CardModern>
+
+        <CardModern variant="glass">
+          <div style={{ padding: '24px' }}>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '12px' }}>
+              <div style={{
+                width: '40px',
+                height: '40px',
+                borderRadius: '10px',
+                background: 'rgba(251, 191, 36, 0.1)',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center'
+              }}>
+                <Clock style={{ width: '20px', height: '20px', color: '#FBBF24' }} />
+              </div>
+            </div>
+            <p style={{ fontSize: '12px', color: '#516640', marginBottom: '4px' }}>Hora Pico</p>
+            <p style={{ fontSize: '24px', fontWeight: 700, color: '#182A01' }}>
+              {stats.peakHour}
+            </p>
+            <p style={{ fontSize: '12px', color: '#516640', marginTop: '4px' }}>
+              {stats.mostUsedCourt}
+            </p>
+          </div>
+        </CardModern>
+      </div>
+
+      {/* Transactions Table */}
+      <CardModern variant="glass">
+        <div style={{ padding: '24px' }}>
+          <div style={{ marginBottom: '20px' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
+              <h3 style={{ fontSize: '18px', fontWeight: 600, color: '#182A01' }}>
+                Detalle de Reservas
+              </h3>
+              <button
+              style={{
+                padding: '8px 16px',
+                borderRadius: '10px',
+                border: 'none',
+                background: 'linear-gradient(135deg, #A4DF4E, #66E7AA)',
+                color: '#182A01',
+                fontSize: '14px',
+                fontWeight: 600,
+                cursor: 'pointer',
+                display: 'flex',
+                alignItems: 'center',
+                gap: '8px'
+              }}
+            >
+              <Download style={{ width: '16px', height: '16px' }} />
+              Exportar
+            </button>
+            </div>
+
+            {/* Search Bar */}
+            <div style={{
+              position: 'relative',
+              marginBottom: '16px'
+            }}>
+              <Search style={{
+                position: 'absolute',
+                left: '12px',
+                top: '50%',
+                transform: 'translateY(-50%)',
+                width: '16px',
+                height: '16px',
+                color: '#516640'
+              }} />
+              <input
+                type="text"
+                placeholder="Buscar por jugador, cancha o referencia..."
+                value={searchQuery}
+                onChange={(e) => {
+                  setSearchQuery(e.target.value)
+                  setCurrentPage(1) // Reset to first page on search
+                }}
+                style={{
+                  width: '100%',
+                  padding: '10px 12px 10px 36px',
+                  borderRadius: '10px',
+                  border: '1px solid rgba(164, 223, 78, 0.2)',
+                  background: 'white',
+                  fontSize: '14px',
+                  color: '#182A01',
+                  outline: 'none'
+                }}
+              />
+            </div>
+          </div>
+
+          <div style={{ overflowX: 'auto' }}>
+            <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+              <thead>
+                <tr style={{ borderBottom: '2px solid rgba(164, 223, 78, 0.1)' }}>
+                  <th style={{ padding: '12px', textAlign: 'left', fontSize: '12px', fontWeight: 600, color: '#516640' }}>JUGADOR</th>
+                  <th style={{ padding: '12px', textAlign: 'left', fontSize: '12px', fontWeight: 600, color: '#516640' }}>CANCHA</th>
+                  <th style={{ padding: '12px', textAlign: 'center', fontSize: '12px', fontWeight: 600, color: '#516640' }}>FECHA</th>
+                  <th style={{ padding: '12px', textAlign: 'center', fontSize: '12px', fontWeight: 600, color: '#516640' }}>HORA</th>
+                  <th style={{ padding: '12px', textAlign: 'center', fontSize: '12px', fontWeight: 600, color: '#516640' }}>DURACIÓN</th>
+                  <th style={{ padding: '12px', textAlign: 'center', fontSize: '12px', fontWeight: 600, color: '#516640' }}>PAGO</th>
+                  <th style={{ padding: '12px', textAlign: 'right', fontSize: '12px', fontWeight: 600, color: '#516640' }}>MONTO</th>
+                </tr>
+              </thead>
+              <tbody>
+                {(() => {
+                  // Filter transactions
+                  const filteredTransactions = transactions.filter(booking => {
+                    if (!searchQuery) return true
+                    const query = searchQuery.toLowerCase()
+                    return (
+                      booking.playerName.toLowerCase().includes(query) ||
+                      booking.courtName.toLowerCase().includes(query) ||
+                      booking.reference.toLowerCase().includes(query) ||
+                      booking.paymentMethod.toLowerCase().includes(query)
+                    )
+                  })
+
+                  // Calculate pagination
+                  const totalPages = Math.ceil(filteredTransactions.length / itemsPerPage)
+                  const startIndex = (currentPage - 1) * itemsPerPage
+                  const paginatedTransactions = filteredTransactions.slice(startIndex, startIndex + itemsPerPage)
+
+                  if (filteredTransactions.length === 0 && searchQuery) {
+                    return (
+                      <tr>
+                        <td colSpan={7} style={{ textAlign: 'center', padding: '40px' }}>
+                          <Search style={{ width: '48px', height: '48px', color: '#516640', opacity: 0.5, margin: '0 auto 16px' }} />
+                          <p style={{ fontSize: '16px', color: '#516640' }}>
+                            No se encontraron reservas para "{searchQuery}"
+                          </p>
+                          <p style={{ fontSize: '14px', color: '#516640', opacity: 0.8 }}>
+                            Intenta con otro término de búsqueda
+                          </p>
+                        </td>
+                      </tr>
+                    )
+                  }
+
+                  return paginatedTransactions.map((booking, index) => (
+                  <tr key={booking.id} style={{ borderBottom: '1px solid rgba(164, 223, 78, 0.05)' }}>
+                    <td style={{ padding: '16px 12px' }}>
+                      <div>
+                        <p style={{ fontSize: '14px', fontWeight: 600, color: '#182A01' }}>
+                          {booking.playerName}
+                        </p>
+                        <p style={{ fontSize: '12px', color: '#516640' }}>
+                          Ref: {booking.reference}
+                        </p>
+                      </div>
+                    </td>
+                    <td style={{ padding: '16px 12px' }}>
+                      <span style={{ fontSize: '14px', color: '#182A01' }}>{booking.courtName}</span>
+                    </td>
+                    <td style={{ padding: '16px 12px', textAlign: 'center' }}>
+                      <span style={{ fontSize: '14px', color: '#516640' }}>
+                        {format(new Date(booking.date), 'dd MMM', { locale: es })}
+                      </span>
+                    </td>
+                    <td style={{ padding: '16px 12px', textAlign: 'center' }}>
+                      <span style={{ fontSize: '14px', color: '#516640' }}>
+                        {booking.startTime}
+                      </span>
+                    </td>
+                    <td style={{ padding: '16px 12px', textAlign: 'center' }}>
+                      <span style={{ fontSize: '14px', color: '#516640' }}>
+                        {booking.duration} min
+                      </span>
+                    </td>
+                    <td style={{ padding: '16px 12px', textAlign: 'center' }}>
+                      <span style={{
+                        fontSize: '12px',
+                        padding: '4px 8px',
+                        background: booking.paymentMethod === 'Efectivo' ? 'rgba(34, 197, 94, 0.1)' :
+                                   booking.paymentMethod === 'Transferencia' ? 'rgba(59, 130, 246, 0.1)' :
+                                   booking.paymentMethod === 'Terminal' ? 'rgba(251, 191, 36, 0.1)' :
+                                   'rgba(164, 223, 78, 0.1)',
+                        borderRadius: '6px',
+                        color: booking.paymentMethod === 'Efectivo' ? '#22C55E' :
+                               booking.paymentMethod === 'Transferencia' ? '#3B82F6' :
+                               booking.paymentMethod === 'Terminal' ? '#F59E0B' :
+                               '#516640'
+                      }}>
+                        {booking.paymentMethod}
+                      </span>
+                    </td>
+                    <td style={{ padding: '16px 12px', textAlign: 'right' }}>
+                      <span style={{ fontSize: '14px', fontWeight: 600, color: '#22C55E' }}>
+                        {formatCurrency(booking.amount / 100)}
+                      </span>
+                    </td>
+                  </tr>
+                  ))
+                })()}
+              </tbody>
+            </table>
+
+            {/* Pagination */}
+            {(() => {
+              const filteredTransactions = transactions.filter(booking => {
+                if (!searchQuery) return true
+                const query = searchQuery.toLowerCase()
+                return (
+                  booking.playerName.toLowerCase().includes(query) ||
+                  booking.courtName.toLowerCase().includes(query) ||
+                  booking.reference.toLowerCase().includes(query) ||
+                  booking.paymentMethod.toLowerCase().includes(query)
+                )
+              })
+              const totalPages = Math.ceil(filteredTransactions.length / itemsPerPage)
+
+              if (totalPages <= 1) return null
+
+              return (
+                <div style={{
+                  display: 'flex',
+                  justifyContent: 'space-between',
+                  alignItems: 'center',
+                  padding: '20px 0',
+                  borderTop: '1px solid rgba(164, 223, 78, 0.1)',
+                  marginTop: '20px'
+                }}>
+                  <div style={{
+                    fontSize: '14px',
+                    color: '#516640'
+                  }}>
+                    Mostrando {((currentPage - 1) * itemsPerPage) + 1}-{Math.min(currentPage * itemsPerPage, filteredTransactions.length)} de {filteredTransactions.length} reservas
+                  </div>
+
+                  <div style={{
+                    display: 'flex',
+                    gap: '8px',
+                    alignItems: 'center'
+                  }}>
+                    {/* Previous button */}
+                    <button
+                      onClick={() => setCurrentPage(prev => Math.max(1, prev - 1))}
+                      disabled={currentPage === 1}
+                      style={{
+                        width: '36px',
+                        height: '36px',
+                        borderRadius: '8px',
+                        border: '1px solid rgba(164, 223, 78, 0.2)',
+                        background: 'white',
+                        cursor: currentPage === 1 ? 'not-allowed' : 'pointer',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        opacity: currentPage === 1 ? 0.5 : 1
+                      }}
+                    >
+                      <ChevronLeft style={{ width: '16px', height: '16px', color: '#516640' }} />
+                    </button>
+
+                    {/* Page numbers */}
+                    {Array.from({ length: Math.min(5, totalPages) }, (_, i) => {
+                      let pageNum = i + 1
+                      if (totalPages > 5) {
+                        if (currentPage <= 3) {
+                          pageNum = i + 1
+                        } else if (currentPage >= totalPages - 2) {
+                          pageNum = totalPages - 4 + i
+                        } else {
+                          pageNum = currentPage - 2 + i
+                        }
+                      }
+                      return (
+                        <button
+                          key={pageNum}
+                          onClick={() => setCurrentPage(pageNum)}
+                          style={{
+                            width: '36px',
+                            height: '36px',
+                            borderRadius: '8px',
+                            border: currentPage === pageNum ? 'none' : '1px solid rgba(164, 223, 78, 0.2)',
+                            background: currentPage === pageNum ? 'linear-gradient(135deg, #A4DF4E, #66E7AA)' : 'white',
+                            color: currentPage === pageNum ? '#182A01' : '#516640',
+                            fontSize: '14px',
+                            fontWeight: currentPage === pageNum ? 600 : 400,
+                            cursor: 'pointer'
+                          }}
+                        >
+                          {pageNum}
+                        </button>
+                      )
+                    })}
+
+                    {/* Next button */}
+                    <button
+                      onClick={() => setCurrentPage(prev => Math.min(totalPages, prev + 1))}
+                      disabled={currentPage === totalPages}
+                      style={{
+                        width: '36px',
+                        height: '36px',
+                        borderRadius: '8px',
+                        border: '1px solid rgba(164, 223, 78, 0.2)',
+                        background: 'white',
+                        cursor: currentPage === totalPages ? 'not-allowed' : 'pointer',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        opacity: currentPage === totalPages ? 0.5 : 1
+                      }}
+                    >
+                      <ChevronRight style={{ width: '16px', height: '16px', color: '#516640' }} />
+                    </button>
+                  </div>
+                </div>
+              )
+            })()}
+          </div>
+        </div>
+      </CardModern>
+    </div>
+  )
+}

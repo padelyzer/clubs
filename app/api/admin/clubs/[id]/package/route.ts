@@ -1,0 +1,126 @@
+import { NextRequest, NextResponse } from 'next/server'
+import { requireSuperAdmin } from '@/lib/auth/actions'
+import { rateLimit, createRateLimitResponse } from '@/lib/security/rate-limit'
+import { auditSuccess, auditFailure } from '@/lib/security/audit'
+import { handleApiError } from '@/lib/errors/api-error'
+import { getClubPackageInfo, assignPackageToClub, getClubPackageUsage } from '@/lib/saas/packages'
+
+// GET /api/admin/clubs/[id]/package - Obtener paquete actual del club
+export async function GET(
+  request: NextRequest,
+  { params }: { params: Promise<{ id: string }> }
+) {
+  try {
+    const { id } = await params
+    
+    // 1. Authentication
+    const session = await requireSuperAdmin()
+    
+    // 2. Rate limiting
+    const rateLimitResult = await rateLimit(request, 'admin')
+    if (!rateLimitResult.success) {
+      return createRateLimitResponse()
+    }
+    
+    // 3. Obtener información del paquete y uso
+    const [packageInfo, usage] = await Promise.all([
+      getClubPackageInfo(id),
+      getClubPackageUsage(id)
+    ])
+    
+    // 4. Audit log
+    await auditSuccess(
+      request,
+      'admin.club.package.view',
+      'club_package',
+      id,
+      { packageId: packageInfo?.packageId },
+      session?.user?.id
+    )
+    
+    return NextResponse.json({
+      success: true,
+      packageInfo,
+      usage
+    })
+    
+  } catch (error) {
+    await auditFailure(
+      request,
+      'admin.club.package.view',
+      'club_package',
+      id,
+      error instanceof Error ? error.message : 'Unknown error'
+    )
+    return handleApiError(error)
+  }
+}
+
+// PUT /api/admin/clubs/[id]/package - Asignar paquete a club
+export async function PUT(
+  request: NextRequest,
+  { params }: { params: Promise<{ id: string }> }
+) {
+  try {
+    const { id } = await params
+    
+    // 1. Authentication
+    const session = await requireSuperAdmin()
+    
+    // 2. Rate limiting
+    const rateLimitResult = await rateLimit(request, 'admin')
+    if (!rateLimitResult.success) {
+      return createRateLimitResponse()
+    }
+    
+    // 3. Parse body
+    const body = await request.json()
+    const { packageId, notes } = body
+    
+    if (!packageId) {
+      return NextResponse.json(
+        { error: 'Package ID is required' },
+        { status: 400 }
+      )
+    }
+    
+    // 4. Asignar paquete
+    const success = await assignPackageToClub(id, packageId, notes)
+    
+    if (!success) {
+      return NextResponse.json(
+        { error: 'Failed to assign package to club' },
+        { status: 500 }
+      )
+    }
+    
+    // 5. Obtener información actualizada
+    const updatedPackageInfo = await getClubPackageInfo(id)
+    
+    // 6. Audit log
+    await auditSuccess(
+      request,
+      'admin.club.package.assign',
+      'club_package',
+      id,
+      { packageId, notes },
+      session?.user?.id
+    )
+    
+    return NextResponse.json({
+      success: true,
+      packageInfo: updatedPackageInfo,
+      message: 'Package assigned successfully'
+    })
+    
+  } catch (error) {
+    await auditFailure(
+      request,
+      'admin.club.package.assign',
+      'club_package',
+      id,
+      error instanceof Error ? error.message : 'Unknown error'
+    )
+    return handleApiError(error)
+  }
+}

@@ -1,0 +1,28 @@
+{
+  "backups": [
+    {
+      "filename": "backup-2025-08-27T00-37-53.json",
+      "timestamp": "2025-08-27T00:37:53.522Z",
+      "size": "0.88 MB",
+      "counts": {
+        "clubs": 1,
+        "users": 4,
+        "players": 52,
+        "courts": 4,
+        "bookings": 510,
+        "bookingGroups": 0,
+        "tournaments": 4,
+        "tournamentRegistrations": 48,
+        "tournamentMatches": 42,
+        "transactions": 477,
+        "expenses": 0,
+        "budget": 0,
+        "budgetCategory": 0,
+        "notifications": 0,
+        "splitPayments": 2,
+        "classes": 0
+      },
+      "totalRecords": 1144
+    }
+  ]
+}

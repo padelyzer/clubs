@@ -1,0 +1,324 @@
+/**
+ * Club Validation and Data Isolation System
+ * 
+ * This module ensures complete data isolation between clubs in our multi-tenant system.
+ * Every data access must be validated against the user's clubId to prevent data leakage.
+ */
+
+import { prisma } from '@/lib/config/prisma'
+
+/**
+ * Core validation function to ensure user has access to club data
+ * @param userClubId - The clubId from the authenticated user's session
+ * @param targetClubId - The clubId of the resource being accessed
+ * @returns boolean indicating if access is allowed
+ */
+export function validateClubAccess(userClubId: string | null, targetClubId: string): boolean {
+  if (!userClubId) {
+    console.error('[SECURITY] Access denied: User has no clubId')
+    return false
+  }
+  
+  if (userClubId !== targetClubId) {
+    console.error(`[SECURITY] Access denied: User clubId (${userClubId}) does not match target clubId (${targetClubId})`)
+    return false
+  }
+  
+  return true
+}
+
+/**
+ * Adds clubId filter to any Prisma query
+ * This ensures queries only return data for the user's club
+ */
+export function addClubFilter<T extends Record<string, any>>(
+  where: T,
+  clubId: string
+): T & { clubId: string } {
+  return {
+    ...where,
+    clubId
+  }
+}
+
+/**
+ * Validates that a resource belongs to the user's club
+ * @param resourceType - Type of resource (booking, player, etc.)
+ * @param resourceId - ID of the resource
+ * @param userClubId - ClubId from user's session
+ * @returns Promise<boolean> indicating if resource belongs to user's club
+ */
+export async function validateResourceOwnership(
+  resourceType: 'booking' | 'player' | 'court' | 'class' | 'tournament' | 'transaction',
+  resourceId: string,
+  userClubId: string
+): Promise<boolean> {
+  try {
+    let resource: any
+    
+    switch (resourceType) {
+      case 'booking':
+        resource = await prisma.booking.findUnique({
+          where: { id: resourceId },
+          select: { clubId: true }
+        })
+        break
+      
+      case 'player':
+        resource = await prisma.player.findUnique({
+          where: { id: resourceId },
+          select: { clubId: true }
+        })
+        break
+      
+      case 'court':
+        resource = await prisma.court.findUnique({
+          where: { id: resourceId },
+          select: { clubId: true }
+        })
+        break
+      
+      case 'class':
+        resource = await prisma.class.findUnique({
+          where: { id: resourceId },
+          select: { clubId: true }
+        })
+        break
+      
+      case 'tournament':
+        resource = await prisma.tournament.findUnique({
+          where: { id: resourceId },
+          select: { clubId: true }
+        })
+        break
+      
+      case 'transaction':
+        resource = await prisma.transaction.findUnique({
+          where: { id: resourceId },
+          select: { clubId: true }
+        })
+        break
+      
+      default:
+        return false
+    }
+    
+    if (!resource) {
+      console.error(`[SECURITY] Resource not found: ${resourceType}/${resourceId}`)
+      return false
+    }
+    
+    return validateClubAccess(userClubId, resource.clubId)
+  } catch (error) {
+    console.error(`[SECURITY] Error validating resource ownership:`, error)
+    return false
+  }
+}
+
+/**
+ * Creates a new club with all required initial data
+ * This ensures new clubs start with proper isolation
+ */
+export async function createClubWithDefaults(clubData: {
+  name: string
+  email: string
+  phone?: string
+  address?: string
+  city?: string
+  state?: string
+  country?: string
+  postalCode?: string
+}) {
+  const clubId = `club_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`
+  const slug = clubData.name.toLowerCase()
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-+|-+$/g, '')
+  
+  return await prisma.$transaction(async (tx) => {
+    // Create the club
+    const club = await tx.club.create({
+      data: {
+        id: clubId,
+        name: clubData.name,
+        slug,
+        email: clubData.email,
+        phone: clubData.phone || '',
+        address: clubData.address || '',
+        city: clubData.city || '',
+        state: clubData.state || '',
+        country: clubData.country || 'Mexico',
+        postalCode: clubData.postalCode || '',
+        status: 'PENDING',
+        active: false,
+        stripeCommissionRate: 250, // 2.5% default
+        updatedAt: new Date()
+      }
+    })
+    
+    // Create default club settings
+    await tx.clubSettings.create({
+      data: {
+        id: `settings_${clubId}`,
+        clubId: club.id,
+        currency: 'MXN',
+        slotDuration: 90,
+        bufferTime: 15,
+        advanceBookingDays: 30,
+        allowSameDayBooking: true,
+        taxIncluded: true,
+        taxRate: 16,
+        cancellationFee: 0,
+        noShowFee: 50,
+        timezone: 'America/Mexico_City',
+        updatedAt: new Date()
+      }
+    })
+    
+    // Create default courts
+    const courtIds = []
+    for (let i = 1; i <= 3; i++) {
+      const court = await tx.court.create({
+        data: {
+          id: `court_${clubId}_${i}`,
+          clubId: club.id,
+          name: `Cancha ${i}`,
+          type: 'PADEL',
+          indoor: false,
+          order: i,
+          active: true,
+          updatedAt: new Date()
+        }
+      })
+      courtIds.push(court.id)
+    }
+    
+    // Create default pricing rules
+    await tx.pricing.create({
+      data: {
+        id: `pricing_${clubId}_default`,
+        clubId: club.id,
+        name: 'Precio Regular',
+        basePrice: 50000, // $500 MXN
+        currency: 'MXN',
+        isDefault: true,
+        active: true,
+        updatedAt: new Date()
+      }
+    })
+    
+    console.log(`[CLUB CREATED] New club '${club.name}' with ID: ${club.id}`)
+    console.log(`[CLUB CREATED] Created ${courtIds.length} default courts`)
+    
+    return club
+  })
+}
+
+/**
+ * Ensures all API queries include clubId filter
+ * Use this wrapper for all data fetching operations
+ */
+export function createClubScopedQuery(clubId: string) {
+  return {
+    // Bookings
+    bookings: {
+      findMany: (args?: any) => prisma.booking.findMany({
+        ...args,
+        where: addClubFilter(args?.where || {}, clubId)
+      }),
+      findFirst: (args?: any) => prisma.booking.findFirst({
+        ...args,
+        where: addClubFilter(args?.where || {}, clubId)
+      }),
+      count: (args?: any) => prisma.booking.count({
+        ...args,
+        where: addClubFilter(args?.where || {}, clubId)
+      })
+    },
+    
+    // Players
+    players: {
+      findMany: (args?: any) => prisma.player.findMany({
+        ...args,
+        where: addClubFilter(args?.where || {}, clubId)
+      }),
+      findFirst: (args?: any) => prisma.player.findFirst({
+        ...args,
+        where: addClubFilter(args?.where || {}, clubId)
+      }),
+      count: (args?: any) => prisma.player.count({
+        ...args,
+        where: addClubFilter(args?.where || {}, clubId)
+      })
+    },
+    
+    // Courts
+    courts: {
+      findMany: (args?: any) => prisma.court.findMany({
+        ...args,
+        where: addClubFilter(args?.where || {}, clubId)
+      }),
+      findFirst: (args?: any) => prisma.court.findFirst({
+        ...args,
+        where: addClubFilter(args?.where || {}, clubId)
+      })
+    },
+    
+    // Classes
+    classes: {
+      findMany: (args?: any) => prisma.class.findMany({
+        ...args,
+        where: addClubFilter(args?.where || {}, clubId)
+      }),
+      findFirst: (args?: any) => prisma.class.findFirst({
+        ...args,
+        where: addClubFilter(args?.where || {}, clubId)
+      })
+    },
+    
+    // Tournaments
+    tournaments: {
+      findMany: (args?: any) => prisma.tournament.findMany({
+        ...args,
+        where: addClubFilter(args?.where || {}, clubId)
+      }),
+      findFirst: (args?: any) => prisma.tournament.findFirst({
+        ...args,
+        where: addClubFilter(args?.where || {}, clubId)
+      })
+    },
+    
+    // Transactions
+    transactions: {
+      findMany: (args?: any) => prisma.transaction.findMany({
+        ...args,
+        where: addClubFilter(args?.where || {}, clubId)
+      }),
+      aggregate: (args?: any) => prisma.transaction.aggregate({
+        ...args,
+        where: addClubFilter(args?.where || {}, clubId)
+      })
+    }
+  }
+}
+
+/**
+ * Middleware helper to enforce club isolation in API routes
+ */
+export function enforceClubIsolation(handler: Function) {
+  return async (req: any, res: any) => {
+    const session = req.session // Assumes session is attached to request
+    
+    if (!session?.clubId) {
+      return res.status(403).json({
+        success: false,
+        error: 'Access denied: No club association'
+      })
+    }
+    
+    // Attach club-scoped query helpers to request
+    req.clubQuery = createClubScopedQuery(session.clubId)
+    req.clubId = session.clubId
+    
+    return handler(req, res)
+  }
+}

@@ -1,0 +1,830 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Mockup - Nuevo Diseño Módulo Torneos</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, sans-serif;
+            background: #f5f5f5;
+            color: #333;
+        }
+        
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+        
+        .mobile-container {
+            max-width: 400px;
+            margin: 40px auto;
+            background: white;
+            border-radius: 20px;
+            box-shadow: 0 10px 40px rgba(0,0,0,0.1);
+            overflow: hidden;
+        }
+        
+        /* Header */
+        .header {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 20px;
+            position: relative;
+        }
+        
+        .header h1 {
+            font-size: 24px;
+            margin-bottom: 5px;
+        }
+        
+        .header .subtitle {
+            opacity: 0.9;
+            font-size: 14px;
+        }
+        
+        .back-button {
+            position: absolute;
+            left: 20px;
+            top: 25px;
+            background: rgba(255,255,255,0.2);
+            border: none;
+            color: white;
+            width: 35px;
+            height: 35px;
+            border-radius: 50%;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+        
+        /* Quick Stats */
+        .quick-stats {
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            gap: 15px;
+            padding: 20px;
+            background: white;
+        }
+        
+        .stat-card {
+            background: #f8f9fa;
+            padding: 15px;
+            border-radius: 12px;
+            text-align: center;
+        }
+        
+        .stat-card .number {
+            font-size: 28px;
+            font-weight: bold;
+            color: #667eea;
+        }
+        
+        .stat-card .label {
+            font-size: 12px;
+            color: #666;
+            margin-top: 5px;
+        }
+        
+        /* Action Buttons */
+        .action-section {
+            padding: 20px;
+            background: white;
+        }
+        
+        .section-title {
+            font-size: 14px;
+            font-weight: 600;
+            color: #666;
+            margin-bottom: 15px;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+        
+        .action-button {
+            width: 100%;
+            padding: 18px;
+            margin-bottom: 12px;
+            background: white;
+            border: 2px solid #e5e7eb;
+            border-radius: 12px;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            gap: 15px;
+            transition: all 0.2s;
+        }
+        
+        .action-button:hover {
+            border-color: #667eea;
+            background: #f7f8ff;
+            transform: translateY(-2px);
+            box-shadow: 0 4px 12px rgba(102, 126, 234, 0.1);
+        }
+        
+        .action-button .icon {
+            width: 40px;
+            height: 40px;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            border-radius: 10px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 20px;
+        }
+        
+        .action-button .content {
+            flex: 1;
+        }
+        
+        .action-button .title {
+            font-size: 16px;
+            font-weight: 600;
+            margin-bottom: 3px;
+        }
+        
+        .action-button .description {
+            font-size: 13px;
+            color: #666;
+        }
+        
+        .action-button .arrow {
+            color: #9ca3af;
+            font-size: 20px;
+        }
+        
+        /* Today's Matches View */
+        .matches-section {
+            padding: 20px;
+            background: #f8f9fa;
+        }
+        
+        .date-selector {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 20px;
+            overflow-x: auto;
+            padding-bottom: 5px;
+        }
+        
+        .date-pill {
+            padding: 8px 16px;
+            background: white;
+            border: 1px solid #e5e7eb;
+            border-radius: 20px;
+            font-size: 14px;
+            white-space: nowrap;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+        
+        .date-pill.active {
+            background: #667eea;
+            color: white;
+            border-color: #667eea;
+        }
+        
+        .court-section {
+            margin-bottom: 25px;
+        }
+        
+        .court-header {
+            font-size: 16px;
+            font-weight: 600;
+            margin-bottom: 12px;
+            color: #333;
+        }
+        
+        .match-card {
+            background: white;
+            border-radius: 12px;
+            padding: 15px;
+            margin-bottom: 12px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.05);
+        }
+        
+        .match-time {
+            font-size: 13px;
+            color: #666;
+            margin-bottom: 8px;
+        }
+        
+        .match-teams {
+            font-size: 15px;
+            font-weight: 600;
+            margin-bottom: 8px;
+        }
+        
+        .match-category {
+            font-size: 12px;
+            color: #666;
+            margin-bottom: 12px;
+        }
+        
+        .capture-button {
+            width: 100%;
+            padding: 10px;
+            background: linear-gradient(135deg, #10b981 0%, #059669 100%);
+            color: white;
+            border: none;
+            border-radius: 8px;
+            font-size: 14px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+        
+        .capture-button:hover {
+            transform: translateY(-1px);
+            box-shadow: 0 4px 12px rgba(16, 185, 129, 0.3);
+        }
+        
+        /* Results Capture Modal */
+        .modal {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: rgba(0,0,0,0.5);
+            z-index: 1000;
+        }
+        
+        .modal.active {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+        
+        .modal-content {
+            background: white;
+            width: 90%;
+            max-width: 400px;
+            border-radius: 20px;
+            padding: 25px;
+            position: relative;
+        }
+        
+        .modal-header {
+            margin-bottom: 20px;
+        }
+        
+        .modal-title {
+            font-size: 20px;
+            font-weight: 600;
+            margin-bottom: 5px;
+        }
+        
+        .modal-subtitle {
+            font-size: 14px;
+            color: #666;
+        }
+        
+        .score-input-group {
+            margin-bottom: 20px;
+        }
+        
+        .set-label {
+            font-size: 13px;
+            color: #666;
+            margin-bottom: 8px;
+        }
+        
+        .score-inputs {
+            display: flex;
+            gap: 10px;
+            align-items: center;
+        }
+        
+        .score-input {
+            flex: 1;
+            padding: 15px;
+            border: 2px solid #e5e7eb;
+            border-radius: 10px;
+            font-size: 24px;
+            text-align: center;
+            font-weight: bold;
+        }
+        
+        .score-input:focus {
+            outline: none;
+            border-color: #667eea;
+        }
+        
+        .vs-separator {
+            font-size: 14px;
+            color: #9ca3af;
+        }
+        
+        .modal-actions {
+            display: flex;
+            gap: 10px;
+            margin-top: 25px;
+        }
+        
+        .modal-button {
+            flex: 1;
+            padding: 12px;
+            border-radius: 10px;
+            font-size: 15px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+        
+        .modal-button.primary {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            border: none;
+        }
+        
+        .modal-button.secondary {
+            background: white;
+            color: #666;
+            border: 2px solid #e5e7eb;
+        }
+        
+        /* Filter Pills */
+        .filter-section {
+            padding: 15px 20px;
+            background: white;
+            border-bottom: 1px solid #e5e7eb;
+            display: flex;
+            gap: 10px;
+            overflow-x: auto;
+        }
+        
+        .filter-pill {
+            padding: 6px 14px;
+            background: #f3f4f6;
+            border: 1px solid transparent;
+            border-radius: 20px;
+            font-size: 13px;
+            white-space: nowrap;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+        
+        .filter-pill.active {
+            background: #667eea;
+            color: white;
+        }
+        
+        /* Bottom Navigation */
+        .bottom-nav {
+            position: fixed;
+            bottom: 0;
+            left: 0;
+            right: 0;
+            background: white;
+            border-top: 1px solid #e5e7eb;
+            display: flex;
+            justify-content: space-around;
+            padding: 10px 0;
+        }
+        
+        .nav-item {
+            flex: 1;
+            text-align: center;
+            padding: 8px;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+        
+        .nav-item .icon {
+            font-size: 24px;
+            margin-bottom: 4px;
+        }
+        
+        .nav-item .label {
+            font-size: 11px;
+            color: #666;
+        }
+        
+        .nav-item.active .icon {
+            color: #667eea;
+        }
+        
+        .nav-item.active .label {
+            color: #667eea;
+            font-weight: 600;
+        }
+        
+        /* Standings View */
+        .standings-section {
+            padding: 20px;
+            display: none;
+        }
+        
+        .group-standings {
+            background: white;
+            border-radius: 12px;
+            padding: 15px;
+            margin-bottom: 20px;
+        }
+        
+        .group-title {
+            font-size: 16px;
+            font-weight: 600;
+            margin-bottom: 15px;
+        }
+        
+        .standings-table {
+            width: 100%;
+        }
+        
+        .standings-row {
+            display: flex;
+            padding: 10px 0;
+            border-bottom: 1px solid #f3f4f6;
+            align-items: center;
+        }
+        
+        .standings-row:last-child {
+            border-bottom: none;
+        }
+        
+        .position {
+            width: 30px;
+            font-weight: 600;
+            color: #667eea;
+        }
+        
+        .team-name {
+            flex: 1;
+            font-size: 14px;
+        }
+        
+        .team-stats {
+            display: flex;
+            gap: 15px;
+            font-size: 13px;
+        }
+        
+        .stat {
+            color: #666;
+        }
+        
+        .stat .value {
+            font-weight: 600;
+            color: #333;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h2 style="text-align: center; margin-bottom: 30px; color: #667eea;">Mockup - Nuevo Diseño Módulo Torneos</h2>
+        
+        <!-- Vista 1: Dashboard Principal -->
+        <div class="mobile-container">
+            <div class="header">
+                <h1 style="text-align: center;">🏆 Torneo Demo 2025</h1>
+                <div class="subtitle" style="text-align: center;">Club de Pádel Puebla</div>
+            </div>
+            
+            <div class="quick-stats">
+                <div class="stat-card">
+                    <div class="number">112</div>
+                    <div class="label">Equipos</div>
+                </div>
+                <div class="stat-card">
+                    <div class="number">168</div>
+                    <div class="label">Partidos</div>
+                </div>
+                <div class="stat-card">
+                    <div class="number">0</div>
+                    <div class="label">Jugados</div>
+                </div>
+                <div class="stat-card">
+                    <div class="number">168</div>
+                    <div class="label">Pendientes</div>
+                </div>
+            </div>
+            
+            <div class="action-section">
+                <div class="section-title">Acciones Rápidas</div>
+                
+                <div class="action-button" onclick="showTodayView()">
+                    <div class="icon">📅</div>
+                    <div class="content">
+                        <div class="title">Partidos de Hoy</div>
+                        <div class="description">12 partidos programados</div>
+                    </div>
+                    <div class="arrow">→</div>
+                </div>
+                
+                <div class="action-button" onclick="showTodayView()">
+                    <div class="icon">🎯</div>
+                    <div class="content">
+                        <div class="title">Capturar Resultados</div>
+                        <div class="description">0 pendientes de captura</div>
+                    </div>
+                    <div class="arrow">→</div>
+                </div>
+                
+                <div class="action-button" onclick="showStandings()">
+                    <div class="icon">📊</div>
+                    <div class="content">
+                        <div class="title">Tablas de Posiciones</div>
+                        <div class="description">Ver clasificación actual</div>
+                    </div>
+                    <div class="arrow">→</div>
+                </div>
+                
+                <div class="action-button">
+                    <div class="icon">⚙️</div>
+                    <div class="content">
+                        <div class="title">Administrar Torneo</div>
+                        <div class="description">Configuración y ajustes</div>
+                    </div>
+                    <div class="arrow">→</div>
+                </div>
+            </div>
+        </div>
+        
+        <!-- Vista 2: Partidos del Día -->
+        <div class="mobile-container" id="todayView" style="display: none;">
+            <div class="header">
+                <button class="back-button" onclick="showDashboard()">←</button>
+                <h1 style="text-align: center;">📅 Partidos de Hoy</h1>
+                <div class="subtitle" style="text-align: center;">Sábado 30 de Enero</div>
+            </div>
+            
+            <div class="filter-section">
+                <div class="filter-pill active">Todos</div>
+                <div class="filter-pill">Masculino</div>
+                <div class="filter-pill">Femenino</div>
+                <div class="filter-pill">Open</div>
+                <div class="filter-pill">Primera</div>
+                <div class="filter-pill">Segunda</div>
+            </div>
+            
+            <div class="date-selector" style="padding: 15px 20px; background: white;">
+                <div class="date-pill">Ayer</div>
+                <div class="date-pill active">Hoy</div>
+                <div class="date-pill">Mañana</div>
+                <div class="date-pill">Lun 1</div>
+                <div class="date-pill">Mar 2</div>
+            </div>
+            
+            <div class="matches-section">
+                <div class="court-section">
+                    <div class="court-header">⚡ CANCHA 1</div>
+                    
+                    <div class="match-card">
+                        <div class="match-time">🕐 10:00 AM</div>
+                        <div class="match-teams">Los Guerreros vs Los Titanes</div>
+                        <div class="match-category">Masculino Open - Grupo A</div>
+                        <button class="capture-button" onclick="showCaptureModal()">
+                            🎯 Capturar Resultado
+                        </button>
+                    </div>
+                    
+                    <div class="match-card">
+                        <div class="match-time">🕐 11:00 AM</div>
+                        <div class="match-teams">Las Valkirias vs Las Amazonas</div>
+                        <div class="match-category">Femenino Open - Grupo A</div>
+                        <button class="capture-button" onclick="showCaptureModal()">
+                            🎯 Capturar Resultado
+                        </button>
+                    </div>
+                    
+                    <div class="match-card">
+                        <div class="match-time">🕐 12:00 PM</div>
+                        <div class="match-teams">Los Halcones vs Los Lobos</div>
+                        <div class="match-category">Masculino Primera - Grupo B</div>
+                        <button class="capture-button" onclick="showCaptureModal()">
+                            🎯 Capturar Resultado
+                        </button>
+                    </div>
+                </div>
+                
+                <div class="court-section">
+                    <div class="court-header">⚡ CANCHA 2</div>
+                    
+                    <div class="match-card">
+                        <div class="match-time">🕐 10:00 AM</div>
+                        <div class="match-teams">Los Vikingos vs Los Espartanos</div>
+                        <div class="match-category">Masculino Open - Grupo A</div>
+                        <button class="capture-button" onclick="showCaptureModal()">
+                            🎯 Capturar Resultado
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <!-- Vista 3: Tablas de Posiciones -->
+        <div class="mobile-container" id="standingsView" style="display: none;">
+            <div class="header">
+                <button class="back-button" onclick="showDashboard()">←</button>
+                <h1 style="text-align: center;">📊 Tabla de Posiciones</h1>
+                <div class="subtitle" style="text-align: center;">Fase de Grupos</div>
+            </div>
+            
+            <div class="filter-section">
+                <div class="filter-pill active">Masculino</div>
+                <div class="filter-pill">Femenino</div>
+            </div>
+            
+            <div class="filter-section" style="border-bottom: none; padding-top: 0;">
+                <div class="filter-pill active">Open</div>
+                <div class="filter-pill">Primera</div>
+                <div class="filter-pill">Segunda</div>
+                <div class="filter-pill">Tercera</div>
+                <div class="filter-pill">Cuarta</div>
+                <div class="filter-pill">Quinta</div>
+                <div class="filter-pill">Sexta</div>
+            </div>
+            
+            <div class="standings-section" style="display: block;">
+                <div class="group-standings">
+                    <div class="group-title">Grupo A</div>
+                    <div class="standings-table">
+                        <div class="standings-row">
+                            <div class="position">1</div>
+                            <div class="team-name">Los Guerreros</div>
+                            <div class="team-stats">
+                                <div class="stat">PJ <span class="value">3</span></div>
+                                <div class="stat">PG <span class="value">3</span></div>
+                                <div class="stat">PP <span class="value">0</span></div>
+                                <div class="stat">Pts <span class="value">9</span></div>
+                            </div>
+                        </div>
+                        <div class="standings-row">
+                            <div class="position">2</div>
+                            <div class="team-name">Los Titanes</div>
+                            <div class="team-stats">
+                                <div class="stat">PJ <span class="value">3</span></div>
+                                <div class="stat">PG <span class="value">2</span></div>
+                                <div class="stat">PP <span class="value">1</span></div>
+                                <div class="stat">Pts <span class="value">6</span></div>
+                            </div>
+                        </div>
+                        <div class="standings-row">
+                            <div class="position">3</div>
+                            <div class="team-name">Los Vikingos</div>
+                            <div class="team-stats">
+                                <div class="stat">PJ <span class="value">3</span></div>
+                                <div class="stat">PG <span class="value">1</span></div>
+                                <div class="stat">PP <span class="value">2</span></div>
+                                <div class="stat">Pts <span class="value">3</span></div>
+                            </div>
+                        </div>
+                        <div class="standings-row">
+                            <div class="position">4</div>
+                            <div class="team-name">Los Espartanos</div>
+                            <div class="team-stats">
+                                <div class="stat">PJ <span class="value">3</span></div>
+                                <div class="stat">PG <span class="value">0</span></div>
+                                <div class="stat">PP <span class="value">3</span></div>
+                                <div class="stat">Pts <span class="value">0</span></div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="group-standings">
+                    <div class="group-title">Grupo B</div>
+                    <div class="standings-table">
+                        <div class="standings-row">
+                            <div class="position">1</div>
+                            <div class="team-name">Los Halcones</div>
+                            <div class="team-stats">
+                                <div class="stat">PJ <span class="value">3</span></div>
+                                <div class="stat">PG <span class="value">2</span></div>
+                                <div class="stat">PP <span class="value">1</span></div>
+                                <div class="stat">Pts <span class="value">6</span></div>
+                            </div>
+                        </div>
+                        <div class="standings-row">
+                            <div class="position">2</div>
+                            <div class="team-name">Los Lobos</div>
+                            <div class="team-stats">
+                                <div class="stat">PJ <span class="value">3</span></div>
+                                <div class="stat">PG <span class="value">2</span></div>
+                                <div class="stat">PP <span class="value">1</span></div>
+                                <div class="stat">Pts <span class="value">6</span></div>
+                            </div>
+                        </div>
+                        <div class="standings-row">
+                            <div class="position">3</div>
+                            <div class="team-name">Los Tigres</div>
+                            <div class="team-stats">
+                                <div class="stat">PJ <span class="value">3</span></div>
+                                <div class="stat">PG <span class="value">1</span></div>
+                                <div class="stat">PP <span class="value">2</span></div>
+                                <div class="stat">Pts <span class="value">3</span></div>
+                            </div>
+                        </div>
+                        <div class="standings-row">
+                            <div class="position">4</div>
+                            <div class="team-name">Los Leones</div>
+                            <div class="team-stats">
+                                <div class="stat">PJ <span class="value">3</span></div>
+                                <div class="stat">PG <span class="value">1</span></div>
+                                <div class="stat">PP <span class="value">2</span></div>
+                                <div class="stat">Pts <span class="value">3</span></div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <!-- Modal: Captura de Resultados -->
+        <div class="modal" id="captureModal">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <div class="modal-title">🎯 Capturar Resultado</div>
+                    <div class="modal-subtitle">Los Guerreros vs Los Titanes</div>
+                </div>
+                
+                <div class="score-input-group">
+                    <div class="set-label">SET 1</div>
+                    <div class="score-inputs">
+                        <input type="number" class="score-input" value="6" min="0" max="7">
+                        <div class="vs-separator">-</div>
+                        <input type="number" class="score-input" value="4" min="0" max="7">
+                    </div>
+                </div>
+                
+                <div class="score-input-group">
+                    <div class="set-label">SET 2</div>
+                    <div class="score-inputs">
+                        <input type="number" class="score-input" value="6" min="0" max="7">
+                        <div class="vs-separator">-</div>
+                        <input type="number" class="score-input" value="3" min="0" max="7">
+                    </div>
+                </div>
+                
+                <div class="score-input-group">
+                    <div class="set-label">SET 3 (Si es necesario)</div>
+                    <div class="score-inputs">
+                        <input type="number" class="score-input" placeholder="-" min="0" max="7">
+                        <div class="vs-separator">-</div>
+                        <input type="number" class="score-input" placeholder="-" min="0" max="7">
+                    </div>
+                </div>
+                
+                <div style="background: #f0fdf4; padding: 15px; border-radius: 10px; margin: 20px 0;">
+                    <div style="font-size: 14px; color: #166534; margin-bottom: 5px;">🏆 Ganador</div>
+                    <div style="font-size: 18px; font-weight: 600; color: #166534;">Los Guerreros</div>
+                </div>
+                
+                <div class="modal-actions">
+                    <button class="modal-button secondary" onclick="hideModal()">Cancelar</button>
+                    <button class="modal-button primary" onclick="saveResult()">Guardar Resultado</button>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <script>
+        function showDashboard() {
+            document.querySelectorAll('.mobile-container').forEach(el => el.style.display = 'none');
+            document.querySelectorAll('.mobile-container')[0].style.display = 'block';
+        }
+        
+        function showTodayView() {
+            document.querySelectorAll('.mobile-container').forEach(el => el.style.display = 'none');
+            document.getElementById('todayView').style.display = 'block';
+        }
+        
+        function showStandings() {
+            document.querySelectorAll('.mobile-container').forEach(el => el.style.display = 'none');
+            document.getElementById('standingsView').style.display = 'block';
+        }
+        
+        function showCaptureModal() {
+            document.getElementById('captureModal').classList.add('active');
+        }
+        
+        function hideModal() {
+            document.getElementById('captureModal').classList.remove('active');
+        }
+        
+        function saveResult() {
+            alert('✅ Resultado guardado exitosamente');
+            hideModal();
+        }
+        
+        // Auto-calculate winner based on sets
+        document.querySelectorAll('.score-input').forEach(input => {
+            input.addEventListener('input', () => {
+                // Simple logic to determine winner
+                // In real app, this would be more sophisticated
+            });
+        });
+    </script>
+</body>
+</html>

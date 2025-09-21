@@ -1,0 +1,110 @@
+import { NextRequest, NextResponse } from 'next/server'
+import { prisma } from '@/lib/config/prisma'
+import { requireSuperAdmin } from '@/lib/auth/actions'
+import bcrypt from 'bcryptjs'
+
+export async function POST(
+  request: NextRequest,
+  context: { params: Promise<{ id: string }> }
+) {
+  try {
+    // Verificar que es super admin
+    await requireSuperAdmin()
+
+    const params = await context.params
+    const clubId = params.id
+
+    // Obtener contraseña del body si existe
+    const body = await request.json().catch(() => ({}))
+    const providedPassword = body.password
+
+    // Buscar el club y sus usuarios
+    const club = await prisma.club.findUnique({
+      where: { id: clubId },
+      include: {
+        User: {
+          where: {
+            role: {
+              in: ['CLUB_OWNER', 'CLUB_STAFF']
+            }
+          }
+        }
+      }
+    })
+
+    if (!club) {
+      return NextResponse.json(
+        { error: 'Club no encontrado' },
+        { status: 404 }
+      )
+    }
+
+    if (club.User.length === 0) {
+      return NextResponse.json(
+        { error: 'No se encontraron usuarios del club' },
+        { status: 404 }
+      )
+    }
+
+    // Usar contraseña proporcionada o generar una aleatoria
+    const newPassword = providedPassword || generateRandomPassword()
+
+    // Validar contraseña proporcionada
+    if (providedPassword && providedPassword.length < 6) {
+      return NextResponse.json(
+        { error: 'La contraseña debe tener al menos 6 caracteres' },
+        { status: 400 }
+      )
+    }
+
+    const hashedPassword = await bcrypt.hash(newPassword, 10)
+
+    // Actualizar la contraseña del primer usuario (owner/admin)
+    const mainUser = club.User.find(u => u.role === 'CLUB_OWNER') || club.User[0]
+
+    await prisma.user.update({
+      where: { id: mainUser.id },
+      data: { password: hashedPassword }
+    })
+
+    return NextResponse.json({
+      success: true,
+      newPassword: newPassword,
+      userEmail: mainUser.email,
+      message: 'Contraseña reseteada exitosamente'
+    })
+
+  } catch (error) {
+    console.error('Error resetting password:', error)
+    return NextResponse.json(
+      { error: 'Error al resetear la contraseña' },
+      { status: 500 }
+    )
+  }
+}
+
+// Función para generar contraseña aleatoria
+function generateRandomPassword(length: number = 12): string {
+  const uppercase = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ'
+  const lowercase = 'abcdefghijklmnopqrstuvwxyz'
+  const numbers = '0123456789'
+  const special = '!@#$%&*'
+
+  const allChars = uppercase + lowercase + numbers + special
+
+  let password = ''
+
+  // Asegurar al menos un carácter de cada tipo
+  password += uppercase[Math.floor(Math.random() * uppercase.length)]
+  password += lowercase[Math.floor(Math.random() * lowercase.length)]
+  password += numbers[Math.floor(Math.random() * numbers.length)]
+  password += special[Math.floor(Math.random() * special.length)]
+
+  // Completar el resto de la contraseña
+  for (let i = password.length; i < length; i++) {
+    password += allChars[Math.floor(Math.random() * allChars.length)]
+  }
+
+  // Mezclar los caracteres
+  return password.split('').sort(() => Math.random() - 0.5).join('')
+}

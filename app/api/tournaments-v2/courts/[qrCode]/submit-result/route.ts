@@ -1,0 +1,195 @@
+import { NextRequest, NextResponse } from 'next/server'
+import { prisma } from '@/lib/config/prisma'
+import { nanoid } from 'nanoid'
+import { AuthService } from '@/lib/modules/shared/auth'
+import { ResponseBuilder } from '@/lib/modules/shared/response'
+import { triggerRoundAdvancementCheck } from '@/lib/tournaments/round-advancement'
+import { TournamentNotificationService } from '@/lib/services/tournament-notification-service'
+
+// POST: Enviar resultado de un partido
+export async function POST(
+  req: NextRequest,
+  { params }: { params: Promise<{ qrCode: string }> }
+) {
+  try {
+    const { qrCode } = await params
+    const body = await req.json()
+    const { 
+      matchId, 
+      submittedBy, // "team1" o "team2"
+      sets,
+      winner,
+      duration 
+    } = body
+
+    // Verificar que el QR code es válido
+    const courtQR = await prisma.courtQRCode.findUnique({
+      where: { qrCode }
+    })
+
+    if (!courtQR || !courtQR.isActive) {
+      return ResponseBuilder.notFound('Código QR no válido')
+    }
+
+    // Verificar que el partido existe
+    const match = await prisma.tournamentMatch.findUnique({
+      where: { id: matchId }
+    })
+
+    if (!match) {
+      return ResponseBuilder.notFound('Partido no encontrado')
+    }
+
+    // Calcular sets ganados
+    let team1TotalSets = 0
+    let team2TotalSets = 0
+    const team1Sets: any[] = []
+    const team2Sets: any[] = []
+
+    sets.forEach((set: any) => {
+      team1Sets.push({ games: set.team1Games, tiebreak: set.tiebreak?.team1 || null })
+      team2Sets.push({ games: set.team2Games, tiebreak: set.tiebreak?.team2 || null })
+      
+      if (set.team1Games > set.team2Games) {
+        team1TotalSets++
+      } else if (set.team2Games > set.team1Games) {
+        team2TotalSets++
+      }
+    })
+
+    // Buscar si ya existe un resultado enviado por el otro equipo
+    const existingResult = await prisma.tournamentMatchResult.findFirst({
+      where: {
+        matchId,
+        submittedBy: submittedBy === 'team1' ? 'team2' : 'team1'
+      }
+    })
+
+    // Obtener información del equipo que envía desde el partido
+    let submitterPhone = null
+    let submitterEmail = null
+    
+    // Si tenemos información de los jugadores, usar esa información
+    if (submittedBy === 'team1' && match.team1Player1) {
+      // Usar la información del equipo 1
+      submitterPhone = match.team1Player1 // Aquí podrías buscar el teléfono en la DB si lo tienes
+    } else if (submittedBy === 'team2' && match.team2Player1) {
+      // Usar la información del equipo 2  
+      submitterPhone = match.team2Player1 // Aquí podrías buscar el teléfono en la DB si lo tienes
+    }
+
+    // Crear nuevo registro de resultado
+    const newResult = await prisma.tournamentMatchResult.create({
+      data: {
+        id: nanoid(),
+        matchId,
+        submittedBy,
+        submitterPhone,
+        submitterEmail,
+        team1Sets,
+        team2Sets,
+        team1TotalSets,
+        team2TotalSets,
+        winner,
+        duration,
+        confirmed: false,
+        submittedAt: new Date(),
+        updatedAt: new Date()
+      }
+    })
+
+    // Si existe resultado del otro equipo, verificar si coinciden
+    if (existingResult) {
+      const resultsMatch = 
+        existingResult.team1TotalSets === team1TotalSets &&
+        existingResult.team2TotalSets === team2TotalSets &&
+        existingResult.winner === winner
+
+      if (resultsMatch) {
+        // Los resultados coinciden, confirmar ambos
+        await prisma.tournamentMatchResult.updateMany({
+          where: { matchId },
+          data: {
+            confirmed: true,
+            confirmedAt: new Date(),
+            confirmedBy: 'opponent'
+          }
+        })
+
+        // Actualizar el partido con los resultados confirmados
+        await prisma.tournamentMatch.update({
+          where: { id: matchId },
+          data: {
+            team1Sets,
+            team2Sets,
+            team1Score: team1TotalSets,
+            team2Score: team2TotalSets,
+            winner: winner === 'team1' ? match.team1Name : match.team2Name,
+            status: 'COMPLETED',
+            actualEndTime: new Date(),
+            resultsConfirmed: true
+          }
+        })
+
+        // Trigger automatic round advancement check
+        const advancementResult = await triggerRoundAdvancementCheck(matchId)
+        
+        // Send result confirmation notifications
+        const resultText = `${match.team1Name} ${team1TotalSets} - ${team2TotalSets} ${match.team2Name}`
+        await TournamentNotificationService.sendResultNotifications(matchId, resultText)
+        
+        // If players advanced, send advancement notifications
+        if (advancementResult.success && advancementResult.advancedPlayers) {
+          await TournamentNotificationService.sendAdvancementNotifications(
+            match.tournamentId,
+            advancementResult.advancedPlayers,
+            'próxima ronda'
+          )
+        }
+        
+        return ResponseBuilder.success({
+          result: newResult,
+          confirmed: true,
+          advancement: advancementResult
+        }, 'Resultado confirmado automáticamente')
+      } else {
+        // Los resultados no coinciden, marcar conflicto
+        await prisma.resultSubmissions.updateMany({
+          where: { matchId },
+          data: {
+            conflictStatus: 'pending',
+            updatedAt: new Date()
+          }
+        })
+
+        // Send conflict notifications to both teams
+        // Note: This is a simplified notification - would need proper tournament data
+        console.log(`🚨 Conflict notification would be sent for match ${matchId}`)
+
+        return ResponseBuilder.success({
+          result: newResult,
+          conflict: true
+        }, 'Conflicto detectado. El organizador será notificado')
+      }
+    }
+
+    // Es el primer resultado enviado
+    // Actualizar estado del partido a "esperando confirmación"
+    await prisma.tournamentMatch.update({
+      where: { id: matchId },
+      data: {
+        status: 'IN_PROGRESS',
+        actualStartTime: match.actualStartTime || new Date()
+      }
+    })
+
+    // Programar alerta si no se recibe confirmación en 20 minutos
+    // Esto se manejará con un cron job o servicio de background
+
+    return ResponseBuilder.success({
+      result: newResult
+    }, 'Resultado enviado. Esperando confirmación del equipo rival')
+  } catch (error) {
+    return ResponseBuilder.serverError(error)
+  }
+}

@@ -1,0 +1,246 @@
+import { NextRequest, NextResponse } from 'next/server'
+import { requireStaffAuth } from '@/lib/auth/actions'
+import { prisma } from '@/lib/config/prisma'
+
+export async function GET(request: NextRequest) {
+  try {
+    const session = await requireStaffAuth()
+    const { searchParams } = new URL(request.url)
+    
+    // Optional date range parameters
+    const startDate = searchParams.get('startDate')
+    const endDate = searchParams.get('endDate')
+    const period = searchParams.get('period') || 'month' // week, month, quarter, year
+
+    let dateFilter: any = {}
+    const now = new Date()
+
+    // Set default date range based on period
+    switch (period) {
+      case 'week':
+        const weekStart = new Date(now)
+        weekStart.setDate(now.getDate() - 7)
+        dateFilter = { gte: weekStart }
+        break
+      case 'month':
+        const monthStart = new Date(now.getFullYear(), now.getMonth(), 1)
+        dateFilter = { gte: monthStart }
+        break
+      case 'quarter':
+        const quarterStart = new Date(now.getFullYear(), Math.floor(now.getMonth() / 3) * 3, 1)
+        dateFilter = { gte: quarterStart }
+        break
+      case 'year':
+        const yearStart = new Date(now.getFullYear(), 0, 1)
+        dateFilter = { gte: yearStart }
+        break
+      default:
+        if (startDate) {
+          dateFilter.gte = new Date(startDate)
+        }
+        if (endDate) {
+          dateFilter.lte = new Date(endDate)
+        }
+    }
+
+    // Get club information
+    const club = await prisma.club.findUnique({
+      where: { id: session.clubId },
+      select: {
+        id: true,
+        name: true,
+        stripeAccountId: true,
+        stripeOnboardingCompleted: true,
+        stripeCommissionRate: true,
+      }
+    })
+
+    if (!club) {
+      return NextResponse.json(
+        { error: 'Club no encontrado' },
+        { status: 404 }
+      )
+    }
+
+    // Get transactions for the period
+    const transactions = await prisma.transaction.findMany({
+      where: {
+        clubId: session.clubId,
+        type: 'INCOME',
+        category: 'BOOKING',
+        ...(Object.keys(dateFilter).length > 0 && { date: dateFilter })
+      },
+      include: {
+        booking: {
+          select: {
+            id: true,
+            date: true,
+            startTime: true,
+            playerName: true,
+            paymentStatus: true,
+          }
+        },
+        bookingGroup: {
+          select: {
+            id: true,
+            date: true,
+            startTime: true,
+            playerName: true,
+            paymentStatus: true,
+          }
+        }
+      },
+      orderBy: {
+        date: 'desc'
+      }
+    })
+
+    // Get split payments for the period
+    const splitPayments = await prisma.splitPayment.findMany({
+      where: {
+        booking: {
+          clubId: session.clubId
+        },
+        status: 'completed',
+        ...(Object.keys(dateFilter).length > 0 && { 
+          completedAt: dateFilter 
+        })
+      },
+      include: {
+        booking: {
+          select: {
+            id: true,
+            date: true,
+            startTime: true,
+            playerName: true,
+            court: {
+              select: { name: true }
+            }
+          }
+        }
+      },
+      orderBy: {
+        completedAt: 'desc'
+      }
+    })
+
+    // Calculate metrics
+    const totalRevenue = transactions.reduce((sum, t) => sum + t.amount, 0)
+    const totalSplitRevenue = splitPayments.reduce((sum, sp) => sum + sp.amount, 0)
+    const combinedRevenue = totalRevenue + totalSplitRevenue
+    
+    const platformCommission = Math.round(combinedRevenue * (club.stripeCommissionRate / 10000))
+    const netRevenue = combinedRevenue - platformCommission
+
+    // Group transactions by day for chart data
+    const dailyStats = new Map()
+    
+    // Process regular transactions
+    transactions.forEach(transaction => {
+      const day = transaction.date.toISOString().split('T')[0]
+      if (!dailyStats.has(day)) {
+        dailyStats.set(day, { revenue: 0, count: 0, splitRevenue: 0, splitCount: 0 })
+      }
+      const stats = dailyStats.get(day)
+      stats.revenue += transaction.amount
+      stats.count += 1
+    })
+
+    // Process split payments
+    splitPayments.forEach(splitPayment => {
+      if (!splitPayment.completedAt) return
+      const day = splitPayment.completedAt.toISOString().split('T')[0]
+      if (!dailyStats.has(day)) {
+        dailyStats.set(day, { revenue: 0, count: 0, splitRevenue: 0, splitCount: 0 })
+      }
+      const stats = dailyStats.get(day)
+      stats.splitRevenue += splitPayment.amount
+      stats.splitCount += 1
+    })
+
+    const chartData = Array.from(dailyStats.entries())
+      .map(([date, stats]) => ({
+        date,
+        revenue: stats.revenue + stats.splitRevenue,
+        transactionCount: stats.count + stats.splitCount,
+        regularRevenue: stats.revenue,
+        splitRevenue: stats.splitRevenue,
+      }))
+      .sort((a, b) => a.date.localeCompare(b.date))
+
+    // Get recent payment activity
+    const recentActivity = [
+      ...transactions.slice(0, 10).map(t => ({
+        id: t.id,
+        type: 'regular',
+        amount: t.amount,
+        date: t.date,
+        description: t.description,
+        reference: t.reference,
+        bookingInfo: t.booking || t.bookingGroup,
+      })),
+      ...splitPayments.slice(0, 10).map(sp => ({
+        id: sp.id,
+        type: 'split',
+        amount: sp.amount,
+        date: sp.completedAt!,
+        description: `Pago dividido - ${sp.playerName}`,
+        reference: sp.stripeChargeId,
+        bookingInfo: sp.booking,
+      }))
+    ].sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()).slice(0, 15)
+
+    // Calculate payment method breakdown
+    const paymentMethods = {
+      stripe: transactions.length + splitPayments.length,
+      onsite: 0, // Would need additional data tracking
+      total: transactions.length + splitPayments.length
+    }
+
+    return NextResponse.json({
+      success: true,
+      data: {
+        club: {
+          id: club.id,
+          name: club.name,
+          hasStripeConfigured: club.stripeAccountId && club.stripeOnboardingCompleted,
+          commissionRate: club.stripeCommissionRate / 100, // percentage
+        },
+        period: {
+          type: period,
+          startDate: dateFilter.gte?.toISOString(),
+          endDate: dateFilter.lte?.toISOString(),
+        },
+        metrics: {
+          totalRevenue: combinedRevenue,
+          regularRevenue: totalRevenue,
+          splitRevenue: totalSplitRevenue,
+          platformCommission,
+          netRevenue,
+          transactionCount: transactions.length,
+          splitPaymentCount: splitPayments.length,
+          totalPaymentCount: transactions.length + splitPayments.length,
+          averageTransactionValue: combinedRevenue > 0 ? Math.round(combinedRevenue / (transactions.length + splitPayments.length)) : 0,
+        },
+        chartData,
+        recentActivity,
+        paymentMethods,
+        summary: {
+          thisMonth: {
+            revenue: combinedRevenue,
+            commission: platformCommission,
+            netRevenue,
+          },
+          // Could add comparison with previous period
+        }
+      }
+    })
+
+  } catch (error) {
+    console.error('Error fetching payments dashboard data:', error)
+    return NextResponse.json(
+      { error: 'Error interno del servidor' },
+      { status: 500 }
+    )
+  }
+}

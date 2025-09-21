@@ -1,0 +1,802 @@
+'use client'
+
+import React, { useState, useEffect } from 'react'
+import { CardModern } from '@/components/design-system/CardModern'
+import { 
+  FileText, Plus, Search, Filter, Download, Send,
+  CheckCircle, Clock, AlertCircle, XCircle,
+  Eye, Edit, ChevronLeft, ChevronRight, Calendar,
+  DollarSign, TrendingUp, Users, Receipt
+} from 'lucide-react'
+import { formatCurrency } from '@/lib/design-system/localization'
+import { format } from 'date-fns'
+import { es } from 'date-fns/locale'
+
+interface Invoice {
+  id: string
+  number: string
+  customerName: string
+  customerEmail: string
+  customerPhone: string
+  date: string
+  dueDate: string
+  items: InvoiceItem[]
+  subtotal: number
+  tax: number
+  total: number
+  status: 'draft' | 'sent' | 'paid' | 'overdue' | 'cancelled'
+  paymentDate?: string
+}
+
+interface InvoiceItem {
+  description: string
+  quantity: number
+  price: number
+  total: number
+}
+
+export default function InvoicesModule() {
+  const [searchQuery, setSearchQuery] = useState('')
+  const [selectedPeriod, setSelectedPeriod] = useState(new Date())
+  const [activeTab, setActiveTab] = useState<'all' | 'pending' | 'paid'>('all')
+  const [invoices, setInvoices] = useState<Invoice[]>([])
+  const [loading, setLoading] = useState(true)
+  const [exporting, setExporting] = useState(false)
+
+  useEffect(() => {
+    fetchInvoices()
+  }, [selectedPeriod, activeTab])
+
+  const fetchInvoices = async () => {
+    try {
+      setLoading(true)
+      const period = format(selectedPeriod, 'yyyy-MM')
+      const status = activeTab === 'pending' ? 'sent' : activeTab === 'paid' ? 'paid' : ''
+      const response = await fetch(`/api/finance/invoices?period=${period}${status ? `&status=${status}` : ''}`)
+      
+      if (response.ok) {
+        const data = await response.json()
+        setInvoices(data.invoices || [])
+      } else {
+        // If API fails, set empty array
+        setInvoices([])
+      }
+    } catch (error) {
+      console.error('Error fetching invoices:', error)
+      setInvoices([])
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  const handleExport = async () => {
+    try {
+      setExporting(true)
+      const period = format(selectedPeriod, 'yyyy-MM')
+      const response = await fetch(`/api/finance/export?type=invoices&format=csv&period=${period}`)
+      
+      if (response.ok) {
+        const blob = await response.blob()
+        const url = window.URL.createObjectURL(blob)
+        const a = document.createElement('a')
+        a.style.display = 'none'
+        a.href = url
+        a.download = `facturas-${period}.csv`
+        document.body.appendChild(a)
+        a.click()
+        window.URL.revokeObjectURL(url)
+      }
+    } catch (error) {
+      console.error('Error exporting invoice data:', error)
+    } finally {
+      setExporting(false)
+    }
+  }
+
+  const totalInvoiced = invoices.reduce((sum, inv) => sum + inv.total, 0)
+  const totalPending = invoices.filter(inv => inv.status === 'sent' || inv.status === 'overdue')
+    .reduce((sum, inv) => sum + inv.total, 0)
+  const totalPaid = invoices.filter(inv => inv.status === 'paid')
+    .reduce((sum, inv) => sum + inv.total, 0)
+  const overdueCount = invoices.filter(inv => inv.status === 'overdue').length
+
+  const getStatusColor = (status: string) => {
+    switch (status) {
+      case 'draft': return '#9CA3AF'
+      case 'sent': return '#3B82F6'
+      case 'paid': return '#A4DF4E'
+      case 'overdue': return '#EF4444'
+      case 'cancelled': return '#6B7280'
+      default: return '#9CA3AF'
+    }
+  }
+
+  const getStatusBg = (status: string) => {
+    switch (status) {
+      case 'draft': return 'rgba(156, 163, 175, 0.1)'
+      case 'sent': return 'rgba(59, 130, 246, 0.1)'
+      case 'paid': return 'rgba(164, 223, 78, 0.1)'
+      case 'overdue': return 'rgba(239, 68, 68, 0.1)'
+      case 'cancelled': return 'rgba(107, 114, 128, 0.1)'
+      default: return 'rgba(156, 163, 175, 0.1)'
+    }
+  }
+
+  const getStatusIcon = (status: string) => {
+    switch (status) {
+      case 'draft': return <Edit style={{ width: '14px', height: '14px' }} />
+      case 'sent': return <Send style={{ width: '14px', height: '14px' }} />
+      case 'paid': return <CheckCircle style={{ width: '14px', height: '14px' }} />
+      case 'overdue': return <AlertCircle style={{ width: '14px', height: '14px' }} />
+      case 'cancelled': return <XCircle style={{ width: '14px', height: '14px' }} />
+      default: return null
+    }
+  }
+
+  const getStatusLabel = (status: string) => {
+    switch (status) {
+      case 'draft': return 'Borrador'
+      case 'sent': return 'Enviada'
+      case 'paid': return 'Pagada'
+      case 'overdue': return 'Vencida'
+      case 'cancelled': return 'Cancelada'
+      default: return status
+    }
+  }
+
+  const filteredInvoices = invoices.filter(invoice => {
+    if (searchQuery) {
+      const query = searchQuery.toLowerCase()
+      return invoice.number.toLowerCase().includes(query) ||
+             invoice.customerName.toLowerCase().includes(query) ||
+             invoice.customerEmail.toLowerCase().includes(query)
+    }
+    return true
+  })
+
+  return (
+    <div style={{ padding: '32px' }}>
+      {/* Header */}
+      <div style={{ marginBottom: '32px' }}>
+        <h1 style={{
+          fontSize: '32px',
+          fontWeight: 700,
+          color: '#182A01',
+          margin: '0 0 8px 0',
+          letterSpacing: '-0.02em'
+        }}>
+          Facturas
+        </h1>
+        <p style={{
+          fontSize: '16px',
+          color: '#516640',
+          fontWeight: 400,
+          margin: 0
+        }}>
+          Gestión de facturas y cobros
+        </p>
+      </div>
+
+      {/* Métricas */}
+      <div style={{
+        display: 'grid',
+        gridTemplateColumns: 'repeat(4, 1fr)',
+        gap: '20px',
+        marginBottom: '32px'
+      }}>
+        <CardModern variant="glass">
+          <div style={{ padding: '24px' }}>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '12px' }}>
+              <div style={{
+                width: '40px',
+                height: '40px',
+                borderRadius: '10px',
+                background: 'rgba(59, 130, 246, 0.1)',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center'
+              }}>
+                <Receipt style={{ width: '20px', height: '20px', color: '#3B82F6' }} />
+              </div>
+              <span style={{ fontSize: '12px', color: '#516640', fontWeight: 600 }}>
+                {filteredInvoices.length} total
+              </span>
+            </div>
+            <p style={{ fontSize: '12px', color: '#516640', marginBottom: '4px' }}>Total Facturado</p>
+            <p style={{ fontSize: '24px', fontWeight: 700, color: '#182A01' }}>
+              {formatCurrency(totalInvoiced)}
+            </p>
+          </div>
+        </CardModern>
+
+        <CardModern variant="glass">
+          <div style={{ padding: '24px' }}>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '12px' }}>
+              <div style={{
+                width: '40px',
+                height: '40px',
+                borderRadius: '10px',
+                background: 'rgba(164, 223, 78, 0.1)',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center'
+              }}>
+                <CheckCircle style={{ width: '20px', height: '20px', color: '#A4DF4E' }} />
+              </div>
+              <TrendingUp style={{ width: '16px', height: '16px', color: '#A4DF4E' }} />
+            </div>
+            <p style={{ fontSize: '12px', color: '#516640', marginBottom: '4px' }}>Cobrado</p>
+            <p style={{ fontSize: '24px', fontWeight: 700, color: '#182A01' }}>
+              {formatCurrency(totalPaid)}
+            </p>
+          </div>
+        </CardModern>
+
+        <CardModern variant="glass">
+          <div style={{ padding: '24px' }}>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '12px' }}>
+              <div style={{
+                width: '40px',
+                height: '40px',
+                borderRadius: '10px',
+                background: 'rgba(251, 191, 36, 0.1)',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center'
+              }}>
+                <Clock style={{ width: '20px', height: '20px', color: '#FBBF24' }} />
+              </div>
+              <span style={{ fontSize: '12px', color: '#FBBF24', fontWeight: 600 }}>
+                {invoices.filter(inv => inv.status === 'sent').length}
+              </span>
+            </div>
+            <p style={{ fontSize: '12px', color: '#516640', marginBottom: '4px' }}>Por Cobrar</p>
+            <p style={{ fontSize: '24px', fontWeight: 700, color: '#182A01' }}>
+              {formatCurrency(totalPending)}
+            </p>
+          </div>
+        </CardModern>
+
+        <CardModern variant="glass">
+          <div style={{ padding: '24px' }}>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '12px' }}>
+              <div style={{
+                width: '40px',
+                height: '40px',
+                borderRadius: '10px',
+                background: overdueCount > 0 ? 'rgba(239, 68, 68, 0.1)' : 'rgba(164, 223, 78, 0.1)',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center'
+              }}>
+                <AlertCircle style={{ 
+                  width: '20px', 
+                  height: '20px', 
+                  color: overdueCount > 0 ? '#EF4444' : '#A4DF4E' 
+                }} />
+              </div>
+              <span style={{ 
+                fontSize: '12px', 
+                color: overdueCount > 0 ? '#EF4444' : '#A4DF4E', 
+                fontWeight: 600 
+              }}>
+                {overdueCount}
+              </span>
+            </div>
+            <p style={{ fontSize: '12px', color: '#516640', marginBottom: '4px' }}>Vencidas</p>
+            <p style={{ fontSize: '24px', fontWeight: 700, color: '#182A01' }}>
+              {overdueCount === 0 ? 'Sin vencidas' : `${overdueCount} facturas`}
+            </p>
+          </div>
+        </CardModern>
+      </div>
+
+      {/* Tabs */}
+      <div style={{ 
+        display: 'flex', 
+        gap: '8px',
+        marginBottom: '24px',
+        borderBottom: '1px solid rgba(164, 223, 78, 0.1)',
+        paddingBottom: '2px'
+      }}>
+        <button
+          onClick={() => setActiveTab('all')}
+          style={{
+            padding: '10px 20px',
+            background: 'transparent',
+            border: 'none',
+            color: activeTab === 'all' ? '#182A01' : '#516640',
+            fontSize: '14px',
+            fontWeight: activeTab === 'all' ? 600 : 500,
+            cursor: 'pointer',
+            borderBottom: activeTab === 'all' ? '2px solid #A4DF4E' : '2px solid transparent',
+            transition: 'all 0.2s'
+          }}
+        >
+          Todas las Facturas
+        </button>
+        <button
+          onClick={() => setActiveTab('pending')}
+          style={{
+            padding: '10px 20px',
+            background: 'transparent',
+            border: 'none',
+            color: activeTab === 'pending' ? '#182A01' : '#516640',
+            fontSize: '14px',
+            fontWeight: activeTab === 'pending' ? 600 : 500,
+            cursor: 'pointer',
+            borderBottom: activeTab === 'pending' ? '2px solid #A4DF4E' : '2px solid transparent',
+            transition: 'all 0.2s'
+          }}
+        >
+          Pendientes
+        </button>
+        <button
+          onClick={() => setActiveTab('paid')}
+          style={{
+            padding: '10px 20px',
+            background: 'transparent',
+            border: 'none',
+            color: activeTab === 'paid' ? '#182A01' : '#516640',
+            fontSize: '14px',
+            fontWeight: activeTab === 'paid' ? 600 : 500,
+            cursor: 'pointer',
+            borderBottom: activeTab === 'paid' ? '2px solid #A4DF4E' : '2px solid transparent',
+            transition: 'all 0.2s'
+          }}
+        >
+          Pagadas
+        </button>
+      </div>
+
+      {/* Content */}
+      <div style={{
+        display: 'grid',
+        gridTemplateColumns: '1fr 380px',
+        gap: '24px'
+      }}>
+        {/* Main Content */}
+        <CardModern variant="glass">
+          <div style={{ padding: '24px' }}>
+            {/* Header */}
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '20px' }}>
+              <h3 style={{
+                fontSize: '18px',
+                fontWeight: 600,
+                color: '#182A01'
+              }}>
+                Listado de Facturas
+              </h3>
+              <div style={{ display: 'flex', gap: '8px' }}>
+                <button
+                  style={{
+                    padding: '8px 16px',
+                    borderRadius: '10px',
+                    border: '1px solid rgba(164, 223, 78, 0.2)',
+                    background: 'white',
+                    color: '#516640',
+                    fontSize: '14px',
+                    fontWeight: 500,
+                    cursor: 'pointer',
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '6px'
+                  }}
+                >
+                  <Filter style={{ width: '14px', height: '14px' }} />
+                  Filtrar
+                </button>
+                <button
+                  style={{
+                    padding: '8px 16px',
+                    borderRadius: '10px',
+                    border: 'none',
+                    background: 'linear-gradient(135deg, #66E7AA 0%, #A4DF4E 100%)',
+                    color: '#182A01',
+                    fontSize: '14px',
+                    fontWeight: 600,
+                    cursor: 'pointer',
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '6px'
+                  }}
+                >
+                  <Plus style={{ width: '14px', height: '14px' }} />
+                  Nueva Factura
+                </button>
+              </div>
+            </div>
+
+            {/* Search */}
+            <div style={{ position: 'relative', marginBottom: '20px' }}>
+              <Search style={{
+                position: 'absolute',
+                left: '12px',
+                top: '50%',
+                transform: 'translateY(-50%)',
+                width: '16px',
+                height: '16px',
+                color: '#516640'
+              }} />
+              <input
+                type="text"
+                placeholder="Buscar por número, cliente o email..."
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                style={{
+                  width: '100%',
+                  padding: '10px 12px 10px 36px',
+                  borderRadius: '10px',
+                  border: '1px solid rgba(164, 223, 78, 0.2)',
+                  background: 'white',
+                  fontSize: '14px',
+                  color: '#182A01',
+                  outline: 'none'
+                }}
+              />
+            </div>
+
+            {/* Invoices List */}
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+              {filteredInvoices.map((invoice) => (
+                <div
+                  key={invoice.id}
+                  style={{
+                    padding: '16px',
+                    borderRadius: '12px',
+                    border: '1px solid rgba(164, 223, 78, 0.15)',
+                    background: 'rgba(255, 255, 255, 0.5)',
+                    backdropFilter: 'blur(10px)',
+                    transition: 'all 0.3s ease',
+                    cursor: 'pointer'
+                  }}
+                  onMouseEnter={(e) => {
+                    e.currentTarget.style.borderColor = 'rgba(164, 223, 78, 0.3)'
+                    e.currentTarget.style.transform = 'translateX(4px)'
+                    e.currentTarget.style.background = 'rgba(255, 255, 255, 0.7)'
+                  }}
+                  onMouseLeave={(e) => {
+                    e.currentTarget.style.borderColor = 'rgba(164, 223, 78, 0.15)'
+                    e.currentTarget.style.transform = 'translateX(0)'
+                    e.currentTarget.style.background = 'rgba(255, 255, 255, 0.5)'
+                  }}
+                >
+                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
+                      <div style={{
+                        width: '40px',
+                        height: '40px',
+                        borderRadius: '10px',
+                        background: getStatusBg(invoice.status),
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        color: getStatusColor(invoice.status)
+                      }}>
+                        {getStatusIcon(invoice.status)}
+                      </div>
+                      <div>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '4px' }}>
+                          <p style={{ 
+                            fontSize: '14px', 
+                            fontWeight: 600, 
+                            color: '#182A01'
+                          }}>
+                            {invoice.number}
+                          </p>
+                          <span style={{
+                            fontSize: '11px',
+                            padding: '2px 8px',
+                            borderRadius: '12px',
+                            background: getStatusBg(invoice.status),
+                            color: getStatusColor(invoice.status),
+                            fontWeight: 600
+                          }}>
+                            {getStatusLabel(invoice.status)}
+                          </span>
+                        </div>
+                        <p style={{ 
+                          fontSize: '13px', 
+                          color: '#516640' 
+                        }}>
+                          {invoice.customerName} • {format(new Date(invoice.date), 'dd MMM yyyy', { locale: es })}
+                        </p>
+                      </div>
+                    </div>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
+                      <div style={{ textAlign: 'right' }}>
+                        <p style={{
+                          fontSize: '16px',
+                          fontWeight: 600,
+                          color: '#182A01'
+                        }}>
+                          {formatCurrency(invoice.total)}
+                        </p>
+                        <p style={{ fontSize: '11px', color: '#516640' }}>
+                          Vence: {format(new Date(invoice.dueDate), 'dd MMM', { locale: es })}
+                        </p>
+                      </div>
+                      <div style={{ display: 'flex', gap: '4px' }}>
+                        <button
+                          style={{
+                            width: '32px',
+                            height: '32px',
+                            borderRadius: '8px',
+                            border: 'none',
+                            background: 'transparent',
+                            cursor: 'pointer',
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            transition: 'all 0.2s'
+                          }}
+                          onMouseEnter={(e) => {
+                            e.currentTarget.style.background = 'rgba(59, 130, 246, 0.1)'
+                          }}
+                          onMouseLeave={(e) => {
+                            e.currentTarget.style.background = 'transparent'
+                          }}
+                        >
+                          <Eye style={{ width: '16px', height: '16px', color: '#516640' }} />
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        </CardModern>
+
+        {/* Sidebar */}
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
+          {/* Period Selector */}
+          <CardModern variant="glass">
+            <div style={{ padding: '24px' }}>
+              <div style={{
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'space-between',
+                marginBottom: '20px'
+              }}>
+                <h3 style={{
+                  fontSize: '16px',
+                  fontWeight: 600,
+                  color: '#182A01'
+                }}>
+                  {format(selectedPeriod, 'MMMM yyyy', { locale: es })}
+                </h3>
+                <div style={{ display: 'flex', gap: '8px' }}>
+                  <button
+                    onClick={() => {
+                      const newDate = new Date(selectedPeriod)
+                      newDate.setMonth(newDate.getMonth() - 1)
+                      setSelectedPeriod(newDate)
+                    }}
+                    style={{
+                      width: '32px',
+                      height: '32px',
+                      borderRadius: '8px',
+                      border: '1px solid rgba(164, 223, 78, 0.2)',
+                      background: 'white',
+                      cursor: 'pointer',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center'
+                    }}
+                  >
+                    <ChevronLeft style={{ width: '16px', height: '16px', color: '#516640' }} />
+                  </button>
+                  <button
+                    onClick={() => {
+                      const newDate = new Date(selectedPeriod)
+                      newDate.setMonth(newDate.getMonth() + 1)
+                      setSelectedPeriod(newDate)
+                    }}
+                    style={{
+                      width: '32px',
+                      height: '32px',
+                      borderRadius: '8px',
+                      border: '1px solid rgba(164, 223, 78, 0.2)',
+                      background: 'white',
+                      cursor: 'pointer',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center'
+                    }}
+                  >
+                    <ChevronRight style={{ width: '16px', height: '16px', color: '#516640' }} />
+                  </button>
+                </div>
+              </div>
+
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                  <span style={{ fontSize: '14px', color: '#516640' }}>Emitidas</span>
+                  <span style={{ fontSize: '14px', fontWeight: 600, color: '#182A01' }}>
+                    {filteredInvoices.length}
+                  </span>
+                </div>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                  <span style={{ fontSize: '14px', color: '#516640' }}>Pagadas</span>
+                  <span style={{ fontSize: '14px', fontWeight: 600, color: '#A4DF4E' }}>
+                    {invoices.filter(inv => inv.status === 'paid').length}
+                  </span>
+                </div>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                  <span style={{ fontSize: '14px', color: '#516640' }}>Pendientes</span>
+                  <span style={{ fontSize: '14px', fontWeight: 600, color: '#FBBF24' }}>
+                    {invoices.filter(inv => inv.status === 'sent').length}
+                  </span>
+                </div>
+                <div style={{
+                  borderTop: '1px solid rgba(164, 223, 78, 0.1)',
+                  paddingTop: '12px',
+                  display: 'flex',
+                  justifyContent: 'space-between',
+                  alignItems: 'center'
+                }}>
+                  <span style={{ fontSize: '14px', fontWeight: 600, color: '#182A01' }}>Total</span>
+                  <span style={{ fontSize: '18px', fontWeight: 700, color: '#182A01' }}>
+                    {formatCurrency(totalInvoiced)}
+                  </span>
+                </div>
+              </div>
+            </div>
+          </CardModern>
+
+          {/* Quick Actions */}
+          <CardModern variant="glass">
+            <div style={{ padding: '24px' }}>
+              <h3 style={{
+                fontSize: '16px',
+                fontWeight: 600,
+                color: '#182A01',
+                marginBottom: '16px'
+              }}>
+                Acciones Rápidas
+              </h3>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+                <button
+                  style={{
+                    width: '100%',
+                    padding: '12px 16px',
+                    borderRadius: '10px',
+                    border: '1px solid rgba(164, 223, 78, 0.2)',
+                    background: 'white',
+                    color: '#182A01',
+                    fontSize: '14px',
+                    fontWeight: 500,
+                    cursor: 'pointer',
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '8px',
+                    transition: 'all 0.2s'
+                  }}
+                  onMouseEnter={(e) => {
+                    e.currentTarget.style.background = 'rgba(164, 223, 78, 0.05)'
+                  }}
+                  onMouseLeave={(e) => {
+                    e.currentTarget.style.background = 'white'
+                  }}
+                >
+                  <FileText style={{ width: '16px', height: '16px' }} />
+                  Nueva Factura
+                </button>
+                <button
+                  style={{
+                    width: '100%',
+                    padding: '12px 16px',
+                    borderRadius: '10px',
+                    border: '1px solid rgba(164, 223, 78, 0.2)',
+                    background: 'white',
+                    color: '#182A01',
+                    fontSize: '14px',
+                    fontWeight: 500,
+                    cursor: 'pointer',
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '8px',
+                    transition: 'all 0.2s'
+                  }}
+                  onMouseEnter={(e) => {
+                    e.currentTarget.style.background = 'rgba(164, 223, 78, 0.05)'
+                  }}
+                  onMouseLeave={(e) => {
+                    e.currentTarget.style.background = 'white'
+                  }}
+                >
+                  <Send style={{ width: '16px', height: '16px' }} />
+                  Enviar Recordatorios
+                </button>
+                <button
+                  onClick={handleExport}
+                  disabled={exporting}
+                  style={{
+                    width: '100%',
+                    padding: '12px 16px',
+                    borderRadius: '10px',
+                    border: '1px solid rgba(164, 223, 78, 0.2)',
+                    background: 'white',
+                    color: '#182A01',
+                    fontSize: '14px',
+                    fontWeight: 500,
+                    cursor: exporting ? 'wait' : 'pointer',
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '8px',
+                    transition: 'all 0.2s',
+                    opacity: exporting ? 0.6 : 1
+                  }}
+                  onMouseEnter={(e) => {
+                    if (!exporting) e.currentTarget.style.background = 'rgba(164, 223, 78, 0.05)'
+                  }}
+                  onMouseLeave={(e) => {
+                    e.currentTarget.style.background = 'white'
+                  }}
+                >
+                  <Download style={{ width: '16px', height: '16px' }} />
+                  {exporting ? 'Exportando...' : 'Exportar'}
+                </button>
+              </div>
+            </div>
+          </CardModern>
+
+          {/* Recent Activity */}
+          <CardModern variant="glass">
+            <div style={{ padding: '24px' }}>
+              <h3 style={{
+                fontSize: '16px',
+                fontWeight: 600,
+                color: '#182A01',
+                marginBottom: '16px'
+              }}>
+                Actividad Reciente
+              </h3>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+                {invoices.slice(0, 3).map((invoice, index) => (
+                  <div key={index} style={{ 
+                    display: 'flex', 
+                    alignItems: 'center', 
+                    gap: '12px',
+                    padding: '8px 0',
+                    borderBottom: index < 2 ? '1px solid rgba(164, 223, 78, 0.1)' : 'none'
+                  }}>
+                    <div style={{
+                      width: '32px',
+                      height: '32px',
+                      borderRadius: '8px',
+                      background: getStatusBg(invoice.status),
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      color: getStatusColor(invoice.status),
+                      fontSize: '12px'
+                    }}>
+                      {getStatusIcon(invoice.status)}
+                    </div>
+                    <div style={{ flex: 1 }}>
+                      <p style={{ fontSize: '13px', color: '#182A01', fontWeight: 600 }}>
+                        {invoice.number}
+                      </p>
+                      <p style={{ fontSize: '11px', color: '#516640' }}>
+                        {invoice.customerName}
+                      </p>
+                    </div>
+                    <span style={{ 
+                      fontSize: '13px', 
+                      fontWeight: 600, 
+                      color: getStatusColor(invoice.status) 
+                    }}>
+                      {formatCurrency(invoice.total)}
+                    </span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </CardModern>
+        </div>
+      </div>
+    </div>
+  )
+}

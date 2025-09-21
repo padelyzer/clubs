@@ -1,0 +1,165 @@
+import { NextRequest, NextResponse } from 'next/server'
+import { requireAuthAPI } from '@/lib/auth/actions'
+import { prisma } from '@/lib/config/prisma'
+import { generatePaymentLink } from '@/lib/payments/payment-links'
+import { WhatsAppService } from '@/lib/services/whatsapp-service'
+
+export async function POST(
+  request: NextRequest,
+  { params }: { params: Promise<{ id: string }> }
+) {
+  try {
+    const session = await requireAuthAPI()
+    
+    if (!session) {
+      return NextResponse.json(
+        { success: false, error: 'No autorizado' },
+        { status: 401 }
+      )
+    }
+    const { id: bookingGroupId } = await params
+    const body = await request.json()
+    
+    const { playerContacts } = body // Array of { name, phone, email? }
+
+    // Get the booking group
+    const bookingGroup = await prisma.bookingGroup.findFirst({
+      where: { 
+        id: bookingGroupId,
+        clubId: session.clubId 
+      },
+      include: {
+        splitPayments: true,
+        bookings: {
+          include: {
+            court: true
+          }
+        },
+        club: true
+      }
+    })
+
+    if (!bookingGroup) {
+      return NextResponse.json(
+        { success: false, error: 'Grupo de reservas no encontrado' },
+        { status: 404 }
+      )
+    }
+
+    if (!bookingGroup.splitPaymentEnabled) {
+      return NextResponse.json(
+        { success: false, error: 'Este grupo no tiene pagos divididos habilitados' },
+        { status: 400 }
+      )
+    }
+
+    // Update existing split payments with player contact info
+    const paymentLinks = []
+    let updatedCount = 0
+
+    for (let i = 0; i < Math.min(bookingGroup.splitPayments.length, playerContacts.length); i++) {
+      const splitPayment = bookingGroup.splitPayments[i]
+      const contact = playerContacts[i]
+
+      // Update split payment with contact info
+      const updatedSplitPayment = await prisma.splitPayment.update({
+        where: { id: splitPayment.id },
+        data: {
+          playerName: contact.name,
+          playerPhone: contact.phone,
+          playerEmail: contact.email || ''
+        }
+      })
+
+      // Generate payment link
+      const paymentLink = await generatePaymentLink({
+        splitPaymentId: splitPayment.id,
+        amount: splitPayment.amount,
+        description: `Pago para reserva grupal "${bookingGroup.name}" - ${bookingGroup.bookings.map(b => b.court.name).join(', ')}`,
+        playerName: contact.name,
+        playerEmail: contact.email,
+        playerPhone: contact.phone,
+        bookingId: bookingGroupId
+      })
+
+      paymentLinks.push({
+        splitPaymentId: splitPayment.id,
+        playerName: contact.name,
+        playerPhone: contact.phone,
+        amount: splitPayment.amount / 100, // Convert to MXN
+        paymentLink
+      })
+
+      // Send WhatsApp notification
+      if (contact.phone) {
+        try {
+          const message = `🏓 ¡Hola ${contact.name}!
+
+Tu parte del pago para la reserva grupal "${bookingGroup.name}" está lista:
+
+📅 ${new Date(bookingGroup.date).toLocaleDateString('es-MX')}
+🕐 ${bookingGroup.startTime} - ${bookingGroup.endTime}
+🏟️ ${bookingGroup.bookings.map(b => b.court.name).join(', ')}
+👥 ${bookingGroup.totalPlayers} jugadores total
+
+💰 Tu pago: $${(splitPayment.amount / 100).toFixed(2)} MXN
+
+Completa tu pago aquí:
+${paymentLink}
+
+¡Nos vemos en la cancha! 🎾`
+
+          await WhatsAppService.sendMessage(contact.phone, message)
+          
+          // Create notification record
+          await prisma.notification.create({
+            data: {
+              bookingGroupId: bookingGroup.id,
+              splitPaymentId: splitPayment.id,
+              type: 'WHATSAPP',
+              template: 'split_payment_reminder',
+              recipient: contact.phone,
+              status: 'sent'
+            }
+          })
+        } catch (error) {
+          console.error(`Error sending WhatsApp to ${contact.phone}:`, error)
+          
+          // Create failed notification record
+          await prisma.notification.create({
+            data: {
+              bookingGroupId: bookingGroup.id,
+              splitPaymentId: splitPayment.id,
+              type: 'WHATSAPP',
+              template: 'split_payment_reminder',
+              recipient: contact.phone,
+              status: 'failed',
+              errorMessage: error instanceof Error ? error.message : 'Unknown error'
+            }
+          })
+        }
+      }
+
+      updatedCount++
+    }
+
+    return NextResponse.json({
+      success: true,
+      message: `Links de pago generados para ${updatedCount} jugadores`,
+      paymentLinks,
+      summary: {
+        totalSplitPayments: bookingGroup.splitPaymentCount,
+        linksGenerated: updatedCount,
+        totalAmount: bookingGroup.totalPrice / 100,
+        amountPerPlayer: (bookingGroup.totalPrice / bookingGroup.splitPaymentCount) / 100
+      }
+    })
+
+  } catch (error) {
+    console.error('Error generating split payment links:', error)
+    return NextResponse.json(
+      { success: false, error: 'Error al generar links de pago' },
+      { status: 500 }
+    )
+  }
+}

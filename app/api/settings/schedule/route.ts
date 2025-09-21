@@ -1,0 +1,152 @@
+import { NextRequest, NextResponse } from 'next/server'
+import { requireAuthAPI } from '@/lib/auth/actions'
+import { prisma } from '@/lib/config/prisma'
+import { z } from 'zod'
+
+// Validation schema for schedule
+const scheduleSchema = z.object({
+  dayOfWeek: z.number().min(0).max(6), // 0=Sunday, 6=Saturday
+  openTime: z.string().regex(/^([0-1]?[0-9]|2[0-3]):[0-5][0-9]$/),
+  closeTime: z.string().regex(/^([0-1]?[0-9]|2[0-3]):[0-5][0-9]$/)
+})
+
+const bulkScheduleSchema = z.array(scheduleSchema)
+
+// GET - Retrieve club schedules
+export async function GET(request: NextRequest) {
+  try {
+    const session = await requireAuthAPI()
+    
+    if (!session) {
+      return NextResponse.json(
+        { success: false, error: 'No autorizado' },
+        { status: 401 }
+      )
+    }
+    
+    const schedules = await prisma.schedule.findMany({
+      where: { clubId: session.clubId },
+      orderBy: { dayOfWeek: 'asc' }
+    })
+
+    // If no schedules exist, create default ones
+    if (schedules.length === 0) {
+      const defaultSchedules = []
+      for (let day = 0; day <= 6; day++) {
+        const scheduleId = `schedule_${session.clubId}_${day}_${Date.now()}`
+        const schedule = await prisma.schedule.create({
+          data: {
+            id: scheduleId,
+            clubId: session.clubId,
+            dayOfWeek: day,
+            openTime: day === 0 ? '08:00' : '07:00', // Sunday opens later
+            closeTime: day === 5 || day === 6 ? '22:00' : '21:00', // Fri/Sat close later
+            updatedAt: new Date()
+          }
+        })
+        defaultSchedules.push(schedule)
+      }
+      return NextResponse.json({
+        success: true,
+        schedules: defaultSchedules,
+        message: 'Horarios predeterminados creados'
+      })
+    }
+
+    // Format schedules with day names
+    const daysOfWeek = ['Domingo', 'Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábado']
+    const formattedSchedules = schedules.map(schedule => ({
+      ...schedule,
+      dayName: daysOfWeek[schedule.dayOfWeek]
+    }))
+
+    return NextResponse.json({
+      success: true,
+      schedules: formattedSchedules
+    })
+
+  } catch (error) {
+    console.error('Error fetching schedules:', error)
+    return NextResponse.json(
+      { success: false, error: 'Error al obtener horarios' },
+      { status: 500 }
+    )
+  }
+}
+
+// PUT - Bulk update schedules
+export async function PUT(request: NextRequest) {
+  try {
+    const session = await requireAuthAPI()
+    
+    if (!session) {
+      return NextResponse.json(
+        { success: false, error: 'No autorizado' },
+        { status: 401 }
+      )
+    }
+    const body = await request.json()
+    
+    const validatedSchedules = bulkScheduleSchema.parse(body.schedules || body)
+    
+    // Update all schedules in a transaction
+    const updatedSchedules = await prisma.$transaction(async (tx) => {
+      const results = []
+      for (const schedule of validatedSchedules) {
+        // Check if schedule exists
+        const existing = await tx.schedule.findFirst({
+          where: {
+            clubId: session.clubId,
+            dayOfWeek: schedule.dayOfWeek
+          }
+        })
+
+        if (existing) {
+          // Update existing
+          const updated = await tx.schedule.update({
+            where: { id: existing.id },
+            data: {
+              openTime: schedule.openTime,
+              closeTime: schedule.closeTime
+            }
+          })
+          results.push(updated)
+        } else {
+          // Create new
+          const scheduleId = `schedule_${session.clubId}_${schedule.dayOfWeek}_${Date.now()}`
+          const created = await tx.schedule.create({
+            data: {
+              id: scheduleId,
+              clubId: session.clubId,
+              ...schedule,
+              updatedAt: new Date()
+            }
+          })
+          results.push(created)
+        }
+      }
+      return results
+    })
+
+    return NextResponse.json({
+      success: true,
+      schedules: updatedSchedules,
+      message: 'Horarios actualizados exitosamente'
+    })
+
+  } catch (error) {
+    console.error('Error updating schedules:', error)
+    
+    if (error instanceof z.ZodError) {
+      return NextResponse.json(
+        { success: false, error: 'Datos inválidos', details: error.issues },
+        { status: 400 }
+      )
+    }
+    
+    return NextResponse.json(
+      { success: false, error: 'Error al actualizar horarios' },
+      { status: 500 }
+    )
+  }
+}

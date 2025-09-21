@@ -1,0 +1,55 @@
+import { NextRequest, NextResponse } from 'next/server'
+import { prisma } from '@/lib/config/prisma'
+
+export async function GET(
+  request: NextRequest,
+  { params }: { params: Promise<{ clubId: string }> }
+) {
+  try {
+    const paramData = await params
+    
+    const { clubId } = params
+    
+    // Get club first to validate it exists and is active
+    const club = await prisma.club.findFirst({
+      where: {
+        OR: [
+          { id: clubId },
+          { slug: clubId }
+        ],
+        status: 'APPROVED',
+        active: true
+      },
+      select: { id: true }
+    })
+
+    if (!club) {
+      return NextResponse.json(
+        { error: 'Club not found' },
+        { status: 404 }
+      )
+    }
+
+    // Get club schedule
+    const schedules = await prisma.schedule.findMany({
+      where: {
+        clubId: club.id
+      },
+      select: {
+        dayOfWeek: true,
+        openTime: true,
+        closeTime: true
+      },
+      orderBy: { dayOfWeek: 'asc' }
+    })
+
+    return NextResponse.json({ schedules })
+
+  } catch (error) {
+    console.error('Public schedule API error:', error)
+    return NextResponse.json(
+      { error: 'Internal server error' },
+      { status: 500 }
+    )
+  }
+}

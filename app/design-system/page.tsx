@@ -1,0 +1,653 @@
+'use client'
+
+import './design-system.css'
+import { useState } from 'react'
+import { Button } from '@/components/design-system/Button'
+import { Input, Textarea } from '@/components/design-system/Input'
+import { Card, CardHeader, CardTitle, CardDescription, CardContent, CardFooter } from '@/components/design-system/Card'
+import { Select } from '@/components/design-system/Select'
+import { Badge } from '@/components/design-system/Badge'
+import { Table, TableHeader, TableBody, TableRow, TableHead, TableCell, TablePagination } from '@/components/design-system/Table'
+import { StatCard, StatsGrid, MiniStat, StatGroup } from '@/components/design-system/Stats'
+import { Alert } from '@/components/design-system/Alert'
+import { Modal, ModalHeader, ModalBody, ModalFooter } from '@/components/design-system/Modal'
+import { ToastProvider, useToast } from '@/components/design-system/Toast'
+import { Header, HeaderNavItem, HeaderLogo, HeaderUser } from '@/components/design-system/Header'
+import { Sidebar, SidebarHeader, SidebarSection, SidebarItem, SidebarFooter } from '@/components/design-system/Sidebar'
+import { Icon, SportIcons } from '@/components/design-system/Icon'
+import { 
+  Bell, User, Settings, LogOut, 
+  LayoutDashboard, Folder, Users, Calendar,
+  TrendingUp, Target, BarChart3,
+  Sliders, Shield, CreditCard,
+  Building, UserCheck, Key,
+  Activity, Wrench, FileText,
+  DollarSign, ShoppingCart, Package,
+  Trophy, Timer, Medal, Grid3x3
+} from 'lucide-react'
+
+// Toast demo component (needs to be inside ToastProvider)
+function ToastDemo() {
+  const { toast } = useToast()
+
+  return (
+    <div className="flex flex-wrap gap-3">
+      <Button 
+        variant="primary" 
+        size="sm"
+        onClick={() => toast({
+          title: "Success!",
+          description: "Your changes have been saved.",
+          variant: "success"
+        })}
+      >
+        Success Toast
+      </Button>
+      <Button 
+        variant="danger" 
+        size="sm"
+        onClick={() => toast({
+          title: "Error",
+          description: "Something went wrong.",
+          variant: "error"
+        })}
+      >
+        Error Toast
+      </Button>
+      <Button 
+        variant="secondary" 
+        size="sm"
+        onClick={() => toast({
+          title: "Info",
+          description: "Here's some information.",
+          variant: "info",
+          action: {
+            label: "Learn more",
+            onClick: () => console.log("Learn more clicked")
+          }
+        })}
+      >
+        Info Toast with Action
+      </Button>
+    </div>
+  )
+}
+
+export default function DesignSystemShowcase() {
+  const [inputValue, setInputValue] = useState('')
+  const [selectValue, setSelectValue] = useState('')
+  const [badges, setBadges] = useState(['React', 'Next.js', 'TypeScript'])
+  const [modalOpen, setModalOpen] = useState(false)
+  const [deleteModalOpen, setDeleteModalOpen] = useState(false)
+  const [currentPage, setCurrentPage] = useState(1)
+
+  // Sample table data
+  const tableData = [
+    { id: 1, name: 'Carlos Alcaraz', category: 'Professional', ranking: '#1', status: 'Active' },
+    { id: 2, name: 'Maria González', category: 'Amateur', ranking: '#15', status: 'Active' },
+    { id: 3, name: 'Juan Martínez', category: 'Junior', ranking: '#8', status: 'Inactive' },
+    { id: 4, name: 'Ana Rodríguez', category: 'Professional', ranking: '#3', status: 'Active' },
+    { id: 5, name: 'Pedro Sánchez', category: 'Amateur', ranking: '#42', status: 'Pending' },
+  ]
+
+  return (
+    <ToastProvider>
+      <div className="min-h-screen" style={{ 
+        background: 'linear-gradient(135deg, #f7f9f6 0%, #e6fef5 50%, #f0f4ed 100%)'
+      }}>
+        {/* Header */}
+        <div className="bg-white border-b border-gray-200">
+          <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
+            <h1 className="text-3xl font-bold text-gray-900">
+              Padelyzer Design System
+            </h1>
+            <p className="mt-2 text-gray-600">
+              Minimal Linear - Complete component library
+            </p>
+          </div>
+        </div>
+
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+          {/* Navigation Section */}
+          <section className="mb-12">
+            <h2 className="text-2xl font-semibold text-gray-900 mb-6">Navigation</h2>
+            
+            {/* Header Component */}
+            <Card className="mb-6">
+              <CardHeader>
+                <CardTitle>Header</CardTitle>
+                <CardDescription>Main navigation header with logo, nav items, and user menu</CardDescription>
+              </CardHeader>
+              <CardContent className="p-0">
+                <Header
+                  logo={<HeaderLogo text="Padelyzer" />}
+                  navigation={
+                    <>
+                      <HeaderNavItem href="/dashboard" active>Dashboard</HeaderNavItem>
+                      <HeaderNavItem href="/courts">Courts</HeaderNavItem>
+                      <HeaderNavItem href="/tournaments">Tournaments</HeaderNavItem>
+                      <HeaderNavItem href="/analytics">Analytics</HeaderNavItem>
+                    </>
+                  }
+                  actions={
+                    <>
+                      <Button variant="ghost" size="sm">
+                        <Bell className="w-4 h-4 mr-2" />
+                        Notifications
+                      </Button>
+                      <HeaderUser
+                        name="John Doe"
+                        email="john@example.com"
+                        menuItems={[
+                          { label: 'Profile', onClick: () => console.log('Profile'), icon: <User className="w-4 h-4" /> },
+                          { label: 'Settings', onClick: () => console.log('Settings'), icon: <Settings className="w-4 h-4" /> },
+                          { label: 'Sign Out', onClick: () => console.log('Sign Out'), icon: <LogOut className="w-4 h-4" /> },
+                        ]}
+                      />
+                    </>
+                  }
+                  variant="default"
+                />
+              </CardContent>
+            </Card>
+
+            {/* Sidebar Component */}
+            <Card className="mb-6">
+              <CardHeader>
+                <CardTitle>Sidebar</CardTitle>
+                <CardDescription>Collapsible sidebar navigation with sections and items</CardDescription>
+              </CardHeader>
+              <CardContent>
+                <div className="flex gap-4">
+                  {/* Default Sidebar */}
+                  <div className="relative h-[400px] border rounded-lg overflow-hidden">
+                    <Sidebar
+                      header={<SidebarHeader title="Dashboard" />}
+                      footer={
+                        <SidebarFooter
+                          user={{
+                            name: 'John Doe',
+                            email: 'john@example.com'
+                          }}
+                        />
+                      }
+                    >
+                      <SidebarSection title="Main">
+                        <SidebarItem icon={<LayoutDashboard className="w-4 h-4" />} active>Dashboard</SidebarItem>
+                        <SidebarItem icon={<Grid3x3 className="w-4 h-4" />}>Courts</SidebarItem>
+                        <SidebarItem icon={<Users className="w-4 h-4" />} badge="23">Players</SidebarItem>
+                        <SidebarItem icon={<Calendar className="w-4 h-4" />}>Schedule</SidebarItem>
+                      </SidebarSection>
+                      
+                      <SidebarSection title="Sports">
+                        <SidebarItem icon={<Trophy className="w-4 h-4" />}>Tournaments</SidebarItem>
+                        <SidebarItem icon={<Medal className="w-4 h-4" />}>Rankings</SidebarItem>
+                        <SidebarItem icon={<Timer className="w-4 h-4" />} badge="Live">Matches</SidebarItem>
+                      </SidebarSection>
+                      
+                      <SidebarSection title="Settings">
+                        <SidebarItem icon={<Sliders className="w-4 h-4" />}>General</SidebarItem>
+                        <SidebarItem icon={<Shield className="w-4 h-4" />}>Security</SidebarItem>
+                        <SidebarItem icon={<CreditCard className="w-4 h-4" />}>Billing</SidebarItem>
+                      </SidebarSection>
+                    </Sidebar>
+                  </div>
+
+                  {/* Dark Variant */}
+                  <div className="relative h-[400px] border rounded-lg overflow-hidden">
+                    <Sidebar
+                      variant="dark"
+                      header={<SidebarHeader title="Admin Panel" />}
+                      footer={
+                        <SidebarFooter
+                          user={{
+                            name: 'Admin User',
+                            email: 'admin@example.com'
+                          }}
+                        />
+                      }
+                    >
+                      <SidebarSection title="Management">
+                        <SidebarItem icon={<Building className="w-4 h-4" />} active>Clubs</SidebarItem>
+                        <SidebarItem icon={<UserCheck className="w-4 h-4" />}>Members</SidebarItem>
+                        <SidebarItem icon={<Key className="w-4 h-4" />}>Permissions</SidebarItem>
+                      </SidebarSection>
+                      
+                      <SidebarSection title="System">
+                        <SidebarItem icon={<Activity className="w-4 h-4" />}>Analytics</SidebarItem>
+                        <SidebarItem icon={<Wrench className="w-4 h-4" />}>Configuration</SidebarItem>
+                        <SidebarItem icon={<FileText className="w-4 h-4" />}>Reports</SidebarItem>
+                      </SidebarSection>
+                    </Sidebar>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+          </section>
+
+          {/* Buttons Section */}
+          <section className="mb-12">
+            <h2 className="text-2xl font-semibold text-gray-900 mb-6">Buttons</h2>
+            
+            {/* Button Variants */}
+            <Card className="mb-6">
+              <CardHeader>
+                <CardTitle>Variants</CardTitle>
+                <CardDescription>Different button styles for various actions</CardDescription>
+              </CardHeader>
+              <CardContent>
+                <div className="flex flex-wrap gap-3">
+                  <Button variant="primary">Primary</Button>
+                  <Button variant="secondary">Secondary</Button>
+                  <Button variant="ghost">Ghost</Button>
+                  <Button variant="danger">Danger</Button>
+                  <Button variant="success">Success</Button>
+                </div>
+                {/* Debug: Check if buttons are rendering */}
+                <div className="mt-4 p-3 bg-gray-100 rounded text-xs text-gray-600">
+                  Debug: 5 buttons should appear above (Primary, Secondary, Ghost, Danger, Success)
+                </div>
+              </CardContent>
+            </Card>
+
+            {/* Button Sizes */}
+            <Card className="mb-6">
+              <CardHeader>
+                <CardTitle>Sizes</CardTitle>
+                <CardDescription>Different button sizes for various contexts</CardDescription>
+              </CardHeader>
+              <CardContent>
+                <div className="flex flex-wrap items-center gap-3">
+                  <Button variant="primary" size="xs">Extra Small</Button>
+                  <Button variant="primary" size="sm">Small</Button>
+                  <Button variant="primary" size="md">Medium</Button>
+                  <Button variant="primary" size="lg">Large</Button>
+                  <Button variant="primary" size="xl">Extra Large</Button>
+                </div>
+                {/* Debug: Check if size buttons are rendering */}
+                <div className="mt-4 p-3 bg-gray-100 rounded text-xs text-gray-600">
+                  Debug: 5 buttons of different sizes should appear above (xs, sm, md, lg, xl)
+                </div>
+              </CardContent>
+            </Card>
+          </section>
+
+          {/* Forms Section */}
+          <section className="mb-12">
+            <h2 className="text-2xl font-semibold text-gray-900 mb-6">Form Elements</h2>
+            
+            {/* Inputs */}
+            <Card className="mb-6">
+              <CardHeader>
+                <CardTitle>Inputs</CardTitle>
+                <CardDescription>Text input variations</CardDescription>
+              </CardHeader>
+              <CardContent>
+                <div className="space-y-4 max-w-md">
+                  <Input
+                    label="Email"
+                    type="email"
+                    placeholder="Enter your email"
+                    value={inputValue}
+                    onChange={(e) => setInputValue(e.target.value)}
+                  />
+                  
+                  <Input
+                    label="Password"
+                    type="password"
+                    placeholder="Enter password"
+                    required
+                    hint="Must be at least 8 characters"
+                  />
+                  
+                  <Input
+                    label="Username"
+                    placeholder="Enter username"
+                    error="This username is already taken"
+                  />
+                </div>
+              </CardContent>
+            </Card>
+
+            {/* Select */}
+            <Card className="mb-6">
+              <CardHeader>
+                <CardTitle>Select</CardTitle>
+                <CardDescription>Dropdown selection</CardDescription>
+              </CardHeader>
+              <CardContent>
+                <div className="space-y-4 max-w-md">
+                  <Select
+                    label="Country"
+                    options={[
+                      { value: 'us', label: 'United States' },
+                      { value: 'mx', label: 'Mexico' },
+                      { value: 'ca', label: 'Canada' },
+                      { value: 'uk', label: 'United Kingdom' },
+                    ]}
+                    placeholder="Select a country"
+                    value={selectValue}
+                    onChange={(e) => setSelectValue(e.target.value)}
+                  />
+                </div>
+              </CardContent>
+            </Card>
+          </section>
+
+          {/* Data Display Section */}
+          <section className="mb-12">
+            <h2 className="text-2xl font-semibold text-gray-900 mb-6">Data Display</h2>
+            
+            {/* Stats Cards */}
+            <Card className="mb-6">
+              <CardHeader>
+                <CardTitle>Statistics Cards</CardTitle>
+                <CardDescription>Various stat card styles</CardDescription>
+              </CardHeader>
+              <CardContent>
+                <StatsGrid columns={4}>
+                  <StatCard
+                    label="Active Players"
+                    value="2,338"
+                    change={{ value: "+20.1%", trend: "up" }}
+                    icon={<Users className="w-6 h-6 text-blue-600" />}
+                  />
+                  <StatCard
+                    label="Courts Available"
+                    value="24"
+                    change={{ value: "+2", trend: "up" }}
+                    icon={<Grid3x3 className="w-6 h-6 text-green-600" />}
+                    variant="elevated"
+                  />
+                  <StatCard
+                    label="Matches Today"
+                    value="156"
+                    change={{ value: "-4.3%", trend: "down" }}
+                    icon={<Trophy className="w-6 h-6 text-purple-600" />}
+                  />
+                  <StatCard
+                    label="Court Utilization"
+                    value="87.5%"
+                    change={{ value: "+5%", trend: "up" }}
+                    icon={<Activity className="w-6 h-6 text-orange-600" />}
+                  />
+                </StatsGrid>
+                
+                <div className="mt-6">
+                  <StatGroup title="Performance Metrics" description="Last 30 days">
+                    <MiniStat label="Page Views" value="125.2K" trend="up" />
+                    <MiniStat label="Bounce Rate" value="42.3%" trend="down" />
+                    <MiniStat label="Session Duration" value="3m 42s" trend="neutral" />
+                  </StatGroup>
+                </div>
+              </CardContent>
+            </Card>
+
+            {/* Table */}
+            <Card className="mb-6">
+              <CardHeader>
+                <CardTitle>Data Table</CardTitle>
+                <CardDescription>Table with sorting and pagination</CardDescription>
+              </CardHeader>
+              <CardContent className="p-0">
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>Player</TableHead>
+                      <TableHead>Category</TableHead>
+                      <TableHead>Ranking</TableHead>
+                      <TableHead>Status</TableHead>
+                      <TableHead variant="action">Actions</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {tableData.map((row) => (
+                      <TableRow key={row.id}>
+                        <TableCell className="font-medium">{row.name}</TableCell>
+                        <TableCell>{row.category}</TableCell>
+                        <TableCell>{row.ranking}</TableCell>
+                        <TableCell>
+                          <Badge 
+                            variant={
+                              row.status === 'Active' ? 'success' : 
+                              row.status === 'Inactive' ? 'danger' : 
+                              'warning'
+                            }
+                          >
+                            {row.status}
+                          </Badge>
+                        </TableCell>
+                        <TableCell variant="action">
+                          <Button size="xs" variant="ghost">View Profile</Button>
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+                <TablePagination
+                  currentPage={currentPage}
+                  totalPages={10}
+                  totalItems={50}
+                  itemsPerPage={5}
+                  onPageChange={setCurrentPage}
+                />
+              </CardContent>
+            </Card>
+          </section>
+
+          {/* Feedback Section */}
+          <section className="mb-12">
+            <h2 className="text-2xl font-semibold text-gray-900 mb-6">Feedback</h2>
+            
+            {/* Alerts */}
+            <Card className="mb-6">
+              <CardHeader>
+                <CardTitle>Alerts</CardTitle>
+                <CardDescription>Different alert styles for notifications</CardDescription>
+              </CardHeader>
+              <CardContent>
+                <div className="space-y-3">
+                  <Alert variant="info" title="Information">
+                    This is an informational alert message.
+                  </Alert>
+                  <Alert variant="success" title="Success!">
+                    Your operation completed successfully.
+                  </Alert>
+                  <Alert variant="warning" title="Warning">
+                    Please review this important information.
+                  </Alert>
+                  <Alert variant="error" title="Error" closable>
+                    An error occurred while processing your request.
+                  </Alert>
+                </div>
+              </CardContent>
+            </Card>
+
+            {/* Modals */}
+            <Card className="mb-6">
+              <CardHeader>
+                <CardTitle>Modals</CardTitle>
+                <CardDescription>Dialog windows for user interactions</CardDescription>
+              </CardHeader>
+              <CardContent>
+                <div className="flex gap-3">
+                  <Button onClick={() => setModalOpen(true)}>
+                    Open Modal
+                  </Button>
+                  <Button variant="danger" onClick={() => setDeleteModalOpen(true)}>
+                    Delete Modal
+                  </Button>
+                </div>
+
+                {/* Standard Modal */}
+                <Modal
+                  open={modalOpen}
+                  onClose={() => setModalOpen(false)}
+                  title="Edit Profile"
+                  description="Make changes to your profile information"
+                  footer={
+                    <>
+                      <Button variant="ghost" onClick={() => setModalOpen(false)}>
+                        Cancel
+                      </Button>
+                      <Button variant="primary" onClick={() => setModalOpen(false)}>
+                        Save Changes
+                      </Button>
+                    </>
+                  }
+                >
+                  <div className="space-y-4">
+                    <Input label="Name" placeholder="Enter your name" />
+                    <Input label="Email" type="email" placeholder="Enter your email" />
+                    <Textarea label="Bio" placeholder="Tell us about yourself" rows={3} />
+                  </div>
+                </Modal>
+
+                {/* Delete Confirmation Modal */}
+                <Modal
+                  open={deleteModalOpen}
+                  onClose={() => setDeleteModalOpen(false)}
+                  title="Delete Item"
+                  size="sm"
+                  footer={
+                    <>
+                      <Button variant="ghost" onClick={() => setDeleteModalOpen(false)}>
+                        Cancel
+                      </Button>
+                      <Button variant="danger" onClick={() => setDeleteModalOpen(false)}>
+                        Delete
+                      </Button>
+                    </>
+                  }
+                >
+                  <p className="text-gray-600">
+                    Are you sure you want to delete this item? This action cannot be undone.
+                  </p>
+                </Modal>
+              </CardContent>
+            </Card>
+
+            {/* Toasts */}
+            <Card>
+              <CardHeader>
+                <CardTitle>Toast Notifications</CardTitle>
+                <CardDescription>Temporary notification messages</CardDescription>
+              </CardHeader>
+              <CardContent>
+                <ToastDemo />
+              </CardContent>
+            </Card>
+          </section>
+
+          {/* Cards Section */}
+          <section className="mb-12">
+            <h2 className="text-2xl font-semibold text-gray-900 mb-6">Cards</h2>
+            
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+              {/* Default Card */}
+              <Card>
+                <CardHeader>
+                  <CardTitle>Default Card</CardTitle>
+                  <CardDescription>Standard card with border</CardDescription>
+                </CardHeader>
+                <CardContent>
+                  <p className="text-gray-600">
+                    This is a default card with standard styling.
+                  </p>
+                </CardContent>
+                <CardFooter>
+                  <Button size="sm">Action</Button>
+                </CardFooter>
+              </Card>
+
+              {/* Elevated Card */}
+              <Card variant="elevated">
+                <CardHeader>
+                  <CardTitle>Elevated Card</CardTitle>
+                  <CardDescription>Card with shadow effect</CardDescription>
+                </CardHeader>
+                <CardContent>
+                  <p className="text-gray-600">
+                    This card has an elevated appearance with shadow.
+                  </p>
+                </CardContent>
+                <CardFooter>
+                  <Button size="sm" variant="secondary">Learn More</Button>
+                </CardFooter>
+              </Card>
+
+              {/* Interactive Card */}
+              <Card variant="elevated" interactive>
+                <CardHeader>
+                  <CardTitle>Interactive Card</CardTitle>
+                  <CardDescription>Clickable card with hover effect</CardDescription>
+                </CardHeader>
+                <CardContent>
+                  <p className="text-gray-600">
+                    This card responds to hover and click interactions.
+                  </p>
+                </CardContent>
+              </Card>
+            </div>
+          </section>
+
+          {/* Badges Section */}
+          <section className="mb-12">
+            <h2 className="text-2xl font-semibold text-gray-900 mb-6">Badges</h2>
+            
+            <Card>
+              <CardHeader>
+                <CardTitle>Badge Variants</CardTitle>
+                <CardDescription>Different badge styles and features</CardDescription>
+              </CardHeader>
+              <CardContent>
+                <div className="space-y-4">
+                  {/* Variants */}
+                  <div className="flex flex-wrap gap-2">
+                    <Badge>Default</Badge>
+                    <Badge variant="primary">Primary</Badge>
+                    <Badge variant="success">Success</Badge>
+                    <Badge variant="warning">Warning</Badge>
+                    <Badge variant="danger">Danger</Badge>
+                    <Badge variant="info">Info</Badge>
+                  </div>
+
+                  {/* With Dot */}
+                  <div className="flex flex-wrap gap-2">
+                    <Badge variant="success" dot>Active</Badge>
+                    <Badge variant="warning" dot>Pending</Badge>
+                    <Badge variant="danger" dot>Offline</Badge>
+                  </div>
+
+                  {/* Removable */}
+                  <div className="flex flex-wrap gap-2">
+                    {badges.map((badge) => (
+                      <Badge
+                        key={badge}
+                        variant="primary"
+                        removable
+                        onRemove={() => setBadges(badges.filter(b => b !== badge))}
+                      >
+                        {badge}
+                      </Badge>
+                    ))}
+                    <Button
+                      size="xs"
+                      variant="ghost"
+                      onClick={() => {
+                        const newBadge = prompt('Enter badge text:')
+                        if (newBadge) setBadges([...badges, newBadge])
+                      }}
+                    >
+                      + Add Badge
+                    </Button>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+          </section>
+        </div>
+      </div>
+    </ToastProvider>
+  )
+}

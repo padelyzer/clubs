@@ -1,0 +1,52 @@
+/* Design System specific styles to ensure all Tailwind classes are available */
+
+/* Force include color classes for buttons */
+.bg-blue-600 { background-color: rgb(37 99 235); }
+.bg-blue-700 { background-color: rgb(29 78 216); }
+.bg-blue-800 { background-color: rgb(30 64 175); }
+.bg-blue-100 { background-color: rgb(219 234 254); }
+.text-blue-300 { color: rgb(147 197 253); }
+
+.bg-red-600 { background-color: rgb(220 38 38); }
+.bg-red-700 { background-color: rgb(185 28 28); }
+.bg-red-800 { background-color: rgb(153 27 27); }
+.bg-red-100 { background-color: rgb(254 226 226); }
+.text-red-300 { color: rgb(252 165 165); }
+
+.bg-green-600 { background-color: rgb(22 163 74); }
+.bg-green-700 { background-color: rgb(21 128 61); }
+.bg-green-800 { background-color: rgb(22 101 52); }
+.bg-green-100 { background-color: rgb(220 252 231); }
+.text-green-300 { color: rgb(134 239 172); }
+
+/* Ensure hover states work */
+.hover\:bg-blue-700:hover { background-color: rgb(29 78 216); }
+.hover\:bg-red-700:hover { background-color: rgb(185 28 28); }
+.hover\:bg-green-700:hover { background-color: rgb(21 128 61); }
+
+/* Active states */
+.active\:bg-blue-800:active { background-color: rgb(30 64 175); }
+.active\:bg-red-800:active { background-color: rgb(153 27 27); }
+.active\:bg-green-800:active { background-color: rgb(22 101 52); }
+
+/* Focus ring colors */
+.focus\:ring-blue-500:focus { --tw-ring-color: rgb(59 130 246); }
+.focus\:ring-red-500:focus { --tw-ring-color: rgb(239 68 68); }
+.focus\:ring-green-500:focus { --tw-ring-color: rgb(34 197 94); }
+
+/* Button size classes */
+.h-6 { height: 1.5rem; }
+.h-8 { height: 2rem; }
+.h-10 { height: 2.5rem; }
+.h-11 { height: 2.75rem; }
+.h-12 { height: 3rem; }
+
+.px-2 { padding-left: 0.5rem; padding-right: 0.5rem; }
+.px-3 { padding-left: 0.75rem; padding-right: 0.75rem; }
+.px-4 { padding-left: 1rem; padding-right: 1rem; }
+.px-6 { padding-left: 1.5rem; padding-right: 1.5rem; }
+.px-8 { padding-left: 2rem; padding-right: 2rem; }
+
+.text-xs { font-size: 0.75rem; line-height: 1rem; }
+.text-sm { font-size: 0.875rem; line-height: 1.25rem; }
+.text-base { font-size: 1rem; line-height: 1.5rem; }

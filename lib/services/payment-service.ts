@@ -1,0 +1,313 @@
+import Stripe from 'stripe'
+import { prisma } from '@/lib/config/prisma'
+import { settingsService, PaymentProvider } from './settings-service'
+
+export interface PaymentConfig {
+  providers: PaymentProvider[]
+  defaultProvider: string
+  currency: string
+}
+
+export interface PaymentLinkOptions {
+  amount: number
+  currency: string
+  description: string
+  metadata: Record<string, string>
+  successUrl: string
+  cancelUrl: string
+  expiresAfter?: number // minutes
+}
+
+export interface PaymentIntentOptions {
+  amount: number
+  currency: string
+  description: string
+  metadata: Record<string, string>
+  applicationFee?: number
+  transferDestination?: string
+}
+
+export class PaymentService {
+  private stripeInstances: Map<string, Stripe> = new Map()
+
+  // Get payment configuration for a club
+  async getPaymentConfig(clubId: string): Promise<PaymentConfig> {
+    const providers = await settingsService.getPaymentProviders(clubId)
+    const settings = await settingsService.getClubSettings(clubId)
+    
+    const enabledProviders = providers.filter(p => p.enabled)
+    const defaultProvider = enabledProviders.find(p => p.providerId === 'stripe')?.providerId || 'cash'
+    
+    return {
+      providers: enabledProviders,
+      defaultProvider,
+      currency: settings?.currency || 'MXN'
+    }
+  }
+
+  // Get or create Stripe instance for a club
+  private async getStripeInstance(clubId: string): Promise<Stripe | null> {
+    try {
+      const providers = await settingsService.getPaymentProviders(clubId)
+      const stripeProvider = providers.find(p => p.providerId === 'stripe' && p.enabled)
+      
+      if (!stripeProvider || !stripeProvider.config.secretKey) {
+        return null
+      }
+
+      const cacheKey = `${clubId}_${stripeProvider.config.secretKey.slice(-8)}`
+      
+      if (!this.stripeInstances.has(cacheKey)) {
+        const stripe = new Stripe(stripeProvider.config.secretKey, {
+          apiVersion: '2024-12-18.acacia'
+        })
+        this.stripeInstances.set(cacheKey, stripe)
+      }
+
+      return this.stripeInstances.get(cacheKey)!
+    } catch (error) {
+      console.error('Error getting Stripe instance:', error)
+      return null
+    }
+  }
+
+  // Create a payment link for tournament registration
+  async createPaymentLink(clubId: string, options: PaymentLinkOptions): Promise<string | null> {
+    try {
+      const stripe = await this.getStripeInstance(clubId)
+      if (!stripe) {
+        throw new Error('Stripe not configured for this club')
+      }
+
+      // Get club's Stripe account for marketplace payments
+      const club = await prisma.club.findUnique({
+        where: { id: clubId },
+        select: { stripeAccountId: true, stripeCommissionRate: true }
+      })
+
+      // Create price
+      const price = await stripe.prices.create({
+        unit_amount: options.amount,
+        currency: options.currency.toLowerCase(),
+        product_data: {
+          name: options.description,
+        },
+        tax_behavior: 'inclusive'
+      })
+
+      // Calculate application fee if marketplace
+      let applicationFee = 0
+      if (club?.stripeAccountId && club.stripeCommissionRate) {
+        applicationFee = Math.round((options.amount * club.stripeCommissionRate) / 10000)
+      }
+
+      const linkOptions: Stripe.PaymentLinkCreateParams = {
+        line_items: [{
+          price: price.id,
+          quantity: 1,
+        }],
+        after_completion: {
+          type: 'redirect',
+          redirect: {
+            url: options.successUrl
+          }
+        },
+        metadata: options.metadata,
+        allow_promotion_codes: false,
+        billing_address_collection: 'required',
+        phone_number_collection: {
+          enabled: true
+        },
+        custom_fields: [
+          {
+            key: 'player1_name',
+            label: {
+              type: 'text',
+              text: 'Nombre Jugador 1'
+            },
+            type: 'text'
+          },
+          {
+            key: 'player2_name', 
+            label: {
+              type: 'text',
+              text: 'Nombre Jugador 2'
+            },
+            type: 'text'
+          }
+        ]
+      }
+
+      // Add expiration if specified
+      if (options.expiresAfter) {
+        const expirationDate = new Date()
+        expirationDate.setMinutes(expirationDate.getMinutes() + options.expiresAfter)
+        linkOptions.expires_at = Math.floor(expirationDate.getTime() / 1000)
+      }
+
+      // Add marketplace configuration
+      if (club?.stripeAccountId && applicationFee > 0) {
+        linkOptions.application_fee_amount = applicationFee
+        linkOptions.transfer_data = {
+          destination: club.stripeAccountId
+        }
+      }
+
+      const paymentLink = await stripe.paymentLinks.create(linkOptions)
+
+      return paymentLink.url
+
+    } catch (error) {
+      console.error('Error creating payment link:', error)
+      return null
+    }
+  }
+
+  // Create payment intent for embedded checkout
+  async createPaymentIntent(clubId: string, options: PaymentIntentOptions): Promise<Stripe.PaymentIntent | null> {
+    try {
+      const stripe = await this.getStripeInstance(clubId)
+      if (!stripe) {
+        throw new Error('Stripe not configured for this club')
+      }
+
+      // Get club's Stripe account info
+      const club = await prisma.club.findUnique({
+        where: { id: clubId },
+        select: { stripeAccountId: true, stripeCommissionRate: true }
+      })
+
+      // Calculate application fee if not provided and marketplace is configured
+      let applicationFee = options.applicationFee
+      if (!applicationFee && club?.stripeAccountId && club.stripeCommissionRate) {
+        applicationFee = Math.round((options.amount * club.stripeCommissionRate) / 10000)
+      }
+
+      const intentOptions: Stripe.PaymentIntentCreateParams = {
+        amount: options.amount,
+        currency: options.currency.toLowerCase(),
+        description: options.description,
+        metadata: options.metadata,
+        automatic_payment_methods: {
+          enabled: true
+        }
+      }
+
+      // Add marketplace configuration
+      if (club?.stripeAccountId) {
+        if (applicationFee && applicationFee > 0) {
+          intentOptions.application_fee_amount = applicationFee
+        }
+        if (options.transferDestination || club.stripeAccountId) {
+          intentOptions.transfer_data = {
+            destination: options.transferDestination || club.stripeAccountId
+          }
+        }
+      }
+
+      const paymentIntent = await stripe.paymentIntents.create(intentOptions)
+      return paymentIntent
+
+    } catch (error) {
+      console.error('Error creating payment intent:', error)
+      return null
+    }
+  }
+
+  // Verify webhook signature
+  async verifyWebhook(clubId: string, payload: string, signature: string): Promise<Stripe.Event | null> {
+    try {
+      const stripe = await this.getStripeInstance(clubId)
+      if (!stripe) {
+        return null
+      }
+
+      const providers = await settingsService.getPaymentProviders(clubId)
+      const stripeProvider = providers.find(p => p.providerId === 'stripe' && p.enabled)
+      
+      if (!stripeProvider?.config.webhookSecret) {
+        throw new Error('Webhook secret not configured')
+      }
+
+      const event = stripe.webhooks.constructEvent(
+        payload,
+        signature,
+        stripeProvider.config.webhookSecret
+      )
+
+      return event
+
+    } catch (error) {
+      console.error('Error verifying webhook:', error)
+      return null
+    }
+  }
+
+  // Get available payment methods for a club
+  async getAvailablePaymentMethods(clubId: string): Promise<string[]> {
+    const config = await this.getPaymentConfig(clubId)
+    const methods: string[] = ['ONSITE'] // Always available
+    
+    config.providers.forEach(provider => {
+      switch (provider.providerId) {
+        case 'stripe':
+          methods.push('STRIPE', 'CARD')
+          break
+        case 'paypal':
+          methods.push('PAYPAL')
+          break
+        case 'mercadopago':
+          methods.push('MERCADO_PAGO')
+          break
+      }
+    })
+
+    return methods
+  }
+
+  // Calculate fees for a payment
+  async calculateFees(clubId: string, amount: number, method: string): Promise<{ platformFee: number, processingFee: number, total: number }> {
+    const providers = await settingsService.getPaymentProviders(clubId)
+    
+    let processingFee = 0
+    let platformFee = 0
+
+    // Find provider and calculate processing fee
+    const provider = providers.find(p => {
+      switch (method) {
+        case 'STRIPE':
+        case 'CARD':
+          return p.providerId === 'stripe'
+        case 'PAYPAL':
+          return p.providerId === 'paypal'
+        case 'MERCADO_PAGO':
+          return p.providerId === 'mercadopago'
+        default:
+          return false
+      }
+    })
+
+    if (provider) {
+      processingFee = Math.round(amount * (provider.fees.percentage / 100)) + provider.fees.fixed
+    }
+
+    // Calculate platform fee if marketplace
+    const club = await prisma.club.findUnique({
+      where: { id: clubId },
+      select: { stripeCommissionRate: true }
+    })
+
+    if (club?.stripeCommissionRate) {
+      platformFee = Math.round((amount * club.stripeCommissionRate) / 10000)
+    }
+
+    return {
+      platformFee,
+      processingFee,
+      total: amount + processingFee
+    }
+  }
+}
+
+// Export singleton instance
+export const paymentService = new PaymentService()

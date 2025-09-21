@@ -1,0 +1,194 @@
+import { NextRequest, NextResponse } from 'next/server'
+import { prisma } from '@/lib/config/prisma'
+import { z } from 'zod'
+import { requireAuthAPI } from '@/lib/auth/actions'
+
+const paymentSchema = z.object({
+  paymentMethod: z.enum(['CASH', 'CARD', 'TRANSFER', 'ONLINE']),
+  paymentAmount: z.number().positive().optional(),
+  paymentReference: z.string().optional()
+})
+
+// POST - Register payment for a specific student
+export async function POST(
+  request: NextRequest,
+  { params }: { params: Promise<{ id: string, studentId: string }> }
+) {
+  try {
+    const user = await requireAuthAPI()
+
+    const { id: classId, studentId: classBookingId } = await params
+    const body = await request.json()
+    const { paymentMethod, paymentAmount, paymentReference } = paymentSchema.parse(body)
+
+    // Verify the class booking exists and belongs to this class
+    const classBooking = await prisma.classBooking.findUnique({
+      where: { id: classBookingId },
+      include: {
+        class: true
+      }
+    })
+
+    if (!classBooking || classBooking.classId !== classId) {
+      return NextResponse.json(
+        { success: false, error: 'Inscripción no encontrada' },
+        { status: 404 }
+      )
+    }
+
+    // Verify user has access to this club
+    if (user.clubId !== classBooking.class.clubId) {
+      return NextResponse.json(
+        { success: false, error: 'No autorizado' },
+        { status: 403 }
+      )
+    }
+
+    // Start transaction to register payment
+    const result = await prisma.$transaction(async (tx) => {
+      const amount = paymentAmount || classBooking.dueAmount || classBooking.class.price
+
+      // Create transaction record
+      await tx.transaction.create({
+        data: {
+          clubId: classBooking.class.clubId,
+          type: 'INCOME',
+          category: 'CLASS',
+          amount,
+          currency: 'MXN',
+          description: `Pago de clase: ${classBooking.class.name} - ${classBooking.studentName}`,
+          date: new Date(),
+          reference: paymentReference || `${paymentMethod}_${Date.now()}`,
+          notes: JSON.stringify({
+            classId: classBooking.class.id,
+            classBookingId: classBooking.id,
+            studentName: classBooking.studentName,
+            paymentMethod,
+            className: classBooking.class.name
+          })
+        }
+      })
+
+      // Update booking payment status
+      const updatedBooking = await tx.classBooking.update({
+        where: { id: classBookingId },
+        data: {
+          paymentStatus: 'completed',
+          paymentMethod: paymentMethod === 'ONLINE' ? 'online' : 'onsite',
+          paidAmount: amount,
+          updatedAt: new Date()
+        }
+      })
+
+      return updatedBooking
+    })
+
+    return NextResponse.json({
+      success: true,
+      message: 'Pago registrado exitosamente',
+      booking: result
+    })
+
+  } catch (error) {
+    console.error('Error registering student payment:', error)
+    
+    if (error instanceof z.ZodError) {
+      return NextResponse.json(
+        { success: false, error: 'Datos inválidos', details: error.errors },
+        { status: 400 }
+      )
+    }
+    
+    if (error instanceof Error) {
+      return NextResponse.json(
+        { success: false, error: error.message },
+        { status: 400 }
+      )
+    }
+    
+    return NextResponse.json(
+      { success: false, error: 'Error al registrar pago' },
+      { status: 500 }
+    )
+  }
+}
+
+// DELETE - Remove payment for a specific student (for corrections)
+export async function DELETE(
+  request: NextRequest,
+  { params }: { params: Promise<{ id: string, studentId: string }> }
+) {
+  try {
+    const user = await requireAuthAPI()
+
+    const { id: classId, studentId: classBookingId } = await params
+
+    // Verify the class booking exists
+    const classBooking = await prisma.classBooking.findUnique({
+      where: { id: classBookingId },
+      include: {
+        class: true
+      }
+    })
+
+    if (!classBooking || classBooking.classId !== classId) {
+      return NextResponse.json(
+        { success: false, error: 'Inscripción no encontrada' },
+        { status: 404 }
+      )
+    }
+
+    // Verify user has access
+    if (user.clubId !== classBooking.class.clubId) {
+      return NextResponse.json(
+        { success: false, error: 'No autorizado' },
+        { status: 403 }
+      )
+    }
+
+    // Remove payment in transaction
+    await prisma.$transaction(async (tx) => {
+      // Find and delete the payment transaction
+      const transactions = await tx.transaction.findMany({
+        where: {
+          clubId: classBooking.class.clubId,
+          category: 'CLASS',
+          notes: {
+            contains: classBookingId
+          }
+        },
+        orderBy: { createdAt: 'desc' },
+        take: 1
+      })
+
+      if (transactions.length > 0) {
+        await tx.transaction.delete({
+          where: { id: transactions[0].id }
+        })
+      }
+
+      // Reset payment status
+      await tx.classBooking.update({
+        where: { id: classBookingId },
+        data: {
+          paymentStatus: 'pending',
+          paymentMethod: null,
+          paidAmount: 0,
+          updatedAt: new Date()
+        }
+      })
+    })
+
+    return NextResponse.json({
+      success: true,
+      message: 'Pago eliminado exitosamente'
+    })
+
+  } catch (error) {
+    console.error('Error removing student payment:', error)
+    return NextResponse.json(
+      { success: false, error: 'Error al eliminar pago' },
+      { status: 500 }
+    )
+  }
+}

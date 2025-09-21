@@ -1,0 +1,252 @@
+'use client'
+
+import { useState, useEffect } from 'react'
+import { format } from 'date-fns'
+import { es } from 'date-fns/locale'
+
+// Datos hardcoded para garantizar que se muestran
+const MOCK_DATA = [
+  {
+    id: '1',
+    employeeName: 'Carlos Rodríguez',
+    employeeRole: 'Instructor de Pádel',
+    baseSalary: 1500000, // centavos
+    bonuses: 300000,
+    deductions: 150000,
+    netAmount: 1650000,
+    period: '2025-09',
+    status: 'paid'
+  },
+  {
+    id: '2',
+    employeeName: 'María González',
+    employeeRole: 'Recepcionista',
+    baseSalary: 1200000,
+    bonuses: 100000,
+    deductions: 100000,
+    netAmount: 1200000,
+    period: '2025-09',
+    status: 'paid'
+  },
+  {
+    id: '3',
+    employeeName: 'Ana Martínez',
+    employeeRole: 'Gerente',
+    baseSalary: 2500000,
+    bonuses: 500000,
+    deductions: 300000,
+    netAmount: 2700000,
+    period: '2025-09',
+    status: 'paid'
+  }
+]
+
+export default function PayrollModuleSimple() {
+  console.log('🟢 [SIMPLE PAYROLL] Component mounting!')
+  
+  const [loading, setLoading] = useState(false)
+  const [payrollData, setPayrollData] = useState<any[]>([])
+  const [useApi, setUseApi] = useState(false)
+  const selectedPeriod = new Date()
+  
+  useEffect(() => {
+    console.log('🟢 [SIMPLE PAYROLL] useEffect triggered, useApi:', useApi)
+    if (useApi) {
+      fetchFromApi()
+    } else {
+      // Usar datos mock
+      console.log('🟢 [SIMPLE PAYROLL] Using mock data')
+      setPayrollData(MOCK_DATA)
+    }
+  }, [useApi])
+  
+  const fetchFromApi = async () => {
+    console.log('🟢 [SIMPLE PAYROLL] Fetching from API...')
+    try {
+      setLoading(true)
+      const period = format(selectedPeriod, 'yyyy-MM')
+      const response = await fetch(`/api/finance/payroll?period=${period}`)
+      console.log('🟢 [SIMPLE PAYROLL] Response status:', response.status)
+      
+      if (response.ok) {
+        const data = await response.json()
+        console.log('🟢 [SIMPLE PAYROLL] Data received:', data)
+        if (data.success && data.payroll) {
+          setPayrollData(data.payroll)
+        }
+      }
+    } catch (error) {
+      console.error('🟢 [SIMPLE PAYROLL] Error:', error)
+    } finally {
+      setLoading(false)
+    }
+  }
+  
+  const totalNomina = payrollData.reduce((sum, r) => sum + r.netAmount, 0)
+  
+  return (
+    <div style={{ 
+      padding: '30px', 
+      background: 'white', 
+      borderRadius: '12px',
+      boxShadow: '0 2px 10px rgba(0,0,0,0.1)',
+      margin: '20px'
+    }}>
+      <h2 style={{ fontSize: '24px', fontWeight: 'bold', marginBottom: '20px', color: '#333' }}>
+        💰 Módulo de Nómina Simple
+      </h2>
+      
+      <div style={{ marginBottom: '20px', padding: '15px', background: '#f0f9ff', borderRadius: '8px' }}>
+        <p style={{ fontSize: '16px', color: '#0369a1' }}>
+          Periodo: <strong>{format(selectedPeriod, 'MMMM yyyy', { locale: es })}</strong>
+        </p>
+        <p style={{ fontSize: '14px', color: '#0369a1', marginTop: '5px' }}>
+          Fuente de datos: <strong>{useApi ? 'API' : 'DATOS MOCK (HARDCODED)'}</strong>
+        </p>
+      </div>
+      
+      <div style={{ marginBottom: '20px' }}>
+        <button
+          onClick={() => setUseApi(!useApi)}
+          style={{
+            padding: '10px 20px',
+            background: useApi ? '#10b981' : '#3b82f6',
+            color: 'white',
+            border: 'none',
+            borderRadius: '6px',
+            cursor: 'pointer',
+            fontSize: '14px',
+            fontWeight: '500'
+          }}
+        >
+          {useApi ? '🔄 Cambiar a Datos Mock' : '🌐 Cambiar a API'}
+        </button>
+      </div>
+      
+      {loading && (
+        <div style={{ padding: '20px', textAlign: 'center', color: '#666' }}>
+          Cargando datos...
+        </div>
+      )}
+      
+      {!loading && payrollData.length === 0 && (
+        <div style={{ 
+          padding: '30px', 
+          textAlign: 'center', 
+          background: '#fef2f2',
+          borderRadius: '8px',
+          color: '#991b1b'
+        }}>
+          ⚠️ No hay datos de nómina disponibles
+        </div>
+      )}
+      
+      {!loading && payrollData.length > 0 && (
+        <>
+          <div style={{ 
+            marginBottom: '20px',
+            padding: '15px',
+            background: '#f0fdf4',
+            borderRadius: '8px',
+            border: '1px solid #86efac'
+          }}>
+            <h3 style={{ fontSize: '18px', fontWeight: '600', color: '#166534', marginBottom: '10px' }}>
+              Resumen de Nómina
+            </h3>
+            <p style={{ fontSize: '16px', color: '#166534' }}>
+              Total de empleados: <strong>{payrollData.length}</strong>
+            </p>
+            <p style={{ fontSize: '20px', color: '#166534', marginTop: '5px' }}>
+              Total a pagar: <strong>${(totalNomina / 100).toFixed(2)}</strong>
+            </p>
+          </div>
+          
+          <div style={{ marginTop: '20px' }}>
+            <h3 style={{ fontSize: '18px', fontWeight: '600', marginBottom: '15px', color: '#333' }}>
+              Detalle de Empleados
+            </h3>
+            
+            <div style={{ overflowX: 'auto' }}>
+              <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+                <thead>
+                  <tr style={{ borderBottom: '2px solid #e5e7eb' }}>
+                    <th style={{ padding: '12px', textAlign: 'left', color: '#6b7280', fontSize: '14px' }}>
+                      Empleado
+                    </th>
+                    <th style={{ padding: '12px', textAlign: 'left', color: '#6b7280', fontSize: '14px' }}>
+                      Rol
+                    </th>
+                    <th style={{ padding: '12px', textAlign: 'right', color: '#6b7280', fontSize: '14px' }}>
+                      Salario Base
+                    </th>
+                    <th style={{ padding: '12px', textAlign: 'right', color: '#6b7280', fontSize: '14px' }}>
+                      Bonos
+                    </th>
+                    <th style={{ padding: '12px', textAlign: 'right', color: '#6b7280', fontSize: '14px' }}>
+                      Deducciones
+                    </th>
+                    <th style={{ padding: '12px', textAlign: 'right', color: '#6b7280', fontSize: '14px' }}>
+                      Neto a Pagar
+                    </th>
+                    <th style={{ padding: '12px', textAlign: 'center', color: '#6b7280', fontSize: '14px' }}>
+                      Estado
+                    </th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {payrollData.map((record, index) => (
+                    <tr key={record.id || index} style={{ borderBottom: '1px solid #f3f4f6' }}>
+                      <td style={{ padding: '12px', fontSize: '14px', fontWeight: '500' }}>
+                        {record.employeeName}
+                      </td>
+                      <td style={{ padding: '12px', fontSize: '14px', color: '#6b7280' }}>
+                        {record.employeeRole}
+                      </td>
+                      <td style={{ padding: '12px', textAlign: 'right', fontSize: '14px' }}>
+                        ${(record.baseSalary / 100).toFixed(2)}
+                      </td>
+                      <td style={{ padding: '12px', textAlign: 'right', fontSize: '14px', color: '#10b981' }}>
+                        ${(record.bonuses / 100).toFixed(2)}
+                      </td>
+                      <td style={{ padding: '12px', textAlign: 'right', fontSize: '14px', color: '#ef4444' }}>
+                        ${(record.deductions / 100).toFixed(2)}
+                      </td>
+                      <td style={{ padding: '12px', textAlign: 'right', fontSize: '16px', fontWeight: '600' }}>
+                        ${(record.netAmount / 100).toFixed(2)}
+                      </td>
+                      <td style={{ padding: '12px', textAlign: 'center' }}>
+                        <span style={{
+                          padding: '4px 12px',
+                          borderRadius: '12px',
+                          fontSize: '12px',
+                          fontWeight: '500',
+                          background: record.status === 'paid' ? '#dcfce7' : '#fef3c7',
+                          color: record.status === 'paid' ? '#166534' : '#92400e'
+                        }}>
+                          {record.status === 'paid' ? 'Pagado' : 'Pendiente'}
+                        </span>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </>
+      )}
+      
+      <div style={{ 
+        marginTop: '30px',
+        padding: '15px',
+        background: '#f9fafb',
+        borderRadius: '8px',
+        fontSize: '12px',
+        color: '#6b7280'
+      }}>
+        <p>🔍 Logs en consola: Abre las DevTools (F12) para ver los logs</p>
+        <p>📊 Total registros: {payrollData.length}</p>
+        <p>✅ Componente renderizado correctamente</p>
+      </div>
+    </div>
+  )
+}

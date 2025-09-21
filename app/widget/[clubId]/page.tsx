@@ -1,0 +1,114 @@
+import { notFound } from 'next/navigation'
+import { prisma } from '@/lib/config/prisma'
+import { WidgetCalendar } from './widget-calendar'
+import { addDays, startOfWeek } from 'date-fns'
+
+export default async function WidgetPage(props: {
+  params: Promise<{ clubId: string }>
+  searchParams: Promise<{ date?: string; embedded?: string }>
+}) {
+  const params = await props.params
+  const searchParams = await props.searchParams
+  const { clubId } = params
+  const isEmbedded = searchParams.embedded === 'true'
+
+  // Get club data - use slug for better UX
+  const club = await prisma.club.findFirst({
+    where: { 
+      OR: [
+        { id: clubId },
+        { slug: clubId }
+      ],
+      status: 'APPROVED',
+      active: true
+    },
+    include: {
+      courts: { 
+        where: { active: true },
+        orderBy: { order: 'asc' }
+      },
+      schedules: { orderBy: { dayOfWeek: 'asc' } },
+      pricing: true
+    }
+  })
+
+  if (!club) {
+    notFound()
+  }
+
+  // Parse date or use current week
+  const baseDate = searchParams.date ? new Date(searchParams.date) : new Date()
+  const weekStart = startOfWeek(baseDate, { weekStartsOn: 1 })
+  const weekEnd = addDays(weekStart, 6)
+
+  // Get bookings for the week
+  const bookings = await prisma.booking.findMany({
+    where: {
+      clubId: club.id,
+      date: {
+        gte: weekStart,
+        lte: weekEnd
+      },
+      status: { not: 'CANCELLED' }
+    },
+    include: { court: true }
+  })
+
+  return (
+    <div className={`${isEmbedded ? 'p-0' : 'min-h-screen bg-gray-50 p-6'}`}>
+      {!isEmbedded && (
+        <div className="max-w-4xl mx-auto mb-6">
+          <div className="text-center">
+            <h1 className="text-3xl font-bold text-gray-900 mb-2">
+              Reservas - {club.name}
+            </h1>
+            <p className="text-gray-600">
+              {club.address}, {club.city}
+            </p>
+            <div className="mt-4 flex justify-center space-x-4">
+              <a 
+                href={`tel:${club.phone}`}
+                className="text-green-600 hover:underline"
+              >
+                {club.phone}
+              </a>
+              <a 
+                href={`mailto:${club.email}`}
+                className="text-green-600 hover:underline"
+              >
+                {club.email}
+              </a>
+            </div>
+          </div>
+        </div>
+      )}
+
+      <div className={isEmbedded ? '' : 'max-w-4xl mx-auto'}>
+        <WidgetCalendar
+          club={club}
+          courts={club.courts}
+          bookings={bookings}
+          weekStart={weekStart}
+          isEmbedded={isEmbedded}
+        />
+      </div>
+
+      {!isEmbedded && (
+        <div className="max-w-4xl mx-auto mt-8 text-center">
+          <div className="bg-white rounded-lg shadow p-6">
+            <p className="text-gray-600 text-sm">
+              Powered by{' '}
+              <a 
+                href="https://padelyzer.app" 
+                target="_blank"
+                className="text-green-600 hover:underline font-medium"
+              >
+                Padelyzer.app
+              </a>
+            </p>
+          </div>
+        </div>
+      )}
+    </div>
+  )
+}

@@ -1,0 +1,332 @@
+// ===============================================
+// NUEVAS TABLAS PARA MÓDULO DE CLASES AVANZADO
+// ===============================================
+
+// 1. CLASES RECURRENTES
+model ClassRecurrence {
+  id            String   @id @default(cuid())
+  classId       String   @unique
+  pattern       String   // DAILY, WEEKLY, MONTHLY
+  interval      Int      @default(1) // Every N days/weeks/months
+  daysOfWeek    Int[]    // [1,3,5] for Mon, Wed, Fri
+  endDate       DateTime? // When recurrence ends
+  occurrences   Int?     // Number of occurrences
+  exceptions    DateTime[] // Dates to skip
+  active        Boolean  @default(true)
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+  
+  // Relations
+  class         Class    @relation(fields: [classId], references: [id], onDelete: Cascade)
+  
+  @@index([classId])
+  @@index([active])
+}
+
+// 2. PAQUETES DE CLASES
+model ClassPackage {
+  id            String   @id @default(cuid())
+  clubId        String
+  name          String
+  description   String?
+  classCount    Int      // Number of classes included
+  price         Int      // Price in cents
+  validityDays  Int      @default(30) // Days until expiration
+  classTypes    String[] // Types of classes that can be used
+  active        Boolean  @default(true)
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+  
+  // Relations
+  club          Club     @relation(fields: [clubId], references: [id], onDelete: Cascade)
+  purchases     PackagePurchase[]
+  
+  @@index([clubId])
+  @@index([active])
+}
+
+// 3. COMPRAS DE PAQUETES
+model PackagePurchase {
+  id            String   @id @default(cuid())
+  packageId     String
+  studentId     String
+  studentName   String
+  studentEmail  String?
+  studentPhone  String
+  purchaseDate  DateTime @default(now())
+  expirationDate DateTime
+  classesUsed   Int      @default(0)
+  classesRemaining Int
+  status        String   @default("active") // active, expired, cancelled
+  paymentStatus String   @default("pending") // pending, completed, refunded
+  paidAmount    Int      // Amount paid in cents
+  
+  // Relations
+  package       ClassPackage @relation(fields: [packageId], references: [id])
+  usageHistory  ClassPackageUsage[]
+  
+  @@index([packageId])
+  @@index([studentId])
+  @@index([status])
+  @@index([expirationDate])
+}
+
+// 4. USO DE PAQUETES
+model ClassPackageUsage {
+  id            String   @id @default(cuid())
+  purchaseId    String
+  classBookingId String
+  usedAt        DateTime @default(now())
+  
+  // Relations
+  purchase      PackagePurchase @relation(fields: [purchaseId], references: [id], onDelete: Cascade)
+  
+  @@index([purchaseId])
+  @@index([classBookingId])
+}
+
+// 5. MEMBRESÍAS
+model ClassMembership {
+  id            String   @id @default(cuid())
+  clubId        String
+  name          String
+  description   String?
+  type          String   // UNLIMITED, LIMITED
+  classLimit    Int?     // NULL for unlimited, number for limited
+  price         Int      // Monthly price in cents
+  benefits      String[] // Additional benefits
+  active        Boolean  @default(true)
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+  
+  // Relations
+  club          Club     @relation(fields: [clubId], references: [id], onDelete: Cascade)
+  subscriptions MembershipSubscription[]
+  
+  @@index([clubId])
+  @@index([active])
+}
+
+// 6. SUSCRIPCIONES A MEMBRESÍAS
+model MembershipSubscription {
+  id            String   @id @default(cuid())
+  membershipId  String
+  studentId     String
+  studentName   String
+  studentEmail  String?
+  studentPhone  String
+  startDate     DateTime @default(now())
+  endDate       DateTime
+  status        String   @default("active") // active, paused, cancelled, expired
+  classesUsed   Int      @default(0)
+  lastBillingDate DateTime @default(now())
+  nextBillingDate DateTime
+  autoRenew     Boolean  @default(true)
+  
+  // Relations
+  membership    ClassMembership @relation(fields: [membershipId], references: [id])
+  
+  @@index([membershipId])
+  @@index([studentId])
+  @@index([status])
+  @@index([nextBillingDate])
+}
+
+// 7. PERFIL DE ESTUDIANTE
+model StudentProfile {
+  id            String   @id @default(cuid())
+  studentId     String   @unique // Can be playerId or unique identifier
+  name          String
+  email         String?
+  phone         String
+  birthDate     DateTime?
+  level         String   @default("BEGINNER")
+  preferredDays String[] // Preferred days of week
+  preferredTimes String[] // Preferred time slots
+  goals         String?
+  notes         String?
+  emergencyContact String?
+  emergencyPhone String?
+  medicalNotes  String?
+  joinedAt      DateTime @default(now())
+  lastClassAt   DateTime?
+  totalClasses  Int      @default(0)
+  totalSpent    Int      @default(0) // in cents
+  averageRating Float?
+  active        Boolean  @default(true)
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+  
+  // Relations
+  progress      StudentProgress[]
+  achievements  StudentAchievement[]
+  
+  @@index([studentId])
+  @@index([phone])
+  @@index([email])
+}
+
+// 8. PROGRESO DEL ESTUDIANTE
+model StudentProgress {
+  id            String   @id @default(cuid())
+  studentId     String
+  classId       String
+  instructorId  String
+  date          DateTime
+  skillsEvaluated Json   // JSON with skills and scores
+  overallScore  Float
+  strengths     String?
+  improvements  String?
+  instructorNotes String?
+  createdAt     DateTime @default(now())
+  
+  // Relations
+  student       StudentProfile @relation(fields: [studentId], references: [id])
+  
+  @@index([studentId])
+  @@index([classId])
+  @@index([date])
+}
+
+// 9. LOGROS DEL ESTUDIANTE
+model StudentAchievement {
+  id            String   @id @default(cuid())
+  studentId     String
+  type          String   // CLASSES_MILESTONE, SKILL_LEVEL, TOURNAMENT, SPECIAL
+  name          String
+  description   String?
+  earnedAt      DateTime @default(now())
+  metadata      Json?    // Additional data about the achievement
+  
+  // Relations
+  student       StudentProfile @relation(fields: [studentId], references: [id])
+  
+  @@index([studentId])
+  @@index([type])
+}
+
+// 10. LISTA DE ESPERA
+model ClassWaitlist {
+  id            String   @id @default(cuid())
+  classId       String
+  studentId     String
+  studentName   String
+  studentPhone  String
+  studentEmail  String?
+  position      Int      // Position in waitlist
+  priority      Int      @default(0) // Higher priority = better position
+  joinedAt      DateTime @default(now())
+  status        String   @default("waiting") // waiting, enrolled, expired, cancelled
+  notifiedAt    DateTime?
+  enrolledAt    DateTime?
+  expiresAt     DateTime // When the waitlist spot expires
+  
+  // Relations
+  class         Class    @relation(fields: [classId], references: [id], onDelete: Cascade)
+  
+  @@unique([classId, position])
+  @@index([classId])
+  @@index([studentId])
+  @@index([status])
+}
+
+// 11. LIQUIDACIONES DE INSTRUCTORES
+model InstructorPayroll {
+  id            String   @id @default(cuid())
+  instructorId  String
+  periodStart   DateTime
+  periodEnd     DateTime
+  totalClasses  Int
+  totalHours    Float
+  totalStudents Int
+  grossAmount   Int      // Total earnings in cents
+  deductions    Int      @default(0) // Any deductions in cents
+  netAmount     Int      // Final amount in cents
+  status        String   @default("pending") // pending, approved, paid, cancelled
+  approvedBy    String?
+  approvedAt    DateTime?
+  paidAt        DateTime?
+  paymentMethod String?  // transfer, cash, check
+  paymentRef    String?  // Payment reference
+  notes         String?
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+  
+  // Relations
+  instructor    ClassInstructor @relation(fields: [instructorId], references: [id])
+  details       PayrollDetail[]
+  
+  @@index([instructorId])
+  @@index([periodStart])
+  @@index([status])
+}
+
+// 12. DETALLE DE LIQUIDACIONES
+model PayrollDetail {
+  id            String   @id @default(cuid())
+  payrollId     String
+  classId       String
+  className     String
+  classDate     DateTime
+  students      Int
+  duration      Float    // in hours
+  rate          Int      // Rate applied in cents
+  amount        Int      // Total for this class in cents
+  
+  // Relations
+  payroll       InstructorPayroll @relation(fields: [payrollId], references: [id], onDelete: Cascade)
+  
+  @@index([payrollId])
+}
+
+// 13. ANALYTICS DE CLASES
+model ClassAnalytics {
+  id            String   @id @default(cuid())
+  clubId        String
+  period        String   // DAILY, WEEKLY, MONTHLY, YEARLY
+  periodDate    DateTime
+  
+  // Metrics
+  totalClasses  Int
+  totalStudents Int
+  totalRevenue  Int      // in cents
+  avgAttendance Float
+  avgRating     Float?
+  
+  // By Type
+  metricsbyType Json     // {INDIVIDUAL: {...}, GROUP: {...}}
+  
+  // By Instructor
+  metricsByInstructor Json // {instructorId: {...}}
+  
+  // Trends
+  attendanceTrend Float? // Percentage change
+  revenueTrend   Float?  // Percentage change
+  
+  createdAt     DateTime @default(now())
+  
+  @@unique([clubId, period, periodDate])
+  @@index([clubId])
+  @@index([periodDate])
+}
+
+// 14. RETENCIÓN DE ESTUDIANTES
+model StudentRetention {
+  id            String   @id @default(cuid())
+  clubId        String
+  studentId     String
+  firstClassDate DateTime
+  lastClassDate DateTime
+  totalClasses  Int
+  avgFrequency  Float    // Classes per month
+  retentionDays Int      // Days between first and last class
+  churnRisk     Float?   // 0-1 probability of churn
+  churnReason   String?  // If churned, why
+  status        String   @default("active") // active, at_risk, churned
+  updatedAt     DateTime @updatedAt
+  
+  @@unique([clubId, studentId])
+  @@index([clubId])
+  @@index([status])
+  @@index([churnRisk])
+}

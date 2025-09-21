@@ -1,0 +1,460 @@
+'use client'
+
+import React, { useState, useEffect } from 'react'
+import { CardModern } from '@/components/design-system/CardModern'
+import { 
+  Users, BookOpen, Award, Clock, TrendingUp,
+  Calendar, DollarSign, BarChart3, Download,
+  Eye, Filter, Loader2, GraduationCap, Target, ChevronLeft, ChevronRight, Home
+} from 'lucide-react'
+import { formatCurrency } from '@/lib/design-system/localization'
+import { format } from 'date-fns'
+import { es } from 'date-fns/locale'
+
+interface ClassTransaction {
+  id: string
+  className: string
+  instructorName: string
+  type: string
+  level: string
+  date: string
+  time: string
+  students: number
+  maxStudents: number
+  pricePerStudent: number
+  totalAmount: number
+  status: string
+  reference: string
+}
+
+export default function ClassesIncomeModule() {
+  const [transactions, setTransactions] = useState<ClassTransaction[]>([])
+  const [loading, setLoading] = useState(true)
+  const [selectedPeriod, setSelectedPeriod] = useState(new Date())
+  const [activeFilter, setActiveFilter] = useState<'all' | 'individual' | 'group' | 'clinic'>('all')
+  const [stats, setStats] = useState({
+    totalClasses: 0,
+    totalStudents: 0,
+    totalRevenue: 0,
+    avgStudentsPerClass: 0,
+    avgRevenuePerClass: 0,
+    occupancyRate: 0,
+    popularType: '',
+    topInstructor: ''
+  })
+
+  useEffect(() => {
+    fetchClassTransactions()
+  }, [selectedPeriod])
+
+  const fetchClassTransactions = async () => {
+    try {
+      setLoading(true)
+      const response = await fetch('/api/finance/transactions?type=INCOME&category=CLASS&period=month&limit=200')
+      if (response.ok) {
+        const data = await response.json()
+        
+        // Enhanced class transaction mapping
+        const classTrans = data.transactions?.map((t: any) => {
+          // Extract class details from description and notes
+          const isIndividual = t.description?.includes('Individual')
+          const isGroup = t.description?.includes('Grupal')
+          const isClinic = t.description?.includes('Clínica')
+          
+          const type = isIndividual ? 'Individual' : isGroup ? 'Grupal' : isClinic ? 'Clínica' : 'Grupal'
+          const students = extractStudentCount(t.description, t.notes)
+          
+          return {
+            id: t.id,
+            className: extractClassName(t.description),
+            instructorName: 'Carlos Mendoza', // Default for now
+            type,
+            level: extractLevel(t.description),
+            date: t.date,
+            time: '16:00', // Default time
+            students,
+            maxStudents: type === 'Individual' ? 1 : type === 'Clínica' ? 12 : 8,
+            pricePerStudent: Math.round(t.amount / students / 100),
+            totalAmount: t.amount,
+            status: 'Completada',
+            reference: t.reference || t.id.substring(0, 8)
+          }
+        }) || []
+        
+        setTransactions(classTrans)
+        calculateStats(classTrans)
+      }
+    } catch (error) {
+      console.error('Error fetching class transactions:', error)
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  const extractClassName = (description: string) => {
+    if (!description) return 'Clase'
+    const parts = description.split(' - ')
+    return parts[0] || description
+  }
+
+  const extractLevel = (description: string) => {
+    if (!description) return 'Intermedio'
+    if (description.includes('Avanzad')) return 'Avanzado'
+    if (description.includes('Iniciación') || description.includes('Beginner')) return 'Principiante'
+    return 'Intermedio'
+  }
+
+  const extractStudentCount = (description: string, notes: string) => {
+    const combined = `${description || ''} ${notes || ''}`
+    const match = combined.match(/(\d+)\s*estudiante/i)
+    return match ? parseInt(match[1]) : 1
+  }
+
+  const calculateStats = (classes: ClassTransaction[]) => {
+    const filtered = classes.filter(c => 
+      activeFilter === 'all' ||
+      (activeFilter === 'individual' && c.type === 'Individual') ||
+      (activeFilter === 'group' && c.type === 'Grupal') ||
+      (activeFilter === 'clinic' && c.type === 'Clínica')
+    )
+    
+    const totalRevenue = filtered.reduce((sum, c) => sum + c.totalAmount, 0)
+    const totalStudents = filtered.reduce((sum, c) => sum + c.students, 0)
+    const totalCapacity = filtered.reduce((sum, c) => sum + c.maxStudents, 0)
+    
+    // Calculate type distribution
+    const typeCounts = filtered.reduce((acc, c) => {
+      acc[c.type] = (acc[c.type] || 0) + 1
+      return acc
+    }, {} as Record<string, number>)
+    
+    const popularType = Object.entries(typeCounts).sort((a, b) => b[1] - a[1])[0]?.[0] || 'Grupal'
+    
+    setStats({
+      totalClasses: filtered.length,
+      totalStudents,
+      totalRevenue,
+      avgStudentsPerClass: filtered.length > 0 ? Math.round(totalStudents / filtered.length) : 0,
+      avgRevenuePerClass: filtered.length > 0 ? Math.round(totalRevenue / filtered.length) : 0,
+      occupancyRate: totalCapacity > 0 ? Math.round((totalStudents / totalCapacity) * 100) : 0,
+      popularType,
+      topInstructor: 'Carlos Mendoza'
+    })
+  }
+
+  if (loading) {
+    return (
+      <div style={{ 
+        padding: '32px',
+        display: 'flex', 
+        justifyContent: 'center', 
+        alignItems: 'center', 
+        height: '400px' 
+      }}>
+        <Loader2 size={32} className="animate-spin" color="#66E7AA" />
+      </div>
+    )
+  }
+
+  return (
+    <div style={{ padding: '32px' }}>
+      {/* Breadcrumbs */}
+      <div style={{ 
+        display: 'flex', 
+        alignItems: 'center', 
+        gap: '8px',
+        marginBottom: '24px',
+        fontSize: '14px',
+        color: '#516640'
+      }}>
+        <button
+          onClick={() => window.dispatchEvent(new CustomEvent('navigate-to-income'))}
+          style={{
+            display: 'flex',
+            alignItems: 'center',
+            gap: '4px',
+            background: 'none',
+            border: 'none',
+            color: '#516640',
+            cursor: 'pointer',
+            padding: 0,
+            fontSize: '14px',
+            transition: 'color 0.2s'
+          }}
+          onMouseEnter={(e) => {
+            e.currentTarget.style.color = '#A4DF4E'
+          }}
+          onMouseLeave={(e) => {
+            e.currentTarget.style.color = '#516640'
+          }}
+        >
+          <Home style={{ width: '14px', height: '14px' }} />
+          Ingresos
+        </button>
+        <ChevronRight style={{ width: '14px', height: '14px' }} />
+        <span style={{ color: '#182A01', fontWeight: 500 }}>Clases</span>
+      </div>
+
+      {/* Header */}
+      <div style={{ marginBottom: '32px' }}>
+        <h2 style={{
+          fontSize: '28px',
+          fontWeight: 700,
+          color: '#182A01',
+          margin: '0 0 8px 0'
+        }}>
+          Ingresos por Clases
+        </h2>
+        <p style={{
+          fontSize: '16px',
+          color: '#516640'
+        }}>
+          Análisis de ingresos por clases y programas de entrenamiento
+        </p>
+      </div>
+
+      {/* Filter Tabs */}
+      <div style={{ display: 'flex', gap: '8px', marginBottom: '24px' }}>
+        {[
+          { id: 'all', label: 'Todas', icon: <BookOpen /> },
+          { id: 'individual', label: 'Individuales', icon: <Users /> },
+          { id: 'group', label: 'Grupales', icon: <Users /> },
+          { id: 'clinic', label: 'Clínicas', icon: <GraduationCap /> }
+        ].map(tab => (
+          <button
+            key={tab.id}
+            onClick={() => {
+              setActiveFilter(tab.id as any)
+              calculateStats(transactions)
+            }}
+            style={{
+              padding: '10px 20px',
+              borderRadius: '10px',
+              border: activeFilter === tab.id ? 'none' : '1px solid rgba(164, 223, 78, 0.2)',
+              background: activeFilter === tab.id ? 'linear-gradient(135deg, #A4DF4E, #66E7AA)' : 'white',
+              color: activeFilter === tab.id ? '#182A01' : '#516640',
+              fontSize: '14px',
+              fontWeight: activeFilter === tab.id ? 600 : 500,
+              cursor: 'pointer',
+              display: 'flex',
+              alignItems: 'center',
+              gap: '8px',
+              transition: 'all 0.2s'
+            }}
+          >
+            {React.cloneElement(tab.icon, { 
+              style: { width: '16px', height: '16px' }
+            })}
+            {tab.label}
+          </button>
+        ))}
+      </div>
+
+      {/* Stats Cards */}
+      <div style={{
+        display: 'grid',
+        gridTemplateColumns: 'repeat(4, 1fr)',
+        gap: '20px',
+        marginBottom: '32px'
+      }}>
+        <CardModern variant="glass">
+          <div style={{ padding: '24px' }}>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '12px' }}>
+              <div style={{
+                width: '40px',
+                height: '40px',
+                borderRadius: '10px',
+                background: 'rgba(164, 223, 78, 0.1)',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center'
+              }}>
+                <BookOpen style={{ width: '20px', height: '20px', color: '#A4DF4E' }} />
+              </div>
+              <span style={{ fontSize: '12px', color: '#A4DF4E', fontWeight: 600 }}>
+                {stats.totalClasses}
+              </span>
+            </div>
+            <p style={{ fontSize: '12px', color: '#516640', marginBottom: '4px' }}>Clases Impartidas</p>
+            <p style={{ fontSize: '24px', fontWeight: 700, color: '#182A01' }}>
+              {formatCurrency(stats.totalRevenue / 100)}
+            </p>
+          </div>
+        </CardModern>
+
+        <CardModern variant="glass">
+          <div style={{ padding: '24px' }}>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '12px' }}>
+              <div style={{
+                width: '40px',
+                height: '40px',
+                borderRadius: '10px',
+                background: 'rgba(34, 197, 94, 0.1)',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center'
+              }}>
+                <Users style={{ width: '20px', height: '20px', color: '#22C55E' }} />
+              </div>
+              <span style={{ fontSize: '12px', color: '#22C55E', fontWeight: 600 }}>
+                +{stats.totalStudents}
+              </span>
+            </div>
+            <p style={{ fontSize: '12px', color: '#516640', marginBottom: '4px' }}>Total Estudiantes</p>
+            <p style={{ fontSize: '24px', fontWeight: 700, color: '#182A01' }}>
+              {stats.avgStudentsPerClass} promedio
+            </p>
+          </div>
+        </CardModern>
+
+        <CardModern variant="glass">
+          <div style={{ padding: '24px' }}>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '12px' }}>
+              <div style={{
+                width: '40px',
+                height: '40px',
+                borderRadius: '10px',
+                background: 'rgba(59, 130, 246, 0.1)',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center'
+              }}>
+                <Target style={{ width: '20px', height: '20px', color: '#3B82F6' }} />
+              </div>
+              <span style={{ fontSize: '12px', color: '#3B82F6', fontWeight: 600 }}>
+                {stats.occupancyRate}%
+              </span>
+            </div>
+            <p style={{ fontSize: '12px', color: '#516640', marginBottom: '4px' }}>Ocupación</p>
+            <p style={{ fontSize: '24px', fontWeight: 700, color: '#182A01' }}>
+              {stats.popularType}
+            </p>
+          </div>
+        </CardModern>
+
+        <CardModern variant="glass">
+          <div style={{ padding: '24px' }}>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '12px' }}>
+              <div style={{
+                width: '40px',
+                height: '40px',
+                borderRadius: '10px',
+                background: 'rgba(251, 191, 36, 0.1)',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center'
+              }}>
+                <Award style={{ width: '20px', height: '20px', color: '#FBBF24' }} />
+              </div>
+            </div>
+            <p style={{ fontSize: '12px', color: '#516640', marginBottom: '4px' }}>Instructor Top</p>
+            <p style={{ fontSize: '18px', fontWeight: 700, color: '#182A01' }}>
+              {stats.topInstructor}
+            </p>
+          </div>
+        </CardModern>
+      </div>
+
+      {/* Classes List */}
+      <CardModern variant="glass">
+        <div style={{ padding: '24px' }}>
+          <div style={{ marginBottom: '20px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+            <h3 style={{ fontSize: '18px', fontWeight: 600, color: '#182A01' }}>
+              Detalle de Clases
+            </h3>
+            <button
+              style={{
+                padding: '8px 16px',
+                borderRadius: '10px',
+                border: 'none',
+                background: 'linear-gradient(135deg, #A4DF4E, #66E7AA)',
+                color: '#182A01',
+                fontSize: '14px',
+                fontWeight: 600,
+                cursor: 'pointer',
+                display: 'flex',
+                alignItems: 'center',
+                gap: '8px'
+              }}
+            >
+              <Download style={{ width: '16px', height: '16px' }} />
+              Exportar
+            </button>
+          </div>
+
+          <div style={{ overflowX: 'auto' }}>
+            <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+              <thead>
+                <tr style={{ borderBottom: '2px solid rgba(164, 223, 78, 0.1)' }}>
+                  <th style={{ padding: '12px', textAlign: 'left', fontSize: '12px', fontWeight: 600, color: '#516640' }}>CLASE</th>
+                  <th style={{ padding: '12px', textAlign: 'left', fontSize: '12px', fontWeight: 600, color: '#516640' }}>TIPO</th>
+                  <th style={{ padding: '12px', textAlign: 'center', fontSize: '12px', fontWeight: 600, color: '#516640' }}>NIVEL</th>
+                  <th style={{ padding: '12px', textAlign: 'center', fontSize: '12px', fontWeight: 600, color: '#516640' }}>ESTUDIANTES</th>
+                  <th style={{ padding: '12px', textAlign: 'center', fontSize: '12px', fontWeight: 600, color: '#516640' }}>FECHA</th>
+                  <th style={{ padding: '12px', textAlign: 'right', fontSize: '12px', fontWeight: 600, color: '#516640' }}>PRECIO/EST</th>
+                  <th style={{ padding: '12px', textAlign: 'right', fontSize: '12px', fontWeight: 600, color: '#516640' }}>TOTAL</th>
+                </tr>
+              </thead>
+              <tbody>
+                {transactions
+                  .filter(c => 
+                    activeFilter === 'all' ||
+                    (activeFilter === 'individual' && c.type === 'Individual') ||
+                    (activeFilter === 'group' && c.type === 'Grupal') ||
+                    (activeFilter === 'clinic' && c.type === 'Clínica')
+                  )
+                  .slice(0, 15)
+                  .map((classItem, index) => (
+                  <tr key={classItem.id} style={{ borderBottom: '1px solid rgba(164, 223, 78, 0.05)' }}>
+                    <td style={{ padding: '16px 12px' }}>
+                      <div>
+                        <p style={{ fontSize: '14px', fontWeight: 600, color: '#182A01' }}>
+                          {classItem.className}
+                        </p>
+                        <p style={{ fontSize: '12px', color: '#516640' }}>
+                          {classItem.instructorName}
+                        </p>
+                      </div>
+                    </td>
+                    <td style={{ padding: '16px 12px' }}>
+                      <span style={{
+                        fontSize: '12px',
+                        padding: '4px 8px',
+                        background: classItem.type === 'Individual' ? 'rgba(59, 130, 246, 0.1)' :
+                                   classItem.type === 'Grupal' ? 'rgba(164, 223, 78, 0.1)' :
+                                   'rgba(251, 191, 36, 0.1)',
+                        borderRadius: '6px',
+                        color: classItem.type === 'Individual' ? '#3B82F6' :
+                               classItem.type === 'Grupal' ? '#516640' :
+                               '#F59E0B'
+                      }}>
+                        {classItem.type}
+                      </span>
+                    </td>
+                    <td style={{ padding: '16px 12px', textAlign: 'center', fontSize: '14px', color: '#516640' }}>
+                      {classItem.level}
+                    </td>
+                    <td style={{ padding: '16px 12px', textAlign: 'center' }}>
+                      <span style={{ fontSize: '14px', fontWeight: 600, color: '#182A01' }}>
+                        {classItem.students}/{classItem.maxStudents}
+                      </span>
+                    </td>
+                    <td style={{ padding: '16px 12px', textAlign: 'center', fontSize: '14px', color: '#516640' }}>
+                      {format(new Date(classItem.date), 'dd MMM', { locale: es })}
+                    </td>
+                    <td style={{ padding: '16px 12px', textAlign: 'right', fontSize: '14px', color: '#516640' }}>
+                      {formatCurrency(classItem.pricePerStudent)}
+                    </td>
+                    <td style={{ padding: '16px 12px', textAlign: 'right', fontSize: '14px', fontWeight: 600, color: '#22C55E' }}>
+                      {formatCurrency(classItem.totalAmount / 100)}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </CardModern>
+    </div>
+  )
+}

@@ -1,0 +1,617 @@
+'use client'
+
+import { useState, useEffect } from 'react'
+import { use } from 'react'
+import {
+  Users, UserPlus, Shield, Edit, Trash2, X, Check,
+  Calendar, DollarSign, Users as UsersIcon, Trophy,
+  Bell, Settings, BarChart3, Save, Mail, Phone, BookOpen,
+  Eye, EyeOff, Lock
+} from 'lucide-react'
+
+interface TeamMember {
+  id: string
+  name: string
+  email: string
+  phone?: string
+  role: string
+  permissions: string[]
+  active: boolean
+  createdAt: string
+}
+
+interface AvailableModule {
+  id: string
+  name: string
+  enabled: boolean
+}
+
+// Mapeo de íconos y descripciones para los módulos
+const MODULE_CONFIG: Record<string, { icon: any, description: string, displayName?: string }> = {
+  bookings: { icon: Calendar, description: 'Gestionar reservas y calendario', displayName: 'Reservas' },
+  finance: { icon: DollarSign, description: 'Ver reportes financieros y transacciones', displayName: 'Finanzas' },
+  customers: { icon: UsersIcon, description: 'Gestionar base de clientes', displayName: 'Clientes' },
+  players: { icon: UsersIcon, description: 'Gestionar jugadores', displayName: 'Jugadores' },
+  tournaments: { icon: Trophy, description: 'Organizar y gestionar torneos', displayName: 'Torneos' },
+  classes: { icon: BookOpen, description: 'Gestionar clases y programas', displayName: 'Clases' },
+  notifications: { icon: Bell, description: 'Enviar notificaciones y WhatsApp', displayName: 'Notificaciones' },
+  settings: { icon: Settings, description: 'Configurar el club', displayName: 'Configuración' },
+  reports: { icon: BarChart3, description: 'Ver reportes y estadísticas', displayName: 'Reportes' }
+}
+
+export default function TeamManagementPage({ params }: { params: Promise<{ clubSlug: string }> }) {
+  // Resolve params promise first, before any hooks
+  const resolvedParams = use(params)
+  const clubSlug = resolvedParams.clubSlug
+
+  // Now all hooks after params resolution
+  const [teamMembers, setTeamMembers] = useState<TeamMember[]>([])
+  const [availableModules, setAvailableModules] = useState<AvailableModule[]>([])
+  const [showAddModal, setShowAddModal] = useState(false)
+  const [editingMember, setEditingMember] = useState<TeamMember | null>(null)
+  const [loading, setLoading] = useState(false)
+  const [loadingTeam, setLoadingTeam] = useState(true)
+  const [fetchError, setFetchError] = useState<string | null>(null)
+
+  // Form state
+  const [formData, setFormData] = useState({
+    name: '',
+    email: '',
+    phone: '',
+    password: '',
+    role: 'CLUB_STAFF',
+    permissions: [] as string[]
+  })
+  const [error, setError] = useState<string | null>(null)
+  const [showPassword, setShowPassword] = useState(false)
+  const [changePassword, setChangePassword] = useState(false)
+
+  useEffect(() => {
+    fetchTeamMembers()
+  }, [])
+
+  const fetchTeamMembers = async () => {
+    setLoadingTeam(true)
+    setFetchError(null)
+    try {
+      const response = await fetch('/api/club/team', {
+        method: 'GET',
+        credentials: 'include',
+        headers: {
+          'Content-Type': 'application/json',
+        }
+      })
+
+      if (!response.ok) {
+        if (response.status === 401) {
+          setFetchError('No tienes permisos para ver esta página. Por favor inicia sesión.')
+        } else {
+          setFetchError('Error al cargar el equipo. Por favor intenta de nuevo.')
+        }
+        console.error('Error response:', response.status, response.statusText)
+        const text = await response.text()
+        console.error('Response body:', text)
+        return
+      }
+
+      const data = await response.json()
+      setTeamMembers(data.members || [])
+      setAvailableModules(data.availableModules || [])
+    } catch (error) {
+      console.error('Error fetching team:', error)
+      setFetchError('Error de conexión. Por favor verifica tu conexión a internet.')
+    } finally {
+      setLoadingTeam(false)
+    }
+  }
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault()
+    setLoading(true)
+    setError(null)
+
+    try {
+      const url = editingMember
+        ? '/api/club/team'
+        : '/api/club/team'
+
+      const method = editingMember ? 'PUT' : 'POST'
+
+      // Only include password if creating new user or if changePassword is true
+      const dataToSend: any = {
+        name: formData.name,
+        email: formData.email,
+        permissions: formData.permissions,
+        id: editingMember?.id
+      }
+
+      // Include password only when needed
+      if (!editingMember || changePassword) {
+        dataToSend.password = formData.password
+      }
+
+      const response = await fetch(url, {
+        method,
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(dataToSend)
+      })
+
+      const data = await response.json()
+
+      if (response.ok) {
+        await fetchTeamMembers()
+        resetForm()
+        setShowAddModal(false)
+        setEditingMember(null)
+        setError(null)
+      } else {
+        // Mostrar el error del servidor
+        setError(data.error || 'Error al guardar el usuario')
+      }
+    } catch (error) {
+      console.error('Error saving team member:', error)
+      setError('Error de conexión. Por favor intenta de nuevo.')
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  const handleDelete = async (id: string) => {
+    if (!confirm('¿Estás seguro de eliminar este miembro del equipo?')) return
+
+    try {
+      const response = await fetch(`/api/club/team?id=${id}`, {
+        method: 'DELETE'
+      })
+
+      if (response.ok) {
+        await fetchTeamMembers()
+      }
+    } catch (error) {
+      console.error('Error deleting team member:', error)
+    }
+  }
+
+  const resetForm = () => {
+    setFormData({
+      name: '',
+      email: '',
+      phone: '',
+      password: '',
+      role: 'CLUB_STAFF',
+      permissions: []
+    })
+    setError(null)
+    setShowPassword(false)
+    setChangePassword(false)
+  }
+
+  const togglePermission = (moduleId: string) => {
+    setFormData(prev => ({
+      ...prev,
+      permissions: prev.permissions.includes(moduleId)
+        ? prev.permissions.filter(p => p !== moduleId)
+        : [...prev.permissions, moduleId]
+    }))
+  }
+
+  const openEditModal = (member: TeamMember) => {
+    setEditingMember(member)
+    setChangePassword(false)
+    setFormData({
+      name: member.name,
+      email: member.email,
+      phone: member.phone || '',
+      role: member.role,
+      permissions: member.permissions
+    })
+    setShowAddModal(true)
+  }
+
+  return (
+    <div className="p-6 max-w-7xl mx-auto">
+      {/* Header */}
+      <div className="mb-8">
+        <div>
+          <h1 className="text-3xl font-bold text-gray-900 flex items-center gap-3">
+            <Users className="w-8 h-8 text-emerald-600" />
+            Gestión del Equipo
+          </h1>
+          <p className="text-gray-600 mt-2">
+            Administra los usuarios y permisos de tu club
+          </p>
+        </div>
+      </div>
+
+      {/* Loading State */}
+      {loadingTeam && (
+        <div className="flex flex-col items-center justify-center py-12">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-emerald-600"></div>
+          <p className="mt-4 text-gray-600">Cargando equipo...</p>
+        </div>
+      )}
+
+      {/* Error State */}
+      {fetchError && !loadingTeam && (
+        <div className="bg-red-50 border border-red-200 rounded-lg p-6 mb-6">
+          <div className="flex items-center gap-3">
+            <svg className="w-6 h-6 text-red-600" fill="currentColor" viewBox="0 0 20 20">
+              <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clipRule="evenodd" />
+            </svg>
+            <div>
+              <p className="font-medium text-red-900">{fetchError}</p>
+              {fetchError.includes('inicia sesión') && (
+                <a href="/login" className="text-sm text-red-700 underline hover:text-red-800 mt-1 inline-block">
+                  Ir a iniciar sesión
+                </a>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Team Members Grid */}
+      {!loadingTeam && !fetchError && (
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+        {/* Add User Card - Always visible */}
+        <div
+          onClick={() => {
+            resetForm()
+            setEditingMember(null)
+            setShowAddModal(true)
+          }}
+          className="bg-gradient-to-br from-emerald-50 to-green-50 border-2 border-dashed border-emerald-300 rounded-xl p-6 flex flex-col items-center justify-center min-h-[280px] cursor-pointer hover:border-emerald-500 hover:bg-emerald-50 transition-all group"
+        >
+          <div className="w-16 h-16 bg-emerald-100 rounded-full flex items-center justify-center group-hover:bg-emerald-200 transition-colors mb-4">
+            <UserPlus className="w-8 h-8 text-emerald-600" />
+          </div>
+          <h3 className="text-lg font-semibold text-gray-800 mb-2">Agregar Nuevo Usuario</h3>
+          <p className="text-sm text-gray-600 text-center">
+            Crea un nuevo usuario para tu equipo y asigna permisos
+          </p>
+        </div>
+
+        {teamMembers.map((member) => (
+          <div key={member.id} className="bg-white rounded-xl shadow-sm border border-gray-200 p-6 hover:shadow-md transition-shadow">
+            <div className="flex items-start justify-between mb-4">
+              <div className="flex items-center gap-3">
+                <div className="w-12 h-12 bg-emerald-100 rounded-full flex items-center justify-center">
+                  <span className="text-emerald-700 font-semibold text-lg">
+                    {member.name.charAt(0).toUpperCase()}
+                  </span>
+                </div>
+                <div>
+                  <h3 className="font-semibold text-gray-900">{member.name}</h3>
+                  <span className={`inline-block px-2 py-1 text-xs rounded-full ${
+                    member.role === 'CLUB_OWNER'
+                      ? 'bg-purple-100 text-purple-700'
+                      : 'bg-blue-100 text-blue-700'
+                  }`}>
+                    {member.role === 'CLUB_OWNER' ? 'Dueño' : 'Staff'}
+                  </span>
+                </div>
+              </div>
+              <div className="flex gap-2">
+                <button
+                  onClick={() => openEditModal(member)}
+                  className="p-2 text-gray-500 hover:text-emerald-600 hover:bg-emerald-50 rounded-lg transition-all"
+                >
+                  <Edit className="w-4 h-4" />
+                </button>
+                {member.role !== 'CLUB_OWNER' && (
+                  <button
+                    onClick={() => handleDelete(member.id)}
+                    className="p-2 text-gray-500 hover:text-red-600 hover:bg-red-50 rounded-lg transition-all"
+                  >
+                    <Trash2 className="w-4 h-4" />
+                  </button>
+                )}
+              </div>
+            </div>
+
+            <div className="space-y-2 text-sm">
+              <div className="flex items-center gap-2 text-gray-600">
+                <Mail className="w-4 h-4" />
+                {member.email}
+              </div>
+              {member.phone && (
+                <div className="flex items-center gap-2 text-gray-600">
+                  <Phone className="w-4 h-4" />
+                  {member.phone}
+                </div>
+              )}
+            </div>
+
+            <div className="mt-4 pt-4 border-t border-gray-100">
+              <p className="text-xs text-gray-500 mb-2">Acceso a módulos:</p>
+              <div className="flex flex-wrap gap-1">
+                {member.permissions.length > 0 ? (
+                  member.permissions.map((perm) => {
+                    const moduleConfig = MODULE_CONFIG[perm]
+                    const moduleName = availableModules.find(m => m.id === perm)?.name ||
+                                     moduleConfig?.displayName ||
+                                     perm
+                    return (
+                      <span key={perm} className="px-2 py-1 bg-gray-100 text-gray-700 text-xs rounded">
+                        {moduleName}
+                      </span>
+                    )
+                  })
+                ) : (
+                  <span className="text-xs text-gray-400">Sin permisos asignados</span>
+                )}
+              </div>
+            </div>
+          </div>
+        ))}
+
+        </div>
+      )}
+
+      {/* Add/Edit Modal */}
+      {showAddModal && (
+        <div
+          className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4"
+          onClick={(e) => {
+            if (e.target === e.currentTarget) {
+              setShowAddModal(false)
+              setEditingMember(null)
+              resetForm()
+            }
+          }}
+        >
+          <div className="bg-white rounded-2xl max-w-2xl w-full max-h-[90vh] overflow-y-auto">
+            <div className="p-6 border-b border-gray-200">
+              <div className="flex items-center justify-between">
+                <h2 className="text-2xl font-bold text-gray-900">
+                  {editingMember ? 'Editar Usuario' : 'Agregar Nuevo Usuario'}
+                </h2>
+                <button
+                  onClick={() => {
+                    setShowAddModal(false)
+                    setEditingMember(null)
+                    resetForm()
+                  }}
+                  className="p-2 hover:bg-gray-100 rounded-lg transition-colors"
+                >
+                  <X className="w-5 h-5" />
+                </button>
+              </div>
+            </div>
+
+            <form onSubmit={handleSubmit} className="p-6">
+              {/* Error Alert */}
+              {error && (
+                <div className="mb-6 p-4 bg-red-50 border border-red-200 rounded-lg">
+                  <div className="flex items-start gap-3">
+                    <div className="flex-shrink-0">
+                      <svg className="w-5 h-5 text-red-600 mt-0.5" fill="currentColor" viewBox="0 0 20 20">
+                        <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clipRule="evenodd" />
+                      </svg>
+                    </div>
+                    <div className="flex-1">
+                      <h3 className="text-sm font-medium text-red-800">Error al crear usuario</h3>
+                      <p className="text-sm text-red-700 mt-1">{error}</p>
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {/* Basic Info */}
+              <div className="space-y-4 mb-6">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    Nombre completo
+                  </label>
+                  <input
+                    type="text"
+                    required
+                    value={formData.name}
+                    onChange={(e) => setFormData(prev => ({ ...prev, name: e.target.value }))}
+                    className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-transparent"
+                    placeholder="Juan Pérez"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    Email
+                  </label>
+                  <input
+                    type="email"
+                    required
+                    value={formData.email}
+                    onChange={(e) => setFormData(prev => ({ ...prev, email: e.target.value }))}
+                    className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-transparent"
+                    placeholder="juan@ejemplo.com"
+                    disabled={!!editingMember}
+                  />
+                </div>
+
+                {/* Password field - show when creating or when change password is checked */}
+                {!editingMember && (
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                      Contraseña
+                    </label>
+                    <div className="relative">
+                      <input
+                        type={showPassword ? "text" : "password"}
+                        required
+                        value={formData.password}
+                        onChange={(e) => setFormData(prev => ({ ...prev, password: e.target.value }))}
+                        className="w-full px-4 pr-12 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-transparent"
+                        placeholder="Mínimo 8 caracteres"
+                        minLength={8}
+                      />
+                      <button
+                        type="button"
+                        onClick={() => setShowPassword(!showPassword)}
+                        className="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-400 hover:text-gray-600"
+                      >
+                        {showPassword ? <EyeOff className="w-5 h-5" /> : <Eye className="w-5 h-5" />}
+                      </button>
+                    </div>
+                    <p className="text-xs text-gray-500 mt-1">
+                      La contraseña debe tener al menos 8 caracteres
+                    </p>
+                  </div>
+                )}
+
+                {/* Change password option when editing */}
+                {editingMember && (
+                  <>
+                    <div>
+                      <label className="flex items-center gap-2 cursor-pointer">
+                        <input
+                          type="checkbox"
+                          checked={changePassword}
+                          onChange={(e) => {
+                            setChangePassword(e.target.checked)
+                            if (!e.target.checked) {
+                              setFormData(prev => ({ ...prev, password: '' }))
+                            }
+                          }}
+                          className="w-4 h-4 text-emerald-600 border-gray-300 rounded focus:ring-emerald-500"
+                        />
+                        <span className="text-sm font-medium text-gray-700">
+                          ¿Cambiar contraseña?
+                        </span>
+                      </label>
+                    </div>
+
+                    {changePassword && (
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-2">
+                          Nueva contraseña
+                        </label>
+                        <div className="relative">
+                          <input
+                            type={showPassword ? "text" : "password"}
+                            required={changePassword}
+                            value={formData.password}
+                            onChange={(e) => setFormData(prev => ({ ...prev, password: e.target.value }))}
+                            className="w-full px-4 pr-12 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-transparent"
+                            placeholder="Mínimo 8 caracteres"
+                            minLength={8}
+                          />
+                          <button
+                            type="button"
+                            onClick={() => setShowPassword(!showPassword)}
+                            className="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-400 hover:text-gray-600"
+                          >
+                            {showPassword ? <EyeOff className="w-5 h-5" /> : <Eye className="w-5 h-5" />}
+                          </button>
+                        </div>
+                        <p className="text-xs text-gray-500 mt-1">
+                          La contraseña debe tener al menos 8 caracteres
+                        </p>
+                      </div>
+                    )}
+                  </>
+                )}
+              </div>
+
+              {/* Permissions */}
+              <div>
+                <h3 className="text-lg font-semibold text-gray-900 mb-4 flex items-center gap-2">
+                  <Shield className="w-5 h-5 text-emerald-600" />
+                  Permisos de Acceso
+                </h3>
+                {availableModules.length > 0 ? (
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                    {availableModules.map((module) => {
+                      const moduleConfig = MODULE_CONFIG[module.id]
+                      if (!moduleConfig) return null
+
+                      const Icon = moduleConfig.icon
+                      const displayName = module.name || moduleConfig.displayName || module.id
+                      const description = moduleConfig.description
+
+                      return (
+                        <label
+                          key={module.id}
+                          className={`flex items-start gap-3 p-4 border rounded-lg cursor-pointer transition-all ${
+                            formData.permissions.includes(module.id)
+                              ? 'border-emerald-500 bg-emerald-50'
+                              : 'border-gray-200 hover:border-gray-300'
+                          }`}
+                        >
+                          <input
+                            type="checkbox"
+                            checked={formData.permissions.includes(module.id)}
+                            onChange={() => togglePermission(module.id)}
+                            className="mt-1"
+                          />
+                          <div className="flex-1">
+                            <div className="flex items-center gap-2">
+                              <Icon className="w-4 h-4 text-gray-600" />
+                              <span className="font-medium text-gray-900">{displayName}</span>
+                            </div>
+                            <p className="text-xs text-gray-500 mt-1">{description}</p>
+                          </div>
+                        </label>
+                      )
+                    })}
+                  </div>
+                ) : (
+                  <p className="text-gray-500 text-sm">Cargando módulos disponibles...</p>
+                )}
+              </div>
+
+              {/* Actions */}
+              <div className="flex gap-3 mt-8">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setShowAddModal(false)
+                    setEditingMember(null)
+                    resetForm()
+                  }}
+                  className="flex-1 px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors"
+                >
+                  Cancelar
+                </button>
+                <button
+                  type="submit"
+                  disabled={loading}
+                  className="flex-1 flex items-center justify-center gap-2"
+                  style={{
+                    backgroundColor: loading ? '#94a3b8' : '#10b981',
+                    color: 'white',
+                    padding: '12px 24px',
+                    borderRadius: '8px',
+                    fontWeight: '500',
+                    border: 'none',
+                    cursor: loading ? 'not-allowed' : 'pointer',
+                    transition: 'all 0.2s',
+                    opacity: loading ? 0.7 : 1
+                  }}
+                  onMouseEnter={(e) => {
+                    if (!loading) {
+                      e.currentTarget.style.backgroundColor = '#059669'
+                    }
+                  }}
+                  onMouseLeave={(e) => {
+                    if (!loading) {
+                      e.currentTarget.style.backgroundColor = '#10b981'
+                    }
+                  }}
+                >
+                  {loading ? (
+                    <span style={{ color: 'white' }}>Guardando...</span>
+                  ) : (
+                    <>
+                      <Save className="w-4 h-4" style={{ color: 'white' }} />
+                      <span style={{ color: 'white' }}>{editingMember ? 'Guardar Cambios' : 'Crear Usuario'}</span>
+                    </>
+                  )}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+    </div>
+  )
+}

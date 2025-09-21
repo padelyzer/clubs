@@ -1,0 +1,180 @@
+import { NextRequest, NextResponse } from 'next/server'
+import { prisma } from '@/lib/config/prisma'
+import { syncClassStudentCounter } from '@/lib/utils/class-counter'
+
+// GET - Get class booking details
+export async function GET(
+  request: NextRequest,
+  { params }: { params: Promise<{ id: string }> }
+) {
+  try {
+    const { id } = await params
+
+    const classBooking = await prisma.classBooking.findUnique({
+      where: { id },
+      include: {
+        class: {
+          include: {
+            instructor: true,
+            court: true
+          }
+        },
+        player: true
+      }
+    })
+
+    if (!classBooking) {
+      return NextResponse.json(
+        { success: false, error: 'Inscripción no encontrada' },
+        { status: 404 }
+      )
+    }
+
+    return NextResponse.json({
+      success: true,
+      booking: classBooking
+    })
+
+  } catch (error) {
+    console.error('Error fetching class booking:', error)
+    return NextResponse.json(
+      { success: false, error: 'Error al obtener inscripción' },
+      { status: 500 }
+    )
+  }
+}
+
+// DELETE - Cancel class booking
+export async function DELETE(
+  request: NextRequest,
+  { params }: { params: Promise<{ id: string }> }
+) {
+  try {
+    const { id } = await params
+
+    // Find the class booking
+    const classBooking = await prisma.classBooking.findUnique({
+      where: { id },
+      include: {
+        class: true
+      }
+    })
+
+    if (!classBooking) {
+      return NextResponse.json(
+        { success: false, error: 'Inscripción no encontrada' },
+        { status: 404 }
+      )
+    }
+
+    // Check if already attended - cannot cancel after attendance
+    if (classBooking.attended) {
+      return NextResponse.json(
+        { success: false, error: 'No se puede cancelar una inscripción después de asistir a la clase' },
+        { status: 400 }
+      )
+    }
+
+    // Use transaction to ensure atomicity
+    await prisma.$transaction(async (tx) => {
+      // Cancel the class booking
+      await tx.classBooking.update({
+        where: { id },
+        data: {
+          status: 'CANCELLED',
+          updatedAt: new Date()
+        }
+      })
+
+      // If payment was completed, create refund transaction
+      if (classBooking.paymentStatus === 'completed' && classBooking.paidAmount > 0) {
+        await tx.transaction.create({
+          data: {
+            clubId: classBooking.class.clubId,
+            type: 'EXPENSE',
+            category: 'REFUND',
+            amount: classBooking.paidAmount,
+            currency: 'MXN',
+            description: `Reembolso por cancelación: ${classBooking.class.name} - ${classBooking.studentName}`,
+            date: new Date(),
+            reference: `REFUND_${classBooking.id}`,
+            notes: JSON.stringify({
+              classId: classBooking.classId,
+              classBookingId: classBooking.id,
+              studentName: classBooking.studentName,
+              className: classBooking.class.name,
+              originalAmount: classBooking.paidAmount,
+              reason: 'CANCELLATION'
+            })
+          }
+        })
+      }
+
+      // Create notification for cancellation
+      await tx.notification.create({
+        data: {
+          type: 'WHATSAPP',
+          recipient: classBooking.studentPhone,
+          template: 'class_booking_cancelled',
+          status: 'pending'
+        }
+      })
+    })
+
+    // Sync class student counter after cancellation
+    await syncClassStudentCounter(classBooking.classId)
+
+    return NextResponse.json({
+      success: true,
+      message: `Inscripción cancelada para ${classBooking.studentName}`,
+      refund: classBooking.paymentStatus === 'completed' ? classBooking.paidAmount : 0
+    })
+
+  } catch (error) {
+    console.error('Error cancelling class booking:', error)
+    return NextResponse.json(
+      { success: false, error: 'Error al cancelar inscripción' },
+      { status: 500 }
+    )
+  }
+}
+
+// PUT - Update class booking
+export async function PUT(
+  request: NextRequest,
+  { params }: { params: Promise<{ id: string }> }
+) {
+  try {
+    const { id } = await params
+    const body = await request.json()
+
+    const updatedBooking = await prisma.classBooking.update({
+      where: { id },
+      data: {
+        ...body,
+        updatedAt: new Date()
+      },
+      include: {
+        class: {
+          include: {
+            instructor: true,
+            court: true
+          }
+        },
+        player: true
+      }
+    })
+
+    return NextResponse.json({
+      success: true,
+      booking: updatedBooking
+    })
+
+  } catch (error) {
+    console.error('Error updating class booking:', error)
+    return NextResponse.json(
+      { success: false, error: 'Error al actualizar inscripción' },
+      { status: 500 }
+    )
+  }
+}
