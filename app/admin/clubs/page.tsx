@@ -1,12 +1,7 @@
-import { requireSuperAdmin } from '@/lib/auth/actions'
-import { prisma } from '@/lib/config/prisma'
-import ClubsManagement from './components/clubs-management'
+import AdminClubsClientPage from './page-client'
 
-export default async function AdminClubsPage(props: {
-  searchParams: Promise<{ [key: string]: string | string[] | undefined }>
-}) {
-  const searchParams = await props.searchParams
-  await requireSuperAdmin()
+export default function AdminClubsPage() {
+  return <AdminClubsClientPage />
 
   const status = (searchParams.status as string) || 'all'
   const search = (searchParams.search as string) || ''
