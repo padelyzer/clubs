@@ -17,12 +17,8 @@ export function useHybridAuth() {
   const router = useRouter()
 
   useEffect(() => {
-    // Solo verificar sesión al montar el componente por primera vez
-    // No en cada navegación
-    if (!session && loading) {
-      checkSession()
-    }
-  }, []) // Sin dependencias para evitar re-verificaciones
+    checkSession()
+  }, []) // Solo al montar
 
   const checkSession = async () => {
     try {
@@ -34,30 +30,17 @@ export function useHybridAuth() {
       const localSession = getSession()
       
       if (localSession) {
-        // Verificar sesión con el servidor
+        // TEMPORAL: No verificar con el servidor para evitar problemas
+        // Solo confiar en la sesión local
+        console.log('[HybridAuth] Using local session without server verification')
+        setSession(localSession)
+        
+        // TODO: Re-habilitar verificación del servidor cuando se resuelva el problema
+        /* 
         const response = await fetch('/api/auth/verify-session', {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json'
-          },
-          body: JSON.stringify({ sessionId: localSession.sessionId })
+          ...
         })
-
-        if (response.ok) {
-          const data = await response.json()
-          if (data.valid) {
-            setSession(localSession)
-          } else {
-            console.error('[HybridAuth] Server says session is invalid')
-            clearSession()
-            setSession(null)
-          }
-        } else {
-          // NO limpiar la sesión si el servidor no responde
-          // Podría ser un problema temporal de red
-          console.error('[HybridAuth] Could not verify session with server, keeping local session')
-          setSession(localSession)
-        }
+        */
       } else {
         setSession(null)
       }
