@@ -1,6 +1,5 @@
 import { NextResponse } from 'next/server'
 import type { NextRequest } from 'next/server'
-import { getSession } from '@/lib/auth/session'
 
 // Rutas públicas que no requieren autenticación
 const publicRoutes = [
@@ -15,6 +14,9 @@ const publicRoutes = [
   '/api/widget',
   '/pay',
   '/opt-out',
+  '/api/health',
+  '/_next',
+  '/favicon.ico',
 ]
 
 // Rutas de API que requieren autenticación especial
@@ -47,59 +49,37 @@ export async function middleware(request: NextRequest) {
     return NextResponse.next()
   }
 
-  // Verificar autenticación para rutas protegidas
-  try {
-    const session = await getSession()
-    
-    if (!session) {
-      // Redirigir a login si no hay sesión
-      if (pathname.startsWith('/api/')) {
-        return new NextResponse(
-          JSON.stringify({ error: 'Unauthorized' }),
-          { status: 401, headers: { 'content-type': 'application/json' } }
-        )
-      }
-      
-      const url = request.nextUrl.clone()
-      url.pathname = '/login'
-      url.searchParams.set('callbackUrl', pathname)
-      return NextResponse.redirect(url)
-    }
-
-    // Verificar permisos de super admin
-    if (superAdminRoutes.some(route => pathname.startsWith(route))) {
-      if (session.role !== 'super_admin') {
-        return new NextResponse(
-          JSON.stringify({ error: 'Forbidden - Super Admin access required' }),
-          { status: 403, headers: { 'content-type': 'application/json' } }
-        )
-      }
-    }
-
-    // Agregar headers de seguridad para APIs
+  // Verificación simple de autenticación basada en cookies
+  // NOTA: Esta es una verificación básica. La validación real debe hacerse en las rutas
+  const sessionCookie = request.cookies.get('auth_session')?.value || 
+                       request.cookies.get('lucia-auth')?.value ||
+                       request.cookies.get('padelyzer-session')?.value
+  
+  if (!sessionCookie) {
+    // No hay cookie de sesión - redirigir o retornar error
     if (pathname.startsWith('/api/')) {
-      const response = NextResponse.next()
-      response.headers.set('X-Content-Type-Options', 'nosniff')
-      response.headers.set('X-Frame-Options', 'DENY')
-      return response
-    }
-
-    return NextResponse.next()
-  } catch (error) {
-    console.error('[Middleware] Auth error:', error)
-    
-    // En caso de error, redirigir a login por seguridad
-    if (!pathname.startsWith('/api/')) {
-      const url = request.nextUrl.clone()
-      url.pathname = '/login'
-      return NextResponse.redirect(url)
+      return new NextResponse(
+        JSON.stringify({ error: 'Unauthorized' }),
+        { status: 401, headers: { 'content-type': 'application/json' } }
+      )
     }
     
-    return new NextResponse(
-      JSON.stringify({ error: 'Internal Server Error' }),
-      { status: 500, headers: { 'content-type': 'application/json' } }
-    )
+    const url = request.nextUrl.clone()
+    url.pathname = '/login'
+    url.searchParams.set('callbackUrl', pathname)
+    return NextResponse.redirect(url)
   }
+
+  // Para verificaciones más específicas (como super admin), 
+  // dejar que las rutas individuales lo manejen
+  
+  // Agregar headers de seguridad
+  const response = NextResponse.next()
+  response.headers.set('X-Content-Type-Options', 'nosniff')
+  response.headers.set('X-Frame-Options', 'DENY')
+  response.headers.set('X-XSS-Protection', '1; mode=block')
+  
+  return response
 }
 
 // Configurar qué rutas debe procesar el middleware
