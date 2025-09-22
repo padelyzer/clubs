@@ -219,7 +219,7 @@ export function createSecureHandler(options: {
         // All middleware passed, run the actual handler
         return await handler(request)
       } catch (error) {
-        console.error('Secure handler error:', error)
+        console.error
         return new NextResponse(
           JSON.stringify({
             error: 'Internal server error',

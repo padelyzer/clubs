@@ -123,13 +123,7 @@ export class SecurityLogger {
         [SecuritySeverity.CRITICAL]: '\x1b[35m'
       }[entry.severity] || '\x1b[0m'
       
-      console.log(
-        `${color}[SECURITY ${entry.severity}] ${entry.eventType}:`,
-        entry.message || '',
-        entry.metadata || '',
-        '\x1b[0m'
-      )
-    }
+      }
     
     // Agregar al buffer
     this.buffer.push(fullEntry)
@@ -175,8 +169,7 @@ export class SecurityLogger {
             })
           } catch (createError) {
             // If table doesn't exist, fall back to creating it
-            console.log('Security log creation failed, table may not exist:', createError)
-          }
+            }
         }
       })
     } catch (error) {
@@ -218,8 +211,7 @@ export class SecurityLogger {
    */
   private logToFile(logs: SecurityLogEntry[]): void {
     if (process.env.NODE_ENV === 'development') {
-      console.log('[SECURITY] Logs que no se pudieron guardar en BD:', logs.length)
-    }
+      }
     
     // En producción, aquí podrías enviar a un servicio externo
     // como Sentry, LogRocket, DataDog, etc.

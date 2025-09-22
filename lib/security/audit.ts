@@ -32,7 +32,7 @@ export async function createAuditLog(
     })
   } catch (error) {
     // Log to console but don't fail the main operation
-    console.error('Failed to create audit log:', error)
+    console.error
   }
 }
 
