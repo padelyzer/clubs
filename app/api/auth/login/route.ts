@@ -95,11 +95,10 @@ export async function POST(request: NextRequest) {
     // Establecer cookie de sesión con configuración explícita
     response.cookies.set(sessionCookie.name, sessionCookie.value, {
       httpOnly: true,
-      secure: process.env.NODE_ENV === 'production',
+      secure: false, // Temporalmente false para diagnóstico
       sameSite: 'lax',
       path: '/',
       maxAge: 60 * 60 * 24 * 30, // 30 días
-      ...sessionCookie.attributes
     })
 
     return response

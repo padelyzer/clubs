@@ -3,6 +3,7 @@
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
+import { LoginCookieWarning } from '@/components/LoginCookieWarning'
 
 export function LoginFormAPI() {
   const router = useRouter()
@@ -50,8 +51,10 @@ export function LoginFormAPI() {
   }
 
   return (
-    <form onSubmit={handleSubmit} className="space-y-6">
-      {error && (
+    <>
+      <LoginCookieWarning />
+      <form onSubmit={handleSubmit} className="space-y-6">
+        {error && (
         <div className="bg-red-50 border border-red-200 text-red-600 px-4 py-3 rounded-xl text-sm">
           <div className="flex items-center gap-2">
             <svg className="w-4 h-4 flex-shrink-0" fill="currentColor" viewBox="0 0 20 20">

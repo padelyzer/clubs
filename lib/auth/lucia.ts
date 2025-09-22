@@ -14,9 +14,11 @@ export const lucia = new Lucia(adapter, {
     name: "padelyzer-session",
     expires: false, // Session cookies
     attributes: {
-      secure: process.env.NODE_ENV === "production",
+      // Temporalmente deshabilitar secure para diagnóstico
+      secure: false, // process.env.NODE_ENV === "production",
       sameSite: "lax",
       path: "/",
+      domain: undefined, // Let browser decide
     },
   },
   sessionExpiresIn: new TimeSpan(30, "d"), // 30 days
