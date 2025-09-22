@@ -3,12 +3,12 @@ const nextConfig = {
   eslint: {
     // WARNING: Only set to true if you want to skip ESLint during builds
     // This should be false in production for code quality
-    ignoreDuringBuilds: true, // TEMPORAL: Deploy urgente de seguridad
+    ignoreDuringBuilds: true, // TODO: Re-habilitar después de corregir warnings
   },
   typescript: {
     // WARNING: Only set to true if you want to skip TypeScript checks during builds
     // This should be false in production for type safety
-    ignoreBuildErrors: true, // TEMPORAL: Deploy urgente de seguridad
+    ignoreBuildErrors: true, // TODO: Re-habilitar después de corregir errores
   },
   serverExternalPackages: ['@prisma/client'],
   

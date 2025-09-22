@@ -90,7 +90,7 @@ async function activateAllModules() {
 
     for (const module of allModules) {
       // Verificar si ya está activo
-      const existingActivation = await prisma.clubModuleAccess.findUnique({
+      const existingActivation = await prisma.clubModule.findUnique({
         where: {
           clubId_moduleId: {
             clubId: club.id,
@@ -101,7 +101,7 @@ async function activateAllModules() {
 
       if (!existingActivation) {
         // Activar módulo
-        await prisma.clubModuleAccess.create({
+        await prisma.clubModule.create({
           data: {
             clubId: club.id,
             moduleId: module.id,
@@ -137,26 +137,22 @@ async function activateAllModules() {
 
     // Buscar o crear el paquete Premium
     let premiumPackage = await prisma.saasPackage.findFirst({
-      where: { code: 'premium' }
+      where: { name: 'premium' }
     })
 
     if (!premiumPackage) {
       premiumPackage = await prisma.saasPackage.create({
         data: {
-          code: 'premium',
-          name: 'Premium',
+          name: 'premium',
+          displayName: 'Premium',
           description: 'Acceso completo a todos los módulos',
-          monthlyPrice: 0, // Gratis para demo
-          features: [
-            'Todos los módulos incluidos',
-            'Sin límite de canchas',
-            'Soporte prioritario',
-            'Acceso a nuevas funcionalidades'
-          ],
+          basePrice: 0, // Gratis para demo
+          currency: 'MXN',
           maxCourts: null,
-          maxBookingsPerMonth: null,
+          maxBookingsMonth: null,
           maxUsers: null,
           isActive: true,
+          isDefault: false,
           sortOrder: 1
         }
       })
@@ -164,13 +160,28 @@ async function activateAllModules() {
     }
 
     // Asignar paquete al club
-    await prisma.club.update({
-      where: { id: club.id },
-      data: {
-        packageId: premiumPackage.id,
-        packageExpiresAt: null // Sin expiración
-      }
+    const existingPackage = await prisma.clubPackage.findUnique({
+      where: { clubId: club.id }
     })
+    
+    if (existingPackage) {
+      await prisma.clubPackage.update({
+        where: { clubId: club.id },
+        data: {
+          packageId: premiumPackage.id,
+          isActive: true,
+          activatedAt: new Date()
+        }
+      })
+    } else {
+      await prisma.clubPackage.create({
+        data: {
+          clubId: club.id,
+          packageId: premiumPackage.id,
+          isActive: true
+        }
+      })
+    }
     console.log('   ✅ Paquete Premium asignado al club')
 
     // Resumen final
