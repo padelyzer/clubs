@@ -53,13 +53,25 @@ interface DatabaseUserAttributes {
 // Validate session - cached per request
 export const validateRequest = cache(
   async (): Promise<{ user: User; session: Session } | { user: null; session: null }> => {
-    const sessionId = (await cookies()).get(lucia.sessionCookieName)?.value ?? null;
+    const cookieStore = await cookies();
+    const sessionCookie = cookieStore.get(lucia.sessionCookieName);
+    const sessionId = sessionCookie?.value ?? null;
+    
+    console.log('[validateRequest] Cookie name:', lucia.sessionCookieName);
+    console.log('[validateRequest] Session ID from cookie:', sessionId);
+    console.log('[validateRequest] All cookies:', cookieStore.getAll().map(c => c.name));
     
     if (!sessionId) {
+      console.log('[validateRequest] No session ID found in cookies');
       return { user: null, session: null };
     }
 
     const result = await lucia.validateSession(sessionId);
+    console.log('[validateRequest] Session validation result:', {
+      hasSession: !!result.session,
+      hasUser: !!result.user,
+      sessionFresh: result.session?.fresh
+    });
     
     try {
       if (result.session && result.session.fresh) {
