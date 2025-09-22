@@ -78,8 +78,27 @@ export async function POST(request: NextRequest) {
       redirectUrl = `/c/${user.Club.slug}/setup`
     }
 
-    // Preparar respuesta con cookie de sesión
-    const response = NextResponse.json({
+    // IMPORTANTE: En Vercel, las cookies deben establecerse usando el objeto cookies de Next.js
+    // antes de crear la respuesta
+    const { cookies } = await import('next/headers')
+    const cookieStore = await cookies()
+    
+    // Establecer la cookie directamente
+    cookieStore.set(sessionCookie.name, sessionCookie.value, {
+      httpOnly: true,
+      secure: false, // Temporalmente false para diagnóstico
+      sameSite: 'lax',
+      path: '/',
+      maxAge: 60 * 60 * 24 * 30, // 30 días
+    })
+    
+    console.log('[Login] Cookie set via cookieStore:', {
+      name: sessionCookie.name,
+      value: sessionCookie.value.substring(0, 20) + '...',
+    })
+
+    // Ahora crear la respuesta
+    return NextResponse.json({
       success: true,
       user: {
         id: user.id,
@@ -91,28 +110,6 @@ export async function POST(request: NextRequest) {
       },
       redirectUrl
     })
-
-    // Establecer cookie de sesión de múltiples maneras para asegurar que funcione
-    // Método 1: Usar response.cookies.set
-    response.cookies.set(sessionCookie.name, sessionCookie.value, {
-      httpOnly: true,
-      secure: false, // Temporalmente false para diagnóstico
-      sameSite: 'lax',
-      path: '/',
-      maxAge: 60 * 60 * 24 * 30, // 30 días
-    })
-    
-    // Método 2: También establecer usando headers Set-Cookie
-    response.headers.append('Set-Cookie', `${sessionCookie.name}=${sessionCookie.value}; Path=/; HttpOnly; SameSite=Lax; Max-Age=${60 * 60 * 24 * 30}`)
-    
-    // Log para debug
-    console.log('[Login] Setting cookie:', {
-      name: sessionCookie.name,
-      value: sessionCookie.value.substring(0, 20) + '...',
-      attributes: sessionCookie.attributes
-    })
-
-    return response
 
   } catch (error) {
     console.error('Login error:', error)
