@@ -9,6 +9,7 @@ const publicRoutes = [
   '/register',
   '/api/auth/login',
   '/api/auth/register',
+  '/api/auth/logout',  // Permitir logout sin autenticación
   '/api/public',
   '/widget',
   '/api/widget',
