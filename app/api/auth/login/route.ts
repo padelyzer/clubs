@@ -92,12 +92,15 @@ export async function POST(request: NextRequest) {
       redirectUrl
     })
 
-    // Establecer cookie de sesión
-    response.cookies.set(
-      sessionCookie.name,
-      sessionCookie.value,
-      sessionCookie.attributes as any
-    )
+    // Establecer cookie de sesión con configuración explícita
+    response.cookies.set(sessionCookie.name, sessionCookie.value, {
+      httpOnly: true,
+      secure: process.env.NODE_ENV === 'production',
+      sameSite: 'lax',
+      path: '/',
+      maxAge: 60 * 60 * 24 * 30, // 30 días
+      ...sessionCookie.attributes
+    })
 
     return response
 
