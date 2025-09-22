@@ -1,5 +1,6 @@
 // import { LoginFormServerAction } from './login-form-server-action' // OLD - Server Action (30+ segundos)
-import { LoginFormAPI } from './login-form-api' // NEW - API Route (< 1 segundo)
+// import { LoginFormAPI } from './login-form-api' // OLD - Solo cookies
+import { LoginFormHybrid } from './login-form-hybrid' // NEW - Híbrido cookies + localStorage
 import Link from 'next/link'
 import Image from 'next/image'
 
@@ -75,8 +76,8 @@ export default function LoginPage() {
               </p>
             </div>
 
-            {/* Login Form - Using API Route for better performance */}
-            <LoginFormAPI />
+            {/* Login Form - Using Hybrid Auth (cookies + localStorage) */}
+            <LoginFormHybrid />
           </div>
 
           {/* Footer link */}

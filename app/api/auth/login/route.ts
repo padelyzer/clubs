@@ -78,7 +78,17 @@ export async function POST(request: NextRequest) {
       redirectUrl = `/c/${user.Club.slug}/setup`
     }
 
-    // Crear la respuesta primero
+    // Crear datos de sesión para el cliente
+    const sessionData = {
+      sessionId: session.id,
+      userId: user.id,
+      email: user.email,
+      role: user.role,
+      clubId: user.clubId,
+      expiresAt: session.expiresAt.getTime()
+    }
+
+    // Crear la respuesta con datos adicionales para el cliente
     const response = NextResponse.json({
       success: true,
       user: {
@@ -89,19 +99,19 @@ export async function POST(request: NextRequest) {
         clubId: user.clubId,
         clubName: user.Club?.name
       },
-      redirectUrl
+      redirectUrl,
+      // Incluir datos de sesión para localStorage respaldo
+      sessionData
     })
 
-    // SOLUCIÓN: Establecer cookie usando solo headers Set-Cookie
-    // Este es el único método que funciona consistentemente en Vercel
+    // Método 1: Establecer cookie (funcionará para usuarios sin bloqueadores)
     const cookieString = `${sessionCookie.name}=${sessionCookie.value}; Path=/; HttpOnly; SameSite=Lax; Max-Age=${60 * 60 * 24 * 30}`
-    
     response.headers.set('Set-Cookie', cookieString)
     
-    console.log('[Login] Setting cookie via Set-Cookie header:', {
-      name: sessionCookie.name,
-      value: sessionCookie.value.substring(0, 20) + '...',
-      cookieString: cookieString.substring(0, 50) + '...'
+    console.log('[Login] Setting hybrid session:', {
+      cookieName: sessionCookie.name,
+      sessionId: session.id,
+      method: 'cookie + localStorage respaldo'
     })
 
     return response
