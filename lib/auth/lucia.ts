@@ -11,14 +11,14 @@ const adapter = new PrismaAdapter(prisma.session, prisma.user);
 // Initialize Lucia
 export const lucia = new Lucia(adapter, {
   sessionCookie: {
-    name: "padelyzer-session",
+    name: "auth-session", // Cambiar nombre para evitar conflictos
     expires: false, // Session cookies
     attributes: {
       // Temporalmente deshabilitar secure para diagnóstico
       secure: false, // process.env.NODE_ENV === "production",
       sameSite: "lax",
       path: "/",
-      domain: undefined, // Let browser decide
+      // No especificar domain para que use el dominio actual
     },
   },
   sessionExpiresIn: new TimeSpan(30, "d"), // 30 days

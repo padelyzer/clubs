@@ -92,13 +92,24 @@ export async function POST(request: NextRequest) {
       redirectUrl
     })
 
-    // Establecer cookie de sesión con configuración explícita
+    // Establecer cookie de sesión de múltiples maneras para asegurar que funcione
+    // Método 1: Usar response.cookies.set
     response.cookies.set(sessionCookie.name, sessionCookie.value, {
       httpOnly: true,
       secure: false, // Temporalmente false para diagnóstico
       sameSite: 'lax',
       path: '/',
       maxAge: 60 * 60 * 24 * 30, // 30 días
+    })
+    
+    // Método 2: También establecer usando headers Set-Cookie
+    response.headers.append('Set-Cookie', `${sessionCookie.name}=${sessionCookie.value}; Path=/; HttpOnly; SameSite=Lax; Max-Age=${60 * 60 * 24 * 30}`)
+    
+    // Log para debug
+    console.log('[Login] Setting cookie:', {
+      name: sessionCookie.name,
+      value: sessionCookie.value.substring(0, 20) + '...',
+      attributes: sessionCookie.attributes
     })
 
     return response
