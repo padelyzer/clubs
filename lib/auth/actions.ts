@@ -37,6 +37,37 @@ export async function getCurrentUser() {
   }
 }
 
+// Require functions for different roles
+export async function requireClubStaff() {
+  try {
+    const { user, session } = await validateRequest()
+
+    if (!user || !session) {
+      redirect('/login')
+    }
+
+    // Check if user has club staff permissions
+    if (user.role !== 'super_admin' && user.role !== 'club_admin' && user.role !== 'club_staff') {
+      redirect('/unauthorized')
+    }
+
+    if (!user.active) {
+      redirect('/inactive')
+    }
+
+    return {
+      userId: user.id,
+      userEmail: user.email,
+      role: user.role,
+      clubId: user.clubId,
+      active: user.active
+    }
+  } catch (error) {
+    console.error('requireClubStaff error:', error)
+    redirect('/login')
+  }
+}
+
 // Funciones de autenticación - Usa Lucia Auth
 export async function requireAuth() {
   try {
