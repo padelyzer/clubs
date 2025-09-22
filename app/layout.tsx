@@ -8,6 +8,7 @@ import { Toaster as HotToast } from "react-hot-toast";
 import { CriticalErrorBoundary } from "@/components/error-boundaries/ErrorBoundary";
 import { GlobalErrorHandler } from "@/components/error-boundaries/GlobalErrorHandler";
 import { CookieBlockerDetector } from "@/components/CookieBlockerDetector";
+import { FallbackAuthProvider } from "@/components/providers/fallback-auth-provider";
 
 const inter = Inter({
   variable: "--font-inter",
@@ -37,12 +38,14 @@ export default function RootLayout({
     <html lang="es" className="light">
       <body className={`${inter.variable} font-inter bg-gray-50 text-gray-900`}>
         <CriticalErrorBoundary context="root-layout">
-          <CookieBlockerDetector />
-          {children}
-          <GlobalErrorHandler />
-          <NotificationContainer />
-          <Toaster />
-          <HotToast />
+          <FallbackAuthProvider>
+            <CookieBlockerDetector />
+            {children}
+            <GlobalErrorHandler />
+            <NotificationContainer />
+            <Toaster />
+            <HotToast />
+          </FallbackAuthProvider>
         </CriticalErrorBoundary>
       </body>
     </html>
