@@ -5,7 +5,13 @@ import { useRouter } from 'next/navigation'
 import { getSession, saveSession, clearSession, hasValidSession, canUseCookies, type SessionData } from '@/lib/auth/hybrid-session'
 
 export function useHybridAuth() {
-  const [session, setSession] = useState<SessionData | null>(null)
+  const [session, setSession] = useState<SessionData | null>(() => {
+    // Inicializar con la sesión existente si hay
+    if (typeof window !== 'undefined') {
+      return getSession()
+    }
+    return null
+  })
   const [loading, setLoading] = useState(true)
   const [authMethod, setAuthMethod] = useState<'cookies' | 'localStorage' | 'none'>('none')
   const router = useRouter()

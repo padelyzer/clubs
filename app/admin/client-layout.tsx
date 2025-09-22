@@ -16,9 +16,13 @@ export default function AdminClientLayout({
   useEffect(() => {
     if (!loading) {
       if (!session) {
+        console.log('[AdminLayout] No session, redirecting to login')
         router.push('/login')
       } else if (session.role !== 'SUPER_ADMIN') {
+        console.log('[AdminLayout] Not super admin, redirecting to dashboard')
         router.push('/dashboard')
+      } else {
+        console.log('[AdminLayout] Valid admin session')
       }
     }
   }, [session, loading, router])
