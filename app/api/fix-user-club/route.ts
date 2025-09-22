@@ -1,0 +1,98 @@
+import { NextRequest, NextResponse } from 'next/server'
+import { prisma } from '@/lib/config/prisma'
+
+export async function POST(request: NextRequest) {
+  try {
+    // Solo permitir con token específico
+    const authHeader = request.headers.get('authorization')
+    if (authHeader !== 'Bearer fix-user-club-2024') {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+    }
+
+    const body = await request.json()
+    const { email } = body
+
+    if (!email) {
+      return NextResponse.json({ error: 'Email required' }, { status: 400 })
+    }
+
+    // Buscar el usuario
+    const user = await prisma.user.findUnique({
+      where: { email },
+      include: { Club: true }
+    })
+
+    if (!user) {
+      return NextResponse.json({ error: 'User not found' }, { status: 404 })
+    }
+
+    // Si ya tiene un club, devolver la info
+    if (user.clubId && user.Club) {
+      return NextResponse.json({
+        success: true,
+        message: 'User already has club',
+        user: {
+          email: user.email,
+          clubId: user.clubId,
+          clubName: user.Club.name,
+          clubSlug: user.Club.slug
+        }
+      })
+    }
+
+    // Buscar un club que pertenezca a este usuario por email o crear uno
+    let club = await prisma.club.findFirst({
+      where: {
+        OR: [
+          { name: { contains: 'Padel Puebla' } },
+          { slug: 'club-padel-puebla' }
+        ]
+      }
+    })
+
+    if (!club) {
+      // Crear un club para este usuario
+      const { randomBytes } = require('crypto')
+      const clubId = randomBytes(16).toString('hex')
+      
+      club = await prisma.club.create({
+        data: {
+          id: clubId,
+          name: 'Club Padel Puebla',
+          slug: 'club-padel-puebla',
+          address: 'Puebla, México',
+          phone: '+52 222 123 4567',
+          email: 'info@clubpadelpuebla.com',
+          initialSetupCompleted: true,
+          active: true,
+          updatedAt: new Date()
+        }
+      })
+    }
+
+    // Actualizar el usuario para asignar el club
+    const updatedUser = await prisma.user.update({
+      where: { email },
+      data: { clubId: club.id }
+    })
+
+    return NextResponse.json({
+      success: true,
+      message: 'User club assigned',
+      user: {
+        email: updatedUser.email,
+        clubId: updatedUser.clubId,
+        clubName: club.name,
+        clubSlug: club.slug
+      }
+    })
+
+  } catch (error) {
+    console.error('Fix user club error:', error)
+    return NextResponse.json({
+      success: false,
+      error: 'Internal server error',
+      details: error.message
+    }, { status: 500 })
+  }
+}
