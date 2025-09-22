@@ -68,14 +68,8 @@ export const validateRequest = cache(
           sessionCookie.attributes
         );
       }
-      if (!result.session) {
-        const sessionCookie = lucia.createBlankSessionCookie();
-        (await cookies()).set(
-          sessionCookie.name,
-          sessionCookie.value,
-          sessionCookie.attributes
-        );
-      }
+      // Don't automatically clear cookies when session is invalid
+      // This should only be done explicitly during logout
     } catch {
       // Next.js throws when you attempt to set cookies in certain contexts
     }
