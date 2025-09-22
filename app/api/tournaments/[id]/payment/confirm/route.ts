@@ -2,11 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { requireAuthAPI } from '@/lib/auth/actions'
 import { prisma } from '@/lib/config/prisma'
 import { z } from 'zod'
-import Stripe from 'stripe'
-
-const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!, {
-  apiVersion: '2024-12-18.acacia'
-})
+import { stripe } from '@/lib/config/stripe'
 
 const confirmPaymentSchema = z.object({
   registrationId: z.string().cuid(),
@@ -158,11 +154,20 @@ async function webhook(request: NextRequest) {
   
   let event: Stripe.Event
   
+  const webhookSecret = process.env.STRIPE_WEBHOOK_SECRET
+  if (!webhookSecret) {
+    console.error('STRIPE_WEBHOOK_SECRET not configured')
+    return NextResponse.json(
+      { error: 'Webhook configuration error' },
+      { status: 500 }
+    )
+  }
+  
   try {
     event = stripe.webhooks.constructEvent(
       body,
       sig,
-      process.env.STRIPE_WEBHOOK_SECRET!
+      webhookSecret
     )
   } catch (err: any) {
     console.error('Webhook signature verification failed:', err.message)

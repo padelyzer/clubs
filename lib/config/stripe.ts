@@ -1,16 +1,20 @@
 import Stripe from 'stripe'
 
-// Validate environment variables
-if (!process.env.STRIPE_SECRET_KEY) {
-  throw new Error('STRIPE_SECRET_KEY is required')
+// Check if we're in a build environment where Stripe might not be configured yet
+const isBuildTime = process.env.NODE_ENV === 'production' && !process.env.STRIPE_SECRET_KEY
+
+// Only validate environment variables if not in build time
+if (!isBuildTime && !process.env.STRIPE_SECRET_KEY) {
+  console.warn('STRIPE_SECRET_KEY is not configured - Stripe features will be disabled')
 }
 
-if (!process.env.STRIPE_WEBHOOK_SECRET) {
-  throw new Error('STRIPE_WEBHOOK_SECRET is required')
+if (!isBuildTime && !process.env.STRIPE_WEBHOOK_SECRET) {
+  console.warn('STRIPE_WEBHOOK_SECRET is not configured - Stripe webhooks will be disabled')
 }
 
-// Initialize Stripe with proper configuration
-export const stripe = new Stripe(process.env.STRIPE_SECRET_KEY, {
+// Initialize Stripe with proper configuration (use dummy key for build if needed)
+const stripeKey = process.env.STRIPE_SECRET_KEY || 'sk_test_dummy_key_for_build'
+export const stripe = new Stripe(stripeKey, {
   apiVersion: '2024-12-18.acacia',
   typescript: true,
   maxNetworkRetries: 3,
@@ -309,7 +313,18 @@ export function constructWebhookEvent(
   signature: string
 ): StripeResponse<Stripe.Event> {
   try {
-    const webhookSecret = process.env.STRIPE_WEBHOOK_SECRET!
+    const webhookSecret = process.env.STRIPE_WEBHOOK_SECRET
+    if (!webhookSecret) {
+      return {
+        success: false,
+        error: {
+          type: 'configuration_error',
+          message: 'Stripe webhook secret not configured',
+        },
+        retryable: false
+      }
+    }
+    
     const event = stripe.webhooks.constructEvent(body, signature, webhookSecret)
     return { success: true, data: event }
   } catch (error) {
