@@ -89,6 +89,11 @@ export function getSession(): SessionData | null {
     
     // Verificar si la sesión no ha expirado
     if (session.expiresAt && Date.now() > session.expiresAt) {
+      console.log('[Session] Session expired:', {
+        expiresAt: new Date(session.expiresAt),
+        now: new Date(),
+        expired: true
+      })
       clearSession()
       return null
     }
@@ -104,6 +109,9 @@ export function getSession(): SessionData | null {
 // Limpiar sesión de todos los métodos
 export function clearSession() {
   if (typeof window === 'undefined') return
+  
+  // DEBUG: Ver qué está llamando a clearSession
+  console.trace('[Session] clearSession called from:')
   
   // Limpiar cookie
   document.cookie = `${SESSION_KEY}=; path=/; max-age=0`
