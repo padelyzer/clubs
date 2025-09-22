@@ -1,14 +1,15 @@
-import SetupGuard from '@/components/SetupGuard'
+// import SetupGuard from '@/components/SetupGuard'
 
 export default function AuthLayout({
   children,
 }: {
   children: React.ReactNode
 }) {
-  // Wrap children with SetupGuard to check for initial setup
+  // Temporarily disabled SetupGuard to fix session issues
+  // TODO: Fix SetupGuard to handle auth errors properly
   return (
-    <SetupGuard>
+    <>
       {children}
-    </SetupGuard>
+    </>
   )
 }
