@@ -68,13 +68,20 @@ export function useHybridAuth() {
       })
 
       const data = await response.json()
+      console.log('[HybridAuth] Login response:', data)
 
       if (response.ok && data.success) {
         // Guardar sesión usando método híbrido
         if (data.sessionData) {
+          console.log('[HybridAuth] Saving session data:', data.sessionData)
           saveSession(data.sessionData)
           setSession(data.sessionData)
+        } else {
+          console.error('[HybridAuth] No sessionData in response!')
         }
+        
+        // Esperar un momento para asegurar que se guarde
+        await new Promise(resolve => setTimeout(resolve, 100))
         
         router.push(data.redirectUrl || '/dashboard')
         router.refresh()

@@ -37,18 +37,28 @@ export function canUseCookies(): boolean {
 export function saveSession(sessionData: SessionData) {
   if (typeof window === 'undefined') return
   
+  console.log('[Session] Saving session data:', sessionData)
   const data = JSON.stringify(sessionData)
   
-  if (canUseCookies()) {
-    // Usar cookies si funcionan
-    const maxAge = Math.floor((sessionData.expiresAt - Date.now()) / 1000)
-    document.cookie = `${SESSION_KEY}=${encodeURIComponent(data)}; path=/; max-age=${maxAge}; samesite=lax`
-    console.log('[Session] Saved using cookies')
-  } else {
-    // Usar localStorage como respaldo
+  // IMPORTANTE: Siempre guardar en localStorage como respaldo
+  // Esto asegura que funcione incluso si las cookies están bloqueadas
+  try {
     localStorage.setItem(SESSION_KEY, data)
-    sessionStorage.setItem(SESSION_KEY, data) // También en sessionStorage
-    console.log('[Session] Saved using localStorage (cookies blocked)')
+    sessionStorage.setItem(SESSION_KEY, data)
+    console.log('[Session] Saved to localStorage/sessionStorage')
+  } catch (e) {
+    console.error('[Session] Error saving to storage:', e)
+  }
+  
+  // También intentar cookies si es posible
+  if (canUseCookies()) {
+    try {
+      const maxAge = Math.floor((sessionData.expiresAt - Date.now()) / 1000)
+      document.cookie = `${SESSION_KEY}=${encodeURIComponent(data)}; path=/; max-age=${maxAge}; samesite=lax`
+      console.log('[Session] Also saved to cookies')
+    } catch (e) {
+      console.error('[Session] Error saving to cookies:', e)
+    }
   }
 }
 
