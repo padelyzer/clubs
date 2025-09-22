@@ -1,14 +1,51 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
   eslint: {
-    // Disable ESLint during production builds to avoid deployment failures
-    ignoreDuringBuilds: true,
+    // WARNING: Only set to true if you want to skip ESLint during builds
+    // This should be false in production for code quality
+    ignoreDuringBuilds: false,
   },
   typescript: {
-    // Allow production builds to successfully complete even if there are type errors
-    ignoreBuildErrors: true,
+    // WARNING: Only set to true if you want to skip TypeScript checks during builds
+    // This should be false in production for type safety
+    ignoreBuildErrors: false,
   },
   serverExternalPackages: ['@prisma/client'],
+  
+  // Add security headers
+  async headers() {
+    return [
+      {
+        source: '/:path*',
+        headers: [
+          {
+            key: 'X-DNS-Prefetch-Control',
+            value: 'on'
+          },
+          {
+            key: 'Strict-Transport-Security',
+            value: 'max-age=63072000; includeSubDomains; preload'
+          },
+          {
+            key: 'X-Content-Type-Options',
+            value: 'nosniff'
+          },
+          {
+            key: 'X-Frame-Options',
+            value: 'SAMEORIGIN'
+          },
+          {
+            key: 'X-XSS-Protection',
+            value: '1; mode=block'
+          },
+          {
+            key: 'Referrer-Policy',
+            value: 'origin-when-cross-origin'
+          },
+        ],
+      },
+    ]
+  },
 }
 
 module.exports = nextConfig
