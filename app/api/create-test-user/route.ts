@@ -46,9 +46,13 @@ export async function POST(request: NextRequest) {
         }
       })
     } else {
-      // Crear nuevo usuario
+      // Crear nuevo usuario con ID generado
+      const { randomBytes } = require('crypto')
+      const id = randomBytes(16).toString('hex')
+      
       const newUser = await prisma.user.create({
         data: {
+          id,
           email,
           name: name || 'Test User',
           password: hashedPassword,
