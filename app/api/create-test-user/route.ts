@@ -57,7 +57,8 @@ export async function POST(request: NextRequest) {
           name: name || 'Test User',
           password: hashedPassword,
           role: role as any,
-          active: true
+          active: true,
+          updatedAt: new Date()
         }
       })
 
