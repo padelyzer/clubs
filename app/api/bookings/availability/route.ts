@@ -67,11 +67,21 @@ export async function GET(request: NextRequest) {
       }
     })
     
-    // Operating hours configuration
+    // Get operating hours from schedule rules
+    const today = bookingDate.getDay() // 0 = Sunday, 1 = Monday, etc.
+    const scheduleRule = await prisma.scheduleRule.findFirst({
+      where: {
+        clubId: session.clubId,
+        dayOfWeek: today,
+        enabled: true
+      }
+    })
     
-    // Default operating hours if not configured
-    const openTime = '07:00'
-    const closeTime = '22:00'
+    // Use schedule rule times or defaults
+    const openTime = scheduleRule?.startTime || '07:00'
+    const closeTime = scheduleRule?.endTime || '23:00'
+    
+    console.log('Schedule rule for day', today, ':', scheduleRule)
     
     // Generate all possible time slots
     const allSlots = []
@@ -83,7 +93,10 @@ export async function GET(request: NextRequest) {
       const slotEnd = format(addMinutes(currentTime, duration), 'HH:mm')
       
       // Check if this slot would exceed closing time
-      if (format(addMinutes(currentTime, duration), 'HH:mm') <= closeTime) {
+      const slotEndTime = addMinutes(currentTime, duration)
+      const closeDateTime = parse(closeTime, 'HH:mm', new Date())
+      
+      if (slotEndTime <= closeDateTime) {
         allSlots.push({
           startTime: slotStart,
           endTime: slotEnd,
