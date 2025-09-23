@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { requireSuperAdmin } from '@/lib/auth/actions'
+import { requireApiSuperAdmin } from '@/lib/auth/api-auth'
 import { prisma } from '@/lib/config/prisma'
 import { rateLimit, createRateLimitResponse } from '@/lib/security/rate-limit'
 import { auditSuccess, auditFailure, AuditActions } from '@/lib/security/audit'
@@ -12,7 +12,7 @@ import { handleApiError, NotFoundError, successResponse } from '@/lib/errors/api
 export async function GET(request: NextRequest) {
   try {
     // 1. Authentication
-    const session = await requireSuperAdmin()
+    const session = await requireApiSuperAdmin(request)
     
     // 2. Rate limiting
     const rateLimitResult = await rateLimit(request, 'admin')
@@ -105,7 +105,7 @@ export async function GET(request: NextRequest) {
 export async function POST(request: NextRequest) {
   try {
     // Authentication
-    const session = await requireSuperAdmin()
+    const session = await requireApiSuperAdmin(request)
     
     // Rate limiting
     const rateLimitResult = await rateLimit(request, 'admin')
