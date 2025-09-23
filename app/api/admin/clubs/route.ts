@@ -69,26 +69,64 @@ export async function GET(request: NextRequest) {
           where.status = status.toUpperCase()
         }
         
-        // 6. Paginated query
-        return await paginateQuery(
-          prisma.club,
-          paginationParams,
-          where,
-          {
-            subscription: {
-              include: {
-                plan: true
+        // 6. Paginated query - TEMPORARY FIX: Exclude description field
+        const [total, clubs] = await Promise.all([
+          prisma.club.count({ where }),
+          prisma.club.findMany({
+            where,
+            select: {
+              id: true,
+              name: true,
+              slug: true,
+              email: true,
+              phone: true,
+              address: true,
+              city: true,
+              state: true,
+              country: true,
+              postalCode: true,
+              website: true,
+              logo: true,
+              // description: true, // EXCLUDED - not in production DB
+              status: true,
+              active: true,
+              stripeAccountId: true,
+              stripeOnboardingCompleted: true,
+              stripePayoutsEnabled: true,
+              stripeChargesEnabled: true,
+              stripeDetailsSubmitted: true,
+              createdAt: true,
+              updatedAt: true,
+              subscription: {
+                include: {
+                  plan: true
+                }
+              },
+              _count: {
+                select: {
+                  User: true,
+                  Court: true,
+                  Booking: true
+                }
               }
             },
-            _count: {
-              select: {
-                User: true,
-                Court: true,
-                Booking: true
-              }
-            }
+            skip: (paginationParams.page - 1) * paginationParams.limit,
+            take: paginationParams.limit,
+            orderBy: { createdAt: 'desc' }
+          })
+        ])
+        
+        return {
+          data: clubs,
+          pagination: {
+            page: paginationParams.page,
+            limit: paginationParams.limit,
+            total,
+            pages: Math.ceil(total / paginationParams.limit),
+            hasNext: paginationParams.page < Math.ceil(total / paginationParams.limit),
+            hasPrev: paginationParams.page > 1
           }
-        )
+        }
       },
       CACHE_TTL.MEDIUM
     )
@@ -104,7 +142,10 @@ export async function GET(request: NextRequest) {
     )
     
     // 8. Return response with headers
-    return NextResponse.json(result, {
+    return NextResponse.json({
+      clubs: result.data,
+      pagination: result.pagination
+    }, {
       headers: {
         'X-RateLimit-Limit': rateLimitResult.limit.toString(),
         'X-RateLimit-Remaining': rateLimitResult.remaining.toString(),
