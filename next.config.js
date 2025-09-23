@@ -13,6 +13,19 @@ const nextConfig = {
   serverExternalPackages: ['@prisma/client'],
   
   // Add security headers
+  async rewrites() {
+    // Si estamos en api.padelyzer.com, reescribir las rutas
+    if (process.env.VERCEL_URL === 'api.padelyzer.com') {
+      return [
+        {
+          source: '/:path*',
+          destination: '/api/:path*',
+        },
+      ];
+    }
+    return [];
+  },
+  
   async headers() {
     return [
       {
@@ -42,6 +55,16 @@ const nextConfig = {
             key: 'Referrer-Policy',
             value: 'origin-when-cross-origin'
           },
+        ],
+      },
+      {
+        // CORS headers para rutas API
+        source: '/api/:path*',
+        headers: [
+          { key: 'Access-Control-Allow-Credentials', value: 'true' },
+          { key: 'Access-Control-Allow-Origin', value: 'https://padelyzer.app, https://api.padelyzer.com, http://localhost:*' },
+          { key: 'Access-Control-Allow-Methods', value: 'GET,OPTIONS,PATCH,DELETE,POST,PUT' },
+          { key: 'Access-Control-Allow-Headers', value: 'X-CSRF-Token, X-Requested-With, Accept, Accept-Version, Content-Length, Content-MD5, Content-Type, Date, X-Api-Version, Authorization' },
         ],
       },
     ]
