@@ -9,6 +9,8 @@ export interface FetchOptions extends Omit<RequestInit, 'headers'> {
 export async function hybridFetch(url: string, options: FetchOptions = {}) {
   const sessionData = getSession()
   
+  console.log('[HybridFetch] Session data:', sessionData)
+  
   const headers: Record<string, string> = {
     'Content-Type': 'application/json',
     ...options.headers
@@ -16,7 +18,11 @@ export async function hybridFetch(url: string, options: FetchOptions = {}) {
   
   // Add session to Authorization header if available
   if (sessionData) {
-    headers['Authorization'] = `Bearer ${encodeURIComponent(JSON.stringify(sessionData))}`
+    const authValue = `Bearer ${encodeURIComponent(JSON.stringify(sessionData))}`
+    headers['Authorization'] = authValue
+    console.log('[HybridFetch] Authorization header set, length:', authValue.length)
+  } else {
+    console.warn('[HybridFetch] No session data available for request to:', url)
   }
   
   const response = await fetch(url, {
@@ -26,11 +32,15 @@ export async function hybridFetch(url: string, options: FetchOptions = {}) {
   
   // Handle unauthorized responses
   if (response.status === 401) {
-    // Clear session and redirect to login
+    console.error('[HybridFetch] Received 401 Unauthorized response')
+    // For now, don't auto-redirect to debug the issue
+    // TODO: Re-enable after fixing authentication
+    /*
     const { clearSession } = await import('@/lib/auth/hybrid-session')
     clearSession()
     window.location.href = '/login'
-    throw new Error('Unauthorized')
+    */
+    // Don't throw here, let apiCall handle the error response
   }
   
   return response
