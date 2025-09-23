@@ -94,17 +94,16 @@ export function isTimeInPast(
     day = dateObj.getDate()
   }
   
-  // Crear fecha/hora del slot
-  const slotDate = new Date(year, month - 1, day, hour, minute, 0, 0)
+  // Obtener la hora actual en la zona horaria del club
+  const nowInTimezone = getNowInTimezone(timezone)
+  const currentHour = nowInTimezone.getHours()
+  const currentMinute = nowInTimezone.getMinutes()
   
-  // Obtener la hora actual
-  const now = new Date()
+  // Comparar directamente las horas y minutos
+  const slotMinutes = hour * 60 + minute
+  const currentMinutes = currentHour * 60 + currentMinute + bufferMinutes
   
-  // Agregar buffer de minutos
-  const nowWithBuffer = new Date(now)
-  nowWithBuffer.setMinutes(nowWithBuffer.getMinutes() + bufferMinutes)
-  
-  return slotDate < nowWithBuffer
+  return slotMinutes < currentMinutes
 }
 
 /**

@@ -154,7 +154,7 @@ export async function GET(request: NextRequest) {
       
       console.log(`Slot ${slot.startTime}: bookingDate=${bookingDate.toDateString()}, nowInClubTz=${nowInClubTz.toDateString()}, isToday=${isToday}`)
       
-      if (isToday && isTimeInPast(slot.startTime, bookingDate, timezone, 2)) {
+      if (isToday && isTimeInPast(slot.startTime, bookingDate, timezone, 0)) {
         console.log(`❌ FILTERING OUT past slot: ${slot.startTime}`)
         return {
           ...slot,
