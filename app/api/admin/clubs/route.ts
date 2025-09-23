@@ -87,7 +87,7 @@ export async function GET(request: NextRequest) {
               postalCode: true,
               website: true,
               logo: true,
-              // description: true, // EXCLUDED - not in production DB
+              description: true, // TODO: Remove this comment after migrations
               status: true,
               active: true,
               stripeAccountId: true,
