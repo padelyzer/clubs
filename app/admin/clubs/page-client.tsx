@@ -45,8 +45,10 @@ export default function AdminClubsClientPage() {
           totalItems: 0
         })
       } else {
-        setError(error || 'Error al cargar los clubes')
-        console.error('Error fetching clubs:', error)
+        // Ensure error is always a string
+        const errorMsg = typeof error === 'string' ? error : 'Error al cargar los clubes'
+        setError(errorMsg)
+        console.error('Error fetching clubs:', { error, data })
       }
     } catch (error) {
       console.error('Error fetching clubs:', error)

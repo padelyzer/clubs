@@ -46,8 +46,25 @@ export async function apiCall<T = any>(
     const data = await response.json()
     
     if (!response.ok) {
+      // Handle different error response formats
+      let errorMessage = `Error ${response.status}`
+      
+      if (data.error) {
+        // If error is a string, use it directly
+        if (typeof data.error === 'string') {
+          errorMessage = data.error
+        }
+        // If error is an object with a message property
+        else if (data.error.message) {
+          errorMessage = data.error.message
+        }
+      } else if (data.message) {
+        // If the response has a message property directly
+        errorMessage = data.message
+      }
+      
       return { 
-        error: data.error || `Error ${response.status}`,
+        error: errorMessage,
         ok: false 
       }
     }
