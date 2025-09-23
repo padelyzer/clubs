@@ -7,7 +7,7 @@ export const clubNavigation = {
     { label: 'Canchas', href: '/dashboard/courts', icon: '🎾' },
     { label: 'Precios', href: '/dashboard/pricing', icon: '💰' },
     { label: 'Horarios', href: '/dashboard/schedule', icon: '⏰' },
-    { label: 'Recepción', href: '/reception', icon: '🏨' },
+    { label: 'Recepción', href: '/dashboard/reception', icon: '📱' },
   ],
   settings: [
     { label: 'Pagos', href: '/dashboard/payments', icon: '💳' },
