@@ -195,11 +195,11 @@ export async function POST(
       return NextResponse.json(
         { 
           success: false, 
-          error: 'Reserva no encontrada',
+          error: 'Reserva no encontrada. Es posible que haya sido cancelada o eliminada. Por favor, actualiza la lista de reservas.',
           debug: {
             searchedId: bookingId,
             clubId: session.clubId,
-            message: 'La reserva no existe o pertenece a otro club'
+            message: 'La reserva no existe en la base de datos. Puede haber sido eliminada o no pertenece a este club.'
           }
         },
         { status: 404 }
