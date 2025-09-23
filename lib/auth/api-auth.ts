@@ -22,23 +22,34 @@ export async function getApiSession(request: NextRequest): Promise<ApiSession | 
     const authHeader = request.headers.get('authorization')
     
     if (!authHeader || !authHeader.startsWith('Bearer ')) {
-      console.log('[ApiAuth] No authorization header')
+      console.log('[ApiAuth] No authorization header found in request')
       return null
     }
     
     const sessionDataStr = authHeader.replace('Bearer ', '')
     
     if (!sessionDataStr) {
-      console.log('[ApiAuth] No session data in header')
+      console.log('[ApiAuth] No session data in authorization header')
       return null
     }
     
+    console.log('[ApiAuth] Attempting to decode session data')
+    
     // Decode session data
-    const sessionData: SessionData = JSON.parse(decodeURIComponent(sessionDataStr))
+    let sessionData: SessionData
+    try {
+      sessionData = JSON.parse(decodeURIComponent(sessionDataStr))
+    } catch (parseError) {
+      console.error('[ApiAuth] Failed to parse session data:', parseError)
+      return null
+    }
     
     // Verify session hasn't expired
     if (sessionData.expiresAt && Date.now() > sessionData.expiresAt) {
-      console.log('[ApiAuth] Session expired')
+      console.log('[ApiAuth] Session expired:', {
+        expiresAt: new Date(sessionData.expiresAt),
+        now: new Date()
+      })
       return null
     }
     
@@ -47,10 +58,17 @@ export async function getApiSession(request: NextRequest): Promise<ApiSession | 
       where: { id: sessionData.userId }
     })
     
-    if (!user || !user.active) {
-      console.log('[ApiAuth] User not found or inactive')
+    if (!user) {
+      console.log('[ApiAuth] User not found:', sessionData.userId)
       return null
     }
+    
+    if (!user.active) {
+      console.log('[ApiAuth] User is inactive:', sessionData.userId)
+      return null
+    }
+    
+    console.log('[ApiAuth] Session validated successfully for user:', user.email)
     
     return {
       user: {
@@ -64,7 +82,7 @@ export async function getApiSession(request: NextRequest): Promise<ApiSession | 
       }
     }
   } catch (error) {
-    console.error('[ApiAuth] Error getting API session:', error)
+    console.error('[ApiAuth] Unexpected error getting API session:', error)
     return null
   }
 }
@@ -74,10 +92,14 @@ export async function requireApiSuperAdmin(request: NextRequest): Promise<ApiSes
   const session = await getApiSession(request)
   
   if (!session) {
+    console.error('[ApiAuth] requireApiSuperAdmin: No session found')
     throw new Error('Unauthorized: No valid session')
   }
   
+  console.log('[ApiAuth] requireApiSuperAdmin: Checking role:', session.user.role)
+  
   if (session.user.role !== 'super_admin') {
+    console.error('[ApiAuth] requireApiSuperAdmin: User is not super_admin:', session.user.role)
     throw new Error('Unauthorized: Super admin access required')
   }
   
