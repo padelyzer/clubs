@@ -168,14 +168,18 @@ export async function GET(request: NextRequest) {
         ? (group.splitPayments?.filter(sp => sp.status === 'completed').length || 0)
         : 0
 
+      // Determine payment status for group bookings
+      const isPaymentComplete = group.splitPaymentEnabled 
+        ? splitPaymentProgress === group.splitPaymentCount
+        : group.status === 'IN_PROGRESS' || group.status === 'COMPLETED' // If checked in, consider paid
+
       return {
         ...group,
         isGroup: true, // Flag to identify this as a group
         courtNames: group.bookings.map((b: any) => b.Court.name).join(', '),
         splitPaymentProgress,
-        splitPaymentComplete: group.splitPaymentEnabled 
-          ? splitPaymentProgress === group.splitPaymentCount
-          : true
+        splitPaymentComplete: isPaymentComplete,
+        paymentStatus: isPaymentComplete ? 'completed' : 'pending' // Add explicit payment status
       }
     })
 
