@@ -165,7 +165,7 @@ export async function POST(
           },
           playerName: bookingGroup.playerName,
           price: bookingGroup.price,
-          checkedIn: bookingGroup.checkedIn,
+          checkedIn: false, // BookingGroup doesn't have checkedIn field
           date: bookingGroup.date,
           startTime: bookingGroup.startTime,
           paymentStatus: bookingGroup.status === 'CONFIRMED' ? 'completed' : 'pending'
@@ -209,7 +209,12 @@ export async function POST(
     console.log('\n✅ Entity found:', isGroup ? 'BookingGroup' : 'Booking')
 
     // Check if already checked in
-    if (booking.checkedIn) {
+    // For groups, use status; for regular bookings, use checkedIn
+    const alreadyCheckedIn = isGroup 
+      ? booking.status === 'CONFIRMED' 
+      : booking.checkedIn
+      
+    if (alreadyCheckedIn) {
       return NextResponse.json(
         { success: false, error: 'Esta reserva ya tiene check-in' },
         { status: 400 }
@@ -375,16 +380,16 @@ export async function POST(
     let updatedBooking
     
     if (isGroup) {
+      // For booking groups, we just mark the status as CONFIRMED
+      // and optionally update totalPlayers if provided
       updatedBooking = await prisma.bookingGroup.update({
         where: { id: bookingId },
         data: {
-          checkedIn: true,
-          checkedInAt: new Date(timestamp || new Date()),
-          checkedInBy: session.userId,
           status: 'CONFIRMED',
           ...(playersArrived && { 
             totalPlayers: playersArrived 
-          })
+          }),
+          updatedAt: new Date(timestamp || new Date())
         },
         include: {
           bookings: {
@@ -409,6 +414,9 @@ export async function POST(
         },
         playerName: updatedBooking.playerName,
         price: updatedBooking.price,
+        checkedIn: updatedBooking.status === 'CONFIRMED', // Simulate checkedIn based on status
+        checkedInAt: updatedBooking.updatedAt, // Use updatedAt as proxy for checkedInAt
+        checkedInBy: session.userId, // Set current user as checker
         paymentStatus: updatedBooking.status === 'CONFIRMED' ? 'completed' : 'pending'
       }
     } else {
@@ -486,16 +494,21 @@ export async function GET(
         },
         select: {
           id: true,
-          checkedIn: true,
-          checkedInAt: true,
-          checkedInBy: true,
           status: true,
-          totalPlayers: true
+          totalPlayers: true,
+          updatedAt: true
         }
       })
       
       if (bookingGroup) {
-        booking = bookingGroup
+        // Convert BookingGroup to booking-like object for consistency
+        booking = {
+          ...bookingGroup,
+          checkedIn: bookingGroup.status === 'CONFIRMED',
+          checkedInAt: bookingGroup.updatedAt,
+          checkedInBy: null, // We don't track this for BookingGroups
+          paymentStatus: bookingGroup.status === 'CONFIRMED' ? 'completed' : 'pending'
+        }
       }
     }
 
