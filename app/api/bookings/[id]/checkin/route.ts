@@ -159,11 +159,16 @@ export async function POST(
             id: 'multiple', 
             name: bookingGroup.bookings.map(b => b.Court.name).join(', ') 
           },
+          Court: { 
+            id: 'multiple', 
+            name: bookingGroup.bookings.map(b => b.Court.name).join(', ') 
+          },
           playerName: bookingGroup.playerName,
           price: bookingGroup.price,
           checkedIn: bookingGroup.checkedIn,
           date: bookingGroup.date,
-          startTime: bookingGroup.startTime
+          startTime: bookingGroup.startTime,
+          paymentStatus: bookingGroup.status === 'CONFIRMED' ? 'completed' : 'pending'
         }
         console.log('   ✅ Created booking-like object from bookingGroup')
       }
@@ -398,8 +403,13 @@ export async function POST(
           id: 'multiple', 
           name: updatedBooking.bookings.map(b => b.Court.name).join(', ') 
         },
+        Court: { 
+          id: 'multiple', 
+          name: updatedBooking.bookings.map(b => b.Court.name).join(', ') 
+        },
         playerName: updatedBooking.playerName,
-        price: updatedBooking.price
+        price: updatedBooking.price,
+        paymentStatus: updatedBooking.status === 'CONFIRMED' ? 'completed' : 'pending'
       }
     } else {
       updatedBooking = await prisma.booking.update({
