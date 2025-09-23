@@ -4,6 +4,8 @@ import { prisma } from '@/lib/config/prisma'
 import Link from 'next/link'
 import { Building2, ArrowRight } from 'lucide-react'
 
+export const dynamic = 'force-dynamic'
+
 export default async function SelectClubPage() {
   const session = await getSession()
   

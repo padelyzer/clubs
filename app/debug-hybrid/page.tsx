@@ -4,6 +4,8 @@ import { useHybridAuth } from '@/hooks/use-hybrid-auth'
 import { getSession, canUseCookies } from '@/lib/auth/hybrid-session'
 import { useEffect, useState } from 'react'
 
+export const dynamic = 'force-dynamic'
+
 export default function DebugHybridPage() {
   const { session, loading, authMethod } = useHybridAuth()
   const [localSession, setLocalSession] = useState<any>(null)
