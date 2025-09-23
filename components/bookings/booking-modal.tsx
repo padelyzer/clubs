@@ -1363,7 +1363,7 @@ export function BookingModal({
                       <option value="">Selecciona una cancha</option>
                       {activeCourts.map(court => (
                         <option key={court.id} value={court.id}>
-                          {court.name} ({court.type})
+                          {court.name}
                         </option>
                       ))}
                     </select>

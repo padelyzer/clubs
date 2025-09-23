@@ -933,7 +933,7 @@ function CalendarPageContent() {
                 <option value="">Selecciona una cancha</option>
                 {courts.map(court => (
                   <option key={court.id} value={court.id}>
-                    {court.name} - {court.type}
+                    {court.name}
                   </option>
                 ))}
               </select>
@@ -1546,12 +1546,6 @@ function CalendarPageContent() {
                           marginBottom: '4px'
                         }}>
                           {court.name}
-                        </div>
-                        <div style={{
-                          fontSize: '12px',
-                          color: '#6B7280'
-                        }}>
-                          {court.type}
                         </div>
                       </div>
                       <span style={{
