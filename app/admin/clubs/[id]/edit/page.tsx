@@ -3,6 +3,8 @@ import { prisma } from '@/lib/config/prisma'
 import { notFound } from 'next/navigation'
 import EditClubForm from './edit-club-form'
 
+export const dynamic = 'force-dynamic'
+
 export default async function EditClubPage({
   params
 }: {

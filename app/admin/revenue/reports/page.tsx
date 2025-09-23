@@ -2,6 +2,8 @@ import { requireSuperAdmin } from '@/lib/auth/actions'
 import { prisma } from '@/lib/config/prisma'
 import { BarChart, FileText, TrendingUp, Calendar, DollarSign, PieChart, Download, Filter, Eye, RefreshCw, CreditCard, Users, Building2, Target } from 'lucide-react'
 
+export const dynamic = 'force-dynamic'
+
 export default async function ReportsPage() {
   await requireSuperAdmin()
 

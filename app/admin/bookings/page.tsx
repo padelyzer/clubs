@@ -2,6 +2,8 @@ import { requireSuperAdmin } from '@/lib/auth/actions'
 import { prisma } from '@/lib/config/prisma'
 import BookingsMonitor from './components/bookings-monitor'
 
+export const dynamic = 'force-dynamic'
+
 export default async function AdminBookingsPage(props: {
   searchParams: Promise<{ [key: string]: string | string[] | undefined }>
 }) {

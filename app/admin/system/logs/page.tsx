@@ -2,6 +2,8 @@ import { requireSuperAdmin } from '@/lib/auth/actions'
 import { prisma } from '@/lib/config/prisma'
 import { FileText, AlertTriangle, Info, CheckCircle, XCircle, Search, Filter, Download, RefreshCw, Calendar, Clock, User, Activity, Zap, Database } from 'lucide-react'
 
+export const dynamic = 'force-dynamic'
+
 export default async function SystemLogsPage() {
   await requireSuperAdmin()
 

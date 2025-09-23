@@ -2,6 +2,8 @@ import { requireSuperAdmin } from '@/lib/auth/actions'
 import { prisma } from '@/lib/config/prisma'
 import { Zap, TrendingUp, TrendingDown, Clock, Cpu, MemoryStick, HardDrive, Wifi, BarChart, Activity, RefreshCw, Settings, AlertTriangle, CheckCircle, Target, Database } from 'lucide-react'
 
+export const dynamic = 'force-dynamic'
+
 export default async function PerformanceMetricsPage() {
   await requireSuperAdmin()
 

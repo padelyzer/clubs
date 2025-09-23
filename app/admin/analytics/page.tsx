@@ -3,6 +3,8 @@ import { prisma } from '@/lib/config/prisma'
 import { getBusinessMetrics } from '@/lib/admin/data'
 import AnalyticsDashboard from './components/analytics-dashboard'
 
+export const dynamic = 'force-dynamic'
+
 export default async function AdminAnalyticsPage() {
   await requireSuperAdmin()
 

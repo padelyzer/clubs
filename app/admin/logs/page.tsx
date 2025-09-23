@@ -1,6 +1,8 @@
 import { requireSuperAdmin } from '@/lib/auth/actions'
 import LogsManagement from './components/logs-management'
 
+export const dynamic = 'force-dynamic'
+
 export default async function AdminLogsPage(props: {
   searchParams: Promise<{ [key: string]: string | string[] | undefined }>
 }) {

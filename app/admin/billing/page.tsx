@@ -2,6 +2,8 @@ import { requireSuperAdmin } from '@/lib/auth/actions'
 import { prisma } from '@/lib/config/prisma'
 import BillingDashboard from './components/billing-dashboard'
 
+export const dynamic = 'force-dynamic'
+
 async function getInvoiceStats() {
   const today = new Date()
   const startOfMonth = new Date(today.getFullYear(), today.getMonth(), 1)

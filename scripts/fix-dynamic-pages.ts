@@ -8,7 +8,7 @@ async function fixDynamicPages() {
   // Find all page.tsx files that use authentication
   const pageFiles = await glob('**/page.tsx', { cwd: appDir });
   
-  const authPatterns = ['requireAuth', 'getSession'];
+  const authPatterns = ['requireAuth', 'getSession', 'requireSuperAdmin'];
   const dynamicExport = "export const dynamic = 'force-dynamic'";
   
   let fixedFiles = 0;

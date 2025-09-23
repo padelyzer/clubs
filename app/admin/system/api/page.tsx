@@ -2,6 +2,8 @@ import { requireSuperAdmin } from '@/lib/auth/actions'
 import { prisma } from '@/lib/config/prisma'
 import { Zap, Webhook, Key, Globe, Activity, BarChart, AlertTriangle, CheckCircle, Clock, Settings, RefreshCw, Plus, Copy, Eye, EyeOff, Trash2, Edit3 } from 'lucide-react'
 
+export const dynamic = 'force-dynamic'
+
 export default async function APIManagementPage() {
   await requireSuperAdmin()
 

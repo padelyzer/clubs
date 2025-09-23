@@ -2,6 +2,8 @@ import { requireSuperAdmin } from '@/lib/auth/actions'
 import { prisma } from '@/lib/config/prisma'
 import CommunicationsManagement from './components/communications-management'
 
+export const dynamic = 'force-dynamic'
+
 export default async function AdminCommunicationsPage() {
   await requireSuperAdmin()
 

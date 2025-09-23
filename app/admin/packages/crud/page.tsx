@@ -1,6 +1,8 @@
 import { requireSuperAdmin } from '@/lib/auth/actions'
 import PackagesCRUD from './components/packages-crud'
 
+export const dynamic = 'force-dynamic'
+
 export default async function PackagesCRUDPage() {
   const session = await requireSuperAdmin()
   

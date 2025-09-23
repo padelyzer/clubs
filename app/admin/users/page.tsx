@@ -2,6 +2,8 @@ import { requireSuperAdmin } from '@/lib/auth/actions'
 import { prisma } from '@/lib/config/prisma'
 import UsersManagement from './components/users-management'
 
+export const dynamic = 'force-dynamic'
+
 export default async function AdminUsersPage(props: {
   searchParams: Promise<{ [key: string]: string | string[] | undefined }>
 }) {

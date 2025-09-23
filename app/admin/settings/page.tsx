@@ -1,6 +1,8 @@
 import { requireSuperAdmin } from '@/lib/auth/actions'
 import SettingsManagement from './components/settings-management'
 
+export const dynamic = 'force-dynamic'
+
 export default async function AdminSettingsPage() {
   await requireSuperAdmin()
 

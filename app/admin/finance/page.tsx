@@ -2,6 +2,8 @@ import { requireSuperAdmin } from '@/lib/auth/actions'
 import { prisma } from '@/lib/config/prisma'
 import FinanceManagement from './components/finance-management'
 
+export const dynamic = 'force-dynamic'
+
 export default async function AdminFinancePage() {
   await requireSuperAdmin()
 

@@ -1,6 +1,8 @@
 import { requireSuperAdmin } from '@/lib/auth/actions'
 import NewClubForm from './new-club-form'
 
+export const dynamic = 'force-dynamic'
+
 export default async function NewClubPage() {
   await requireSuperAdmin()
 

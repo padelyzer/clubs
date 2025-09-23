@@ -2,6 +2,8 @@ import { requireSuperAdmin } from '@/lib/auth/actions'
 import { prisma } from '@/lib/config/prisma'
 import { Shield, Lock, Key, AlertTriangle, CheckCircle, Eye, Users, Globe, Activity, Settings, RefreshCw, Ban, UserX, Clock, Zap } from 'lucide-react'
 
+export const dynamic = 'force-dynamic'
+
 export default async function SecuritySettingsPage() {
   await requireSuperAdmin()
 

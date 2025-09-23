@@ -3,6 +3,8 @@ import { prisma } from '@/lib/config/prisma'
 import { notFound } from 'next/navigation'
 import ClubDetails from './components/club-details'
 
+export const dynamic = 'force-dynamic'
+
 export default async function ClubDetailsPage(props: {
   params: Promise<{ id: string }>
 }) {

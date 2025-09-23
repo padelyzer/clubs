@@ -5,6 +5,8 @@ import DashboardCharts from './components/dashboard-charts'
 import RecentActivity from './components/recent-activity'
 import QuickActions from './components/quick-actions'
 
+export const dynamic = 'force-dynamic'
+
 export default async function AdminDashboardPage() {
   const session = await requireSuperAdmin()
 

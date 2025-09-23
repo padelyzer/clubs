@@ -1,5 +1,7 @@
 import { requireSuperAdmin } from '@/lib/auth/actions'
 
+export const dynamic = 'force-dynamic'
+
 export default async function TestPage() {
   const session = await requireSuperAdmin()
   

@@ -2,6 +2,8 @@ import { requireSuperAdmin } from '@/lib/auth/actions'
 import { prisma } from '@/lib/config/prisma'
 import SubscriptionsManagement from './components/subscriptions-management'
 
+export const dynamic = 'force-dynamic'
+
 async function getSubscriptionPlans() {
   return await prisma.subscriptionPlan.findMany({
     orderBy: { sortOrder: 'asc' },
