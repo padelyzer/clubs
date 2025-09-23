@@ -3,141 +3,98 @@ import { PrismaClient } from '@prisma/client'
 const prisma = new PrismaClient()
 
 async function checkDatabaseStatus() {
+  console.log('🔍 Verificando estado de la base de datos...\n')
+  
   try {
-    console.log('🔍 Verificando estado de la base de datos...')
-    console.log('=' .repeat(60))
-
     // Verificar conexión
     await prisma.$connect()
-    console.log('✅ Conexión a base de datos exitosa')
+    console.log('✅ Conexión exitosa a la base de datos')
     
-    // Contar registros en todas las tablas principales
-    const [
-      clubCount,
-      userCount, 
-      courtCount,
-      playerCount,
-      bookingCount,
-      transactionCount,
-      classCount,
-      expenseCount
-    ] = await Promise.all([
-      prisma.club.count(),
-      prisma.user.count(),
-      prisma.court.count(), 
-      prisma.player.count(),
-      prisma.booking.count(),
-      prisma.transaction.count(),
-      prisma.class.count(),
-      prisma.expense.count()
-    ])
-
-    console.log('\n📊 CONTENIDO DE LA BASE DE DATOS:')
-    console.log('=' .repeat(60))
-    console.log(`🏢 Clubes: ${clubCount}`)
-    console.log(`👤 Usuarios: ${userCount}`) 
-    console.log(`🎾 Canchas: ${courtCount}`)
-    console.log(`👥 Jugadores: ${playerCount}`)
-    console.log(`📅 Reservas: ${bookingCount}`)
-    console.log(`💰 Transacciones: ${transactionCount}`)
-    console.log(`🎓 Clases: ${classCount}`)
-    console.log(`💸 Gastos: ${expenseCount}`)
-
-    // Verificar datos recientes de reservas
-    if (bookingCount > 0) {
-      const recentBookings = await prisma.booking.findMany({
-        take: 5,
-        orderBy: { createdAt: 'desc' },
-        include: {
-          court: { select: { name: true } }
-        }
+    // Obtener información de la base de datos
+    const result = await prisma.$queryRaw`
+      SELECT current_database(), current_user, version();
+    ` as any[]
+    
+    console.log('\n📊 Información de la base de datos:')
+    console.log('   Database:', result[0].current_database)
+    console.log('   Usuario:', result[0].current_user)
+    console.log('   Versión:', result[0].version.split(',')[0])
+    
+    // Verificar si existe la columna description en Club
+    try {
+      const clubColumns = await prisma.$queryRaw`
+        SELECT column_name, data_type, is_nullable 
+        FROM information_schema.columns 
+        WHERE table_name = 'Club' 
+        AND table_schema = 'public'
+        ORDER BY ordinal_position;
+      ` as any[]
+      
+      console.log('\n📋 Columnas en la tabla Club:')
+      const hasDescription = clubColumns.some(col => col.column_name === 'description')
+      
+      clubColumns.forEach(col => {
+        console.log(`   - ${col.column_name} (${col.data_type})${col.is_nullable === 'YES' ? ' - nullable' : ''}`)
       })
-
-      console.log('\n🆕 RESERVAS MÁS RECIENTES:')
-      console.log('-' .repeat(60))
-      recentBookings.forEach((booking, i) => {
-        console.log(`${i + 1}. ${booking.playerName} - ${booking.court?.name} - ${booking.date.toLocaleDateString()} - $${(booking.price / 100).toFixed(0)} MXN`)
-      })
+      
+      if (!hasDescription) {
+        console.log('\n⚠️  ADVERTENCIA: La columna "description" NO existe en la tabla Club')
+      } else {
+        console.log('\n✅ La columna "description" existe en la tabla Club')
+      }
+    } catch (error) {
+      console.error('❌ Error al verificar columnas:', error)
     }
-
-    // Verificar ingresos totales
-    if (transactionCount > 0) {
-      const totalIncome = await prisma.transaction.aggregate({
-        where: { type: 'INCOME' },
-        _sum: { amount: true },
-        _count: true
-      })
-
-      const totalExpenses = await prisma.transaction.aggregate({
-        where: { type: 'EXPENSE' },
-        _sum: { amount: true },
-        _count: true
-      })
-
-      console.log('\n💰 RESUMEN FINANCIERO:')
-      console.log('-' .repeat(60))
-      console.log(`💚 Total Ingresos: $${((totalIncome._sum.amount || 0) / 100).toLocaleString('es-MX')} MXN (${totalIncome._count} transacciones)`)
-      console.log(`🔴 Total Gastos: $${((totalExpenses._sum.amount || 0) / 100).toLocaleString('es-MX')} MXN (${totalExpenses._count} transacciones)`)
-      console.log(`📈 Ganancia: $${(((totalIncome._sum.amount || 0) - (totalExpenses._sum.amount || 0)) / 100).toLocaleString('es-MX')} MXN`)
+    
+    // Verificar migraciones aplicadas
+    try {
+      const migrations = await prisma.$queryRaw`
+        SELECT migration_name, finished_at 
+        FROM _prisma_migrations 
+        WHERE finished_at IS NOT NULL
+        ORDER BY finished_at DESC
+        LIMIT 10;
+      ` as any[]
+      
+      console.log('\n🚀 Últimas migraciones aplicadas:')
+      if (migrations.length === 0) {
+        console.log('   ⚠️  No hay migraciones aplicadas')
+      } else {
+        migrations.forEach(m => {
+          console.log(`   - ${m.migration_name} (${new Date(m.finished_at).toLocaleString()})`)
+        })
+      }
+    } catch (error) {
+      console.log('\n⚠️  No se pudo leer el historial de migraciones')
+      console.log('   Esto puede indicar que nunca se han ejecutado migraciones')
     }
-
-    // Verificar distribución por fecha
-    if (bookingCount > 0) {
-      const bookingsByMonth = await prisma.booking.groupBy({
-        by: ['date'],
-        _count: true,
-        orderBy: { date: 'asc' },
-        take: 10
-      })
-
-      console.log('\n📅 DISTRIBUCIÓN DE RESERVAS POR FECHA:')
-      console.log('-' .repeat(60))
-      bookingsByMonth.forEach(group => {
-        console.log(`${group.date.toLocaleDateString()}: ${group._count} reservas`)
-      })
+    
+    // Contar registros
+    const counts = {
+      clubs: await prisma.club.count(),
+      users: await prisma.user.count(),
+      courts: await prisma.court.count(),
+      bookings: await prisma.booking.count()
     }
-
-    // Verificar si tenemos el usuario admin
-    const adminUser = await prisma.user.findFirst({
-      where: { email: 'admin@padelpremium.mx' },
-      include: { club: { select: { name: true } } }
+    
+    console.log('\n📈 Conteo de registros:')
+    Object.entries(counts).forEach(([table, count]) => {
+      console.log(`   - ${table}: ${count}`)
     })
-
-    if (adminUser) {
-      console.log('\n👨‍💼 USUARIO ADMINISTRADOR:')
-      console.log('-' .repeat(60))
-      console.log(`✅ Email: ${adminUser.email}`)
-      console.log(`✅ Nombre: ${adminUser.name}`)
-      console.log(`✅ Club: ${adminUser.club?.name}`)
-      console.log(`✅ Rol: ${adminUser.role}`)
-      console.log(`✅ Activo: ${adminUser.active ? 'Sí' : 'No'}`)
-    } else {
-      console.log('\n❌ No se encontró usuario administrador')
-    }
-
-    console.log('\n🎯 ESTADO GENERAL DEL SISTEMA:')
-    console.log('=' .repeat(60))
     
-    if (bookingCount >= 500) {
-      console.log('✅ Sistema COMPLETAMENTE POBLADO con datos de demostración')
-      console.log(`✅ ${bookingCount} reservas generadas exitosamente`)
-    } else if (bookingCount > 50) {
-      console.log('⚠️ Sistema parcialmente poblado')
-      console.log(`⚠️ ${bookingCount} reservas (se esperaban 500+)`)
-    } else {
-      console.log('❌ Sistema requiere población de datos')
-      console.log('💡 Ejecuta: npx tsx scripts/mass-bookings-generator.ts')
-    }
-
-    console.log(`💾 Base de datos: PostgreSQL (padelyzer_db)`)
-    console.log(`🔌 URL: postgresql://localhost:5432/padelyzer_db`)
-    console.log('=' .repeat(60))
-
   } catch (error) {
-    console.error('❌ Error verificando base de datos:', error)
+    console.error('\n❌ Error al conectar con la base de datos:', error)
+    process.exit(1)
   } finally {
     await prisma.$disconnect()
   }
 }
 
-checkDatabaseStatus()
+console.log('====================================')
+console.log(' VERIFICACIÓN DE BASE DE DATOS')
+console.log('====================================\n')
+console.log('DATABASE_URL:', process.env.DATABASE_URL?.replace(/:[^@]+@/, ':****@') || 'No configurada')
+console.log('NODE_ENV:', process.env.NODE_ENV || 'development')
+console.log('\n')
+
+checkDatabaseStatus().catch(console.error)
