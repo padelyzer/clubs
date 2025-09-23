@@ -17,6 +17,7 @@
     "build": "prisma generate && next build",
     "vercel-build": "node scripts/safe-migrate.js",
     "vercel-build-no-migrate": "prisma generate && next build",
+    "build-simple": "next build",
     "prisma:migrate:prod": "prisma migrate deploy",
     "start": "next start",
     "lint": "next lint",
