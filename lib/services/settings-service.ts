@@ -342,9 +342,12 @@ export class SettingsService {
 
   async updatePaymentProviders(clubId: string, providers: PaymentProvider[]): Promise<boolean> {
     try {
+      console.log('[SettingsService] Updating payment providers for club:', clubId)
+      console.log('[SettingsService] Providers to update:', JSON.stringify(providers, null, 2))
+      
       // Update or create each provider
       for (const provider of providers) {
-        await prisma.paymentProvider.upsert({
+        const upsertData = {
           where: {
             clubId_providerId: {
               clubId,
@@ -355,7 +358,8 @@ export class SettingsService {
             name: provider.name,
             enabled: provider.enabled,
             config: provider.config,
-            fees: provider.fees
+            fees: provider.fees,
+            updatedAt: new Date()
           },
           create: {
             id: `payment_provider_${clubId}_${provider.providerId}_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
@@ -364,14 +368,24 @@ export class SettingsService {
             name: provider.name,
             enabled: provider.enabled,
             config: provider.config,
-            fees: provider.fees
+            fees: provider.fees,
+            createdAt: new Date(),
+            updatedAt: new Date()
           }
-        })
+        }
+        
+        console.log('[SettingsService] Upserting provider:', provider.providerId)
+        await prisma.paymentProvider.upsert(upsertData)
+        console.log('[SettingsService] Provider upserted successfully')
       }
 
       return true
     } catch (error) {
-      console.error('Error updating payment providers:', error)
+      console.error('[SettingsService] Error updating payment providers:', error)
+      console.error('[SettingsService] Error details:', {
+        message: error instanceof Error ? error.message : 'Unknown error',
+        stack: error instanceof Error ? error.stack : undefined
+      })
       return false
     }
   }
