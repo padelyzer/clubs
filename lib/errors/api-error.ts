@@ -131,15 +131,34 @@ export function handleApiError(error: unknown): NextResponse {
     }
   }
   
-  // Log unexpected errors
-  console.error('Unexpected error:', error)
+  // Log unexpected errors with full details
+  console.error('[API Error] Unexpected error in handleApiError:', {
+    error,
+    message: error?.message || 'Unknown error',
+    stack: error?.stack,
+    type: error?.constructor?.name,
+  })
   
-  // Return generic error for unknown errors
+  // In production, send to Sentry
+  if (process.env.NODE_ENV === 'production') {
+    Sentry.captureException(error)
+  }
+  
+  // Return more detailed error in development
+  const isDev = process.env.NODE_ENV === 'development'
+  
   return NextResponse.json(
     {
       error: {
-        message: 'An unexpected error occurred',
+        message: error?.message || 'An unexpected error occurred',
         code: 'INTERNAL_SERVER_ERROR',
+        ...(isDev && { 
+          details: {
+            message: error?.message,
+            stack: error?.stack?.split('\n').slice(0, 5),
+            type: error?.constructor?.name
+          }
+        })
       }
     },
     { status: 500 }

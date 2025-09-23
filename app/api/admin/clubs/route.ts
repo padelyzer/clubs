@@ -12,7 +12,21 @@ import { handleApiError, NotFoundError, successResponse } from '@/lib/errors/api
 export async function GET(request: NextRequest) {
   try {
     // 1. Authentication
-    const session = await requireApiSuperAdmin(request)
+    let session
+    try {
+      session = await requireApiSuperAdmin(request)
+    } catch (authError: any) {
+      console.error('[Clubs API] Authentication failed:', authError.message)
+      return NextResponse.json(
+        { 
+          error: { 
+            message: authError.message || 'Authentication failed',
+            code: 'UNAUTHORIZED'
+          } 
+        },
+        { status: 401 }
+      )
+    }
     
     // 2. Rate limiting
     const rateLimitResult = await rateLimit(request, 'admin')
