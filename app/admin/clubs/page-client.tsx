@@ -37,12 +37,14 @@ export default function AdminClubsClientPage() {
       
       const { data, error, ok } = await apiCall(`/api/admin/clubs?${params}`)
       
+      console.log('[AdminClubsPage] API Response:', { data, error, ok })
+      
       if (ok && data) {
         setClubs(data.clubs || [])
-        setPagination(data.pagination || {
-          currentPage: 1,
-          totalPages: 1,
-          totalItems: 0
+        setPagination({
+          currentPage: data.pagination?.page || 1,
+          totalPages: data.pagination?.pages || 1,
+          totalItems: data.pagination?.total || 0
         })
       } else {
         // Ensure error is always a string
@@ -80,8 +82,21 @@ export default function AdminClubsClientPage() {
     )
   }
 
+  // Calculate stats from clubs array (this is temporary - API should provide total stats)
+  const stats = {
+    total: pagination.totalItems || clubs.length,
+    pending: clubs.filter((c: any) => c.status === 'PENDING').length,
+    approved: clubs.filter((c: any) => c.status === 'APPROVED').length,
+    rejected: clubs.filter((c: any) => c.status === 'REJECTED').length,
+    suspended: clubs.filter((c: any) => c.status === 'SUSPENDED').length,
+  }
+
   return <ClubsManagement 
-    clubs={clubs} 
-    pagination={pagination}
+    clubs={clubs}
+    stats={stats}
+    currentPage={pagination.currentPage}
+    totalPages={pagination.totalPages}
+    currentStatus={status}
+    currentSearch={search}
   />
 }
