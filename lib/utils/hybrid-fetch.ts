@@ -9,7 +9,14 @@ export interface FetchOptions extends Omit<RequestInit, 'headers'> {
 export async function hybridFetch(url: string, options: FetchOptions = {}) {
   const sessionData = getSession()
   
-  console.log('[HybridFetch] Session data:', sessionData)
+  console.log('[HybridFetch] Session data:', {
+    hasSession: !!sessionData,
+    userId: sessionData?.userId,
+    email: sessionData?.email,
+    role: sessionData?.role,
+    clubId: sessionData?.clubId,
+    expiresAt: sessionData?.expiresAt ? new Date(sessionData.expiresAt) : null
+  })
   
   const headers: Record<string, string> = {
     'Content-Type': 'application/json',

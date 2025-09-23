@@ -98,8 +98,15 @@ export async function requireApiSuperAdmin(request: NextRequest): Promise<ApiSes
   
   console.log('[ApiAuth] requireApiSuperAdmin: Checking role:', session.user.role)
   
-  if (session.user.role !== 'super_admin') {
-    console.error('[ApiAuth] requireApiSuperAdmin: User is not super_admin:', session.user.role)
+  // Check for super admin role (handle different case variations)
+  const normalizedRole = session.user.role?.toLowerCase()
+  const isSuperAdmin = normalizedRole === 'super_admin' || 
+                       normalizedRole === 'superadmin' ||
+                       session.user.role === 'SUPER_ADMIN' ||
+                       session.user.role === 'SUPERADMIN'
+  
+  if (!isSuperAdmin) {
+    console.error('[ApiAuth] requireApiSuperAdmin: User is not super_admin. Current role:', session.user.role)
     throw new Error('Unauthorized: Super admin access required')
   }
   
@@ -114,7 +121,10 @@ export async function requireApiClubAdmin(request: NextRequest): Promise<ApiSess
     throw new Error('Unauthorized: No valid session')
   }
   
-  if (session.user.role !== 'super_admin' && session.user.role !== 'club_admin') {
+  // Roles in DB are uppercase
+  const allowedRoles = ['SUPER_ADMIN', 'CLUB_OWNER', 'CLUB_STAFF']
+  if (!allowedRoles.includes(session.user.role)) {
+    console.error('[ApiAuth] requireApiClubAdmin: Invalid role:', session.user.role)
     throw new Error('Unauthorized: Club admin access required')
   }
   
@@ -129,8 +139,10 @@ export async function requireApiClubStaff(request: NextRequest): Promise<ApiSess
     throw new Error('Unauthorized: No valid session')
   }
   
-  const allowedRoles = ['super_admin', 'club_admin', 'club_staff']
+  // Roles in DB are uppercase
+  const allowedRoles = ['SUPER_ADMIN', 'CLUB_OWNER', 'CLUB_STAFF']
   if (!allowedRoles.includes(session.user.role)) {
+    console.error('[ApiAuth] requireApiClubStaff: Invalid role:', session.user.role)
     throw new Error('Unauthorized: Club staff access required')
   }
   
