@@ -60,7 +60,31 @@ export async function apiCall<T = any>(
 ): Promise<{ data?: T; error?: string; ok: boolean }> {
   try {
     const response = await hybridFetch(url, options)
-    const data = await response.json()
+    
+    // Check if response has content
+    const contentType = response.headers.get('content-type')
+    if (!contentType || !contentType.includes('application/json')) {
+      console.error('[ApiCall] Non-JSON response:', {
+        status: response.status,
+        statusText: response.statusText,
+        contentType
+      })
+      return {
+        error: `Server error: ${response.status} ${response.statusText}`,
+        ok: false
+      }
+    }
+    
+    let data
+    try {
+      data = await response.json()
+    } catch (jsonError) {
+      console.error('[ApiCall] Failed to parse JSON:', jsonError)
+      return {
+        error: 'Invalid response from server',
+        ok: false
+      }
+    }
     
     if (!response.ok) {
       // Handle different error response formats

@@ -10,11 +10,14 @@ import { handleApiError, NotFoundError, successResponse } from '@/lib/errors/api
 
 // GET /api/admin/clubs - Get paginated list of clubs
 export async function GET(request: NextRequest) {
+  console.log('[Clubs API] Request received')
+  
   try {
     // 1. Authentication
     let session
     try {
       session = await requireApiSuperAdmin(request)
+      console.log('[Clubs API] Authentication successful for:', session.user.email)
     } catch (authError: any) {
       console.error('[Clubs API] Authentication failed:', authError.message)
       return NextResponse.json(
