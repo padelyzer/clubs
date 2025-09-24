@@ -20,6 +20,7 @@ export async function POST(request: NextRequest) {
     }
 
     // Find the payment record
+    console.log('Searching for payment with paymentIntentId:', paymentIntentId)
     const payment = await prisma.payment.findFirst({
       where: { stripePaymentIntentId: paymentIntentId },
       include: {
@@ -41,6 +42,7 @@ export async function POST(request: NextRequest) {
         }
       }
     })
+    console.log('Payment found:', !!payment)
 
     let booking
     let clubId
@@ -64,8 +66,49 @@ export async function POST(request: NextRequest) {
       })
 
       if (!splitPayment) {
-        // Try to find by bookingId for class bookings
+        // Try to find the booking directly if no payment record exists
         if (bookingId) {
+          console.log('No payment record found, checking booking directly:', bookingId)
+          
+          const booking = await prisma.booking.findUnique({
+            where: { id: bookingId },
+            include: {
+              Club: true
+            }
+          })
+
+          if (booking && booking.paymentStatus === 'processing') {
+            // Update booking directly
+            await prisma.booking.update({
+              where: { id: booking.id },
+              data: {
+                paymentStatus: 'completed',
+                paymentType: 'ONLINE_FULL'
+              }
+            })
+
+            // Create payment record for tracking
+            await prisma.payment.create({
+              data: {
+                id: `payment_${booking.clubId}_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
+                bookingId: booking.id,
+                amount: booking.price,
+                currency: 'MXN',
+                method: 'STRIPE',
+                status: 'completed',
+                stripePaymentIntentId: paymentIntentId,
+                createdAt: new Date(),
+                updatedAt: new Date(),
+              }
+            })
+
+            return NextResponse.json({
+              success: true,
+              message: 'Pago confirmado correctamente'
+            })
+          }
+
+          // Check if it's a class booking
           const classBooking = await prisma.classBooking.findUnique({
             where: { id: bookingId },
             include: {
@@ -253,10 +296,11 @@ export async function POST(request: NextRequest) {
       message: 'Pago confirmado correctamente'
     })
 
-  } catch (error) {
+  } catch (error: any) {
     console.error('Error confirming payment:', error)
+    console.error('Error stack:', error.stack)
     return NextResponse.json(
-      { error: 'Error interno del servidor' },
+      { error: error.message || 'Error interno del servidor' },
       { status: 500 }
     )
   }
