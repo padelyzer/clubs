@@ -63,6 +63,9 @@ export function SplitPaymentManager({ bookingId, onClose, embedded = false }: Sp
   const [error, setError] = useState<string | null>(null)
   const [showGenerateLinks, setShowGenerateLinks] = useState(false)
   const [paymentConfig, setPaymentConfig] = useState<ClubPaymentConfig | null>(null)
+  const [showReferenceModal, setShowReferenceModal] = useState(false)
+  const [selectedPayment, setSelectedPayment] = useState<{ id: string, method: string } | null>(null)
+  const [referenceNumber, setReferenceNumber] = useState('')
 
   useEffect(() => {
     fetchStatus()
@@ -135,7 +138,14 @@ export function SplitPaymentManager({ bookingId, onClose, embedded = false }: Sp
   }
 
 
-  async function processPayment(splitPaymentId: string, paymentMethod: string) {
+  async function processPayment(splitPaymentId: string, paymentMethod: string, reference?: string) {
+    // For card and transfer payments, show reference modal first
+    if ((paymentMethod === 'terminal' || paymentMethod === 'transfer') && !reference) {
+      setSelectedPayment({ id: splitPaymentId, method: paymentMethod })
+      setShowReferenceModal(true)
+      return
+    }
+
     setActionLoading(`payment-${splitPaymentId}-${paymentMethod}`)
     setError(null)
 
@@ -149,7 +159,7 @@ export function SplitPaymentManager({ bookingId, onClose, embedded = false }: Sp
           splitPaymentId,
           action: 'complete',
           paymentMethod,
-          referenceNumber: `${paymentMethod.toUpperCase()}_${Date.now().toString().slice(-6)}`
+          referenceNumber: reference || `${paymentMethod.toUpperCase()}_${Date.now().toString().slice(-6)}`
         }),
       })
 
@@ -157,11 +167,29 @@ export function SplitPaymentManager({ bookingId, onClose, embedded = false }: Sp
 
       if (data.success) {
         await fetchStatus()
+        setShowReferenceModal(false)
+        setSelectedPayment(null)
+        setReferenceNumber('')
       } else {
         setError(data.error || 'Error al procesar pago')
       }
     } catch (err) {
       setError('Error al procesar pago')
+    } finally {
+      setActionLoading(null)
+    }
+  }
+
+  async function generatePaymentLink(splitPaymentId: string) {
+    setActionLoading(`link-${splitPaymentId}`)
+    setError(null)
+
+    try {
+      // TODO: Implement payment link generation
+      // For now, just show a message
+      setError('Función de link de pago en desarrollo')
+    } catch (err) {
+      setError('Error al generar link de pago')
     } finally {
       setActionLoading(null)
     }
@@ -179,17 +207,31 @@ export function SplitPaymentManager({ bookingId, onClose, embedded = false }: Sp
           onClick={() => processPayment(splitPayment.id, 'cash')}
           disabled={actionLoading === `payment-${splitPayment.id}-cash`}
           style={{
-            fontSize: '12px',
+            fontSize: '11px',
             backgroundColor: '#dcfce7',
             color: '#166534',
-            padding: '6px 10px',
+            padding: '5px 8px',
             borderRadius: '6px',
             border: 'none',
             cursor: actionLoading === `payment-${splitPayment.id}-cash` ? 'not-allowed' : 'pointer',
-            opacity: actionLoading === `payment-${splitPayment.id}-cash` ? 0.6 : 1
+            opacity: actionLoading === `payment-${splitPayment.id}-cash` ? 0.6 : 1,
+            display: 'inline-flex',
+            alignItems: 'center',
+            gap: '4px'
           }}
         >
-          {actionLoading === `payment-${splitPayment.id}-cash` ? '⏳' : '💵'} Efectivo
+          {actionLoading === `payment-${splitPayment.id}-cash` ? (
+            <svg className="animate-spin" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+              <path d="M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+              <path d="M9 12l2 2 4-4" opacity="0.5" />
+            </svg>
+          ) : (
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <rect x="2" y="5" width="20" height="14" rx="2" />
+              <line x1="12" y1="12" x2="12" y2="12.01" />
+            </svg>
+          )}
+          Efectivo
         </button>
       )
     }
@@ -201,17 +243,31 @@ export function SplitPaymentManager({ bookingId, onClose, embedded = false }: Sp
           onClick={() => processPayment(splitPayment.id, 'terminal')}
           disabled={actionLoading === `payment-${splitPayment.id}-terminal`}
           style={{
-            fontSize: '12px',
+            fontSize: '11px',
             backgroundColor: '#dbeafe',
             color: '#1d4ed8',
-            padding: '6px 10px',
+            padding: '5px 8px',
             borderRadius: '6px',
             border: 'none',
             cursor: actionLoading === `payment-${splitPayment.id}-terminal` ? 'not-allowed' : 'pointer',
-            opacity: actionLoading === `payment-${splitPayment.id}-terminal` ? 0.6 : 1
+            opacity: actionLoading === `payment-${splitPayment.id}-terminal` ? 0.6 : 1,
+            display: 'inline-flex',
+            alignItems: 'center',
+            gap: '4px'
           }}
         >
-          {actionLoading === `payment-${splitPayment.id}-terminal` ? '⏳' : '💳'} Tarjeta
+          {actionLoading === `payment-${splitPayment.id}-terminal` ? (
+            <svg className="animate-spin" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+              <path d="M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+              <path d="M9 12l2 2 4-4" opacity="0.5" />
+            </svg>
+          ) : (
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <rect x="3" y="5" width="18" height="14" rx="2" />
+              <line x1="3" y1="10" x2="21" y2="10" />
+            </svg>
+          )}
+          Tarjeta
         </button>
       )
     }
@@ -223,20 +279,69 @@ export function SplitPaymentManager({ bookingId, onClose, embedded = false }: Sp
           onClick={() => processPayment(splitPayment.id, 'transfer')}
           disabled={actionLoading === `payment-${splitPayment.id}-transfer`}
           style={{
-            fontSize: '12px',
+            fontSize: '11px',
             backgroundColor: '#fef3c7',
             color: '#d97706',
-            padding: '6px 10px',
+            padding: '5px 8px',
             borderRadius: '6px',
             border: 'none',
             cursor: actionLoading === `payment-${splitPayment.id}-transfer` ? 'not-allowed' : 'pointer',
-            opacity: actionLoading === `payment-${splitPayment.id}-transfer` ? 0.6 : 1
+            opacity: actionLoading === `payment-${splitPayment.id}-transfer` ? 0.6 : 1,
+            display: 'inline-flex',
+            alignItems: 'center',
+            gap: '4px'
           }}
         >
-          {actionLoading === `payment-${splitPayment.id}-transfer` ? '⏳' : '🏦'} Transferencia
+          {actionLoading === `payment-${splitPayment.id}-transfer` ? (
+            <svg className="animate-spin" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+              <path d="M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+              <path d="M9 12l2 2 4-4" opacity="0.5" />
+            </svg>
+          ) : (
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <polyline points="7 11 12 6 17 11" />
+              <polyline points="17 13 12 18 7 13" />
+            </svg>
+          )}
+          Transferencia
         </button>
       )
     }
+    
+    // Add payment link button
+    buttons.push(
+      <button
+        key="link"
+        onClick={() => generatePaymentLink(splitPayment.id)}
+        disabled={actionLoading === `link-${splitPayment.id}`}
+        style={{
+          fontSize: '12px',
+          backgroundColor: '#e0e7ff',
+          color: '#4338ca',
+          padding: '6px 10px',
+          borderRadius: '6px',
+          border: 'none',
+          cursor: actionLoading === `link-${splitPayment.id}` ? 'not-allowed' : 'pointer',
+          opacity: actionLoading === `link-${splitPayment.id}` ? 0.6 : 1,
+          display: 'inline-flex',
+          alignItems: 'center',
+          gap: '4px'
+        }}
+      >
+        {actionLoading === `link-${splitPayment.id}` ? (
+          <svg className="animate-spin" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+            <path d="M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+            <path d="M9 12l2 2 4-4" opacity="0.5" />
+          </svg>
+        ) : (
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71" />
+            <path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71" />
+          </svg>
+        )}
+        Link
+      </button>
+    )
     
     return buttons
   }
@@ -254,14 +359,6 @@ export function SplitPaymentManager({ bookingId, onClose, embedded = false }: Sp
     }
   }
 
-  const getStatusIcon = (status: string) => {
-    switch (status) {
-      case 'completed': return '✅'
-      case 'processing': return '⏳'
-      case 'failed': return '❌'
-      default: return '⏸️'
-    }
-  }
 
   if (loading) {
     if (embedded) {
@@ -481,7 +578,7 @@ export function SplitPaymentManager({ bookingId, onClose, embedded = false }: Sp
                       </div>
                       {(payment.playerEmail || payment.playerPhone) && (
                         <div style={{
-                          fontSize: '12px',
+                          fontSize: '11px',
                           color: '#6b7280'
                         }}>
                           {payment.playerEmail && <div>{payment.playerEmail}</div>}
@@ -504,14 +601,45 @@ export function SplitPaymentManager({ bookingId, onClose, embedded = false }: Sp
                         alignItems: 'center',
                         padding: '4px 8px',
                         borderRadius: '12px',
-                        fontSize: '12px',
+                        fontSize: '11px',
                         fontWeight: '500'
                       }} className={getStatusColor(payment.status)}>
-                        {getStatusIcon(payment.status)} {payment.status === 'completed' ? 'Pagado' : payment.status === 'processing' ? 'Procesando' : payment.status === 'failed' ? 'Falló' : 'Pendiente'}
+                        {payment.status === 'completed' ? (
+                          <>
+                            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" style={{ marginRight: '4px' }}>
+                              <polyline points="20 6 9 17 4 12" />
+                            </svg>
+                            Pagado
+                          </>
+                        ) : payment.status === 'processing' ? (
+                          <>
+                            <svg className="animate-spin" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" style={{ marginRight: '4px' }}>
+                              <path d="M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                              <path d="M9 12l2 2 4-4" opacity="0.5" />
+                            </svg>
+                            Procesando
+                          </>
+                        ) : payment.status === 'failed' ? (
+                          <>
+                            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" style={{ marginRight: '4px' }}>
+                              <path d="M18 6L6 18" />
+                              <path d="M6 6l12 12" />
+                            </svg>
+                            Falló
+                          </>
+                        ) : (
+                          <>
+                            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" style={{ marginRight: '4px' }}>
+                              <circle cx="12" cy="12" r="10" />
+                              <path d="M8 12h0M12 12h0M16 12h0" strokeLinecap="round" />
+                            </svg>
+                            Pendiente
+                          </>
+                        )}
                       </div>
                     </div>
                     {payment.status === 'pending' && (
-                      <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
+                      <div style={{ display: 'flex', gap: '6px', flexWrap: 'nowrap' }}>
                         {getPaymentMethodButtons(payment)}
                       </div>
                     )}
@@ -534,7 +662,10 @@ export function SplitPaymentManager({ bookingId, onClose, embedded = false }: Sp
         }}>
           {status.completedPayments === status.totalPayments ? (
             <span style={{ color: '#10b981', fontWeight: '500' }}>
-              ✅ Todos los pagos completados
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" style={{ display: 'inline', marginRight: '4px', verticalAlign: 'text-bottom' }}>
+                <polyline points="20 6 9 17 4 12" />
+              </svg>
+              Todos los pagos completados
             </span>
           ) : (
             <span>
@@ -542,6 +673,105 @@ export function SplitPaymentManager({ bookingId, onClose, embedded = false }: Sp
             </span>
           )}
         </div>
+
+        {/* Reference Modal */}
+        {showReferenceModal && (
+          <div style={{
+            position: 'fixed',
+            top: 0,
+            left: 0,
+            right: 0,
+            bottom: 0,
+            backgroundColor: 'rgba(0, 0, 0, 0.5)',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            zIndex: 100
+          }}>
+            <div style={{
+              backgroundColor: 'white',
+              padding: '24px',
+              borderRadius: '8px',
+              maxWidth: '400px',
+              width: '90%',
+              boxShadow: '0 10px 25px rgba(0, 0, 0, 0.1)'
+            }}>
+              <h3 style={{
+                fontSize: '18px',
+                fontWeight: '600',
+                marginBottom: '16px',
+                color: '#111827'
+              }}>
+                Ingrese referencia de {selectedPayment?.method === 'terminal' ? 'tarjeta' : 'transferencia'}
+              </h3>
+              <p style={{
+                fontSize: '14px',
+                color: '#6b7280',
+                marginBottom: '16px'
+              }}>
+                Ingrese los últimos 4-6 dígitos de la referencia o número de autorización
+              </p>
+              <input
+                type="text"
+                value={referenceNumber}
+                onChange={(e) => setReferenceNumber(e.target.value.toUpperCase())}
+                placeholder="Ej: 123456"
+                style={{
+                  width: '100%',
+                  padding: '8px 12px',
+                  border: '1px solid #e5e7eb',
+                  borderRadius: '6px',
+                  fontSize: '14px',
+                  marginBottom: '16px'
+                }}
+                autoFocus
+              />
+              <div style={{ display: 'flex', gap: '8px' }}>
+                <button
+                  onClick={() => {
+                    setShowReferenceModal(false)
+                    setSelectedPayment(null)
+                    setReferenceNumber('')
+                  }}
+                  style={{
+                    flex: 1,
+                    padding: '8px 16px',
+                    backgroundColor: '#f3f4f6',
+                    color: '#374151',
+                    border: 'none',
+                    borderRadius: '6px',
+                    fontSize: '14px',
+                    fontWeight: '500',
+                    cursor: 'pointer'
+                  }}
+                >
+                  Cancelar
+                </button>
+                <button
+                  onClick={() => {
+                    if (selectedPayment && referenceNumber.trim()) {
+                      processPayment(selectedPayment.id, selectedPayment.method, referenceNumber.trim())
+                    }
+                  }}
+                  disabled={!referenceNumber.trim()}
+                  style={{
+                    flex: 1,
+                    padding: '8px 16px',
+                    backgroundColor: referenceNumber.trim() ? '#10b981' : '#e5e7eb',
+                    color: referenceNumber.trim() ? 'white' : '#9ca3af',
+                    border: 'none',
+                    borderRadius: '6px',
+                    fontSize: '14px',
+                    fontWeight: '500',
+                    cursor: referenceNumber.trim() ? 'pointer' : 'not-allowed'
+                  }}
+                >
+                  Confirmar
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
       </div>
     )
   }
