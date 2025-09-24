@@ -51,9 +51,9 @@ export async function generateSplitPaymentLinks(bookingId: string) {
   const booking = await prisma.booking.findUnique({
     where: { id: bookingId },
     include: {
-      court: true,
-      club: true,
-      splitPayments: {
+      Court: true,
+      Club: true,
+      SplitPayment: {
         where: { status: 'pending' }
       }
     }
@@ -70,13 +70,13 @@ export async function generateSplitPaymentLinks(bookingId: string) {
   const paymentLinks = []
 
   // Generate payment links for each pending split payment
-  for (const splitPayment of booking.splitPayments) {
+  for (const splitPayment of booking.SplitPayment) {
     try {
       // Generate unique payment link for this split payment
       const paymentLink = await generatePaymentLink({
         splitPaymentId: splitPayment.id,
         amount: splitPayment.amount,
-        description: `Pago para reserva en ${booking.court.name} - ${booking.club.name}`,
+        description: `Pago para reserva en ${booking.Court.name} - ${booking.Club.name}`,
         playerName: splitPayment.playerName,
         playerEmail: splitPayment.playerEmail,
         playerPhone: splitPayment.playerPhone,
@@ -116,20 +116,20 @@ export async function processSplitPaymentCompletion(splitPaymentId: string) {
     include: {
       booking: {
         include: {
-          splitPayments: true,
-          court: true,
-          club: true
+          SplitPayment: true,
+          Court: true,
+          Club: true
         }
       },
       bookingGroup: {
         include: {
-          splitPayments: true,
+          SplitPayment: true,
           bookings: {
             include: {
-              court: true
+              Court: true
             }
           },
-          club: true
+          Club: true
         }
       }
     }
@@ -154,8 +154,8 @@ export async function processSplitPaymentCompletion(splitPaymentId: string) {
   const bookingData = isGroup ? splitPayment.bookingGroup : splitPayment.booking
   const clubId = bookingData.clubId
   const courtInfo = isGroup 
-    ? splitPayment.bookingGroup.bookings.map(b => b.court.name).join(', ')
-    : splitPayment.booking.court.name
+    ? splitPayment.bookingGroup.bookings.map(b => b.Court.name).join(', ')
+    : splitPayment.booking.Court.name
 
   // Create transaction in finance module for split payment
   await prisma.transaction.create({
@@ -186,8 +186,8 @@ export async function processSplitPaymentCompletion(splitPaymentId: string) {
 
   // Check if all split payments are completed
   const allSplitPayments = isGroup 
-    ? splitPayment.bookingGroup.splitPayments 
-    : splitPayment.booking.splitPayments
+    ? splitPayment.bookingGroup.SplitPayment 
+    : splitPayment.booking.SplitPayment
   const completedPayments = allSplitPayments.filter(sp => 
     sp.status === 'completed' || sp.id === splitPaymentId
   ).length
@@ -240,11 +240,11 @@ export async function getSplitPaymentStatus(bookingId: string) {
   const booking = await prisma.booking.findUnique({
     where: { id: bookingId },
     include: {
-      splitPayments: {
+      SplitPayment: {
         orderBy: { createdAt: 'asc' }
       },
-      court: true,
-      club: true
+      Court: true,
+      Club: true
     }
   })
 
@@ -252,11 +252,11 @@ export async function getSplitPaymentStatus(bookingId: string) {
     throw new Error('Reserva no encontrada')
   }
 
-  const completedPayments = booking.splitPayments.filter(sp => sp.status === 'completed').length
-  const pendingPayments = booking.splitPayments.filter(sp => sp.status === 'pending').length
-  const failedPayments = booking.splitPayments.filter(sp => sp.status === 'failed').length
+  const completedPayments = booking.SplitPayment.filter(sp => sp.status === 'completed').length
+  const pendingPayments = booking.SplitPayment.filter(sp => sp.status === 'pending').length
+  const failedPayments = booking.SplitPayment.filter(sp => sp.status === 'failed').length
 
-  const completedAmount = booking.splitPayments
+  const completedAmount = booking.SplitPayment
     .filter(sp => sp.status === 'completed')
     .reduce((sum, sp) => sum + sp.amount, 0)
     
@@ -270,17 +270,17 @@ export async function getSplitPaymentStatus(bookingId: string) {
       startTime: booking.startTime,
       endTime: booking.endTime,
       club: {
-        name: booking.club.name
+        name: booking.Club.name
       },
       court: {
-        name: booking.court.name
+        name: booking.Court.name
       },
       playerName: booking.playerName,
       totalPlayers: booking.totalPlayers || 4,
       price: booking.price,
       paymentStatus: booking.paymentStatus
     },
-    splitPayments: booking.splitPayments.map(sp => ({
+    splitPayments: booking.SplitPayment.map(sp => ({
       id: sp.id,
       playerName: sp.playerName,
       playerEmail: sp.playerEmail,
@@ -306,8 +306,8 @@ export async function resendSplitPaymentNotification(splitPaymentId: string) {
     include: {
       booking: {
         include: {
-          court: true,
-          club: true
+          Court: true,
+          Club: true
         }
       }
     }
@@ -325,7 +325,7 @@ export async function resendSplitPaymentNotification(splitPaymentId: string) {
   const paymentLink = await generatePaymentLink({
     splitPaymentId: splitPayment.id,
     amount: splitPayment.amount,
-    description: `Pago para reserva en ${splitPayment.booking.court.name} - ${splitPayment.booking.club.name}`,
+    description: `Pago para reserva en ${splitPayment.booking.Court.name} - ${splitPayment.booking.Club.name}`,
     playerName: splitPayment.playerName,
     playerEmail: splitPayment.playerEmail,
     playerPhone: splitPayment.playerPhone,
@@ -347,8 +347,8 @@ async function sendSplitPaymentNotification(splitPaymentId: string, paymentLink:
     include: {
       booking: {
         include: {
-          court: true,
-          club: true
+          Court: true,
+          Club: true
         }
       }
     }
@@ -360,10 +360,10 @@ async function sendSplitPaymentNotification(splitPaymentId: string, paymentLink:
 
   const message = `🏓 ¡Hola ${splitPayment.playerName}!
 
-Tu reserva en ${splitPayment.booking.club.name} está confirmada:
+Tu reserva en ${splitPayment.booking.Club.name} está confirmada:
 📅 ${new Date(splitPayment.booking.date).toLocaleDateString('es-MX')}
 🕐 ${splitPayment.booking.startTime} - ${splitPayment.booking.endTime}
-🏟️ ${splitPayment.booking.court.name}
+🏟️ ${splitPayment.booking.Court.name}
 
 💰 Completa tu pago de $${(splitPayment.amount / 100).toFixed(2)} MXN:
 ${paymentLink}
@@ -411,8 +411,8 @@ async function sendBookingConfirmationNotification(bookingId: string) {
   const booking = await prisma.booking.findUnique({
     where: { id: bookingId },
     include: {
-      court: true,
-      club: true
+      Court: true,
+      Club: true
     }
   })
 
@@ -422,10 +422,10 @@ async function sendBookingConfirmationNotification(bookingId: string) {
 
   const message = `✅ ¡Pago completo! Tu reserva está confirmada
 
-📍 ${booking.club.name}
+📍 ${booking.Club.name}
 📅 ${new Date(booking.date).toLocaleDateString('es-MX')}
 🕐 ${booking.startTime} - ${booking.endTime}
-🏟️ ${booking.court.name}
+🏟️ ${booking.Court.name}
 
 💰 Pago completado: $${(booking.price / 100).toFixed(2)} MXN
 
