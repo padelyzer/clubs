@@ -57,8 +57,13 @@ export async function GET(request: NextRequest) {
 
   } catch (error) {
     console.error('Error fetching instructors:', error)
+    const errorMessage = error instanceof Error ? error.message : 'Error desconocido'
     return NextResponse.json(
-      { success: false, error: 'Error al obtener instructores' },
+      { 
+        success: false, 
+        error: 'Error al obtener instructores',
+        details: process.env.NODE_ENV === 'development' ? errorMessage : undefined
+      },
       { status: 500 }
     )
   }

@@ -48,8 +48,13 @@ export async function GET(request: NextRequest) {
     
   } catch (error) {
     console.error('Error fetching class pricing:', error)
+    const errorMessage = error instanceof Error ? error.message : 'Error desconocido'
     return NextResponse.json(
-      { success: false, error: 'Error al obtener configuración de precios' },
+      { 
+        success: false, 
+        error: 'Error al obtener configuración de precios',
+        details: process.env.NODE_ENV === 'development' ? errorMessage : undefined
+      },
       { status: 500 }
     )
   }
