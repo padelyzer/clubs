@@ -24,13 +24,13 @@ export async function POST(request: NextRequest) {
     const payment = await prisma.payment.findFirst({
       where: { stripePaymentIntentId: paymentIntentId },
       include: {
-        booking: {
+        Booking: {
           include: {
             Club: true,
             Court: true
           }
         },
-        bookingGroup: {
+        BookingGroup: {
           include: {
             Club: true,
             bookings: {
@@ -52,12 +52,12 @@ export async function POST(request: NextRequest) {
       const splitPayment = await prisma.splitPayment.findFirst({
         where: { stripePaymentIntentId: paymentIntentId },
         include: {
-          booking: {
+          Booking: {
             include: {
               Club: true
             }
           },
-          bookingGroup: {
+          BookingGroup: {
             include: {
               Club: true
             }
@@ -153,11 +153,11 @@ export async function POST(request: NextRequest) {
         }
       })
 
-      booking = splitPayment.booking || splitPayment.bookingGroup
-      clubId = splitPayment.booking?.clubId || splitPayment.bookingGroup?.clubId
+      booking = splitPayment.Booking || splitPayment.BookingGroup
+      clubId = splitPayment.Booking?.clubId || splitPayment.BookingGroup?.clubId
 
       // Check if all split payments are completed
-      if (splitPayment.booking) {
+      if (splitPayment.Booking) {
         const pendingSplitPayments = await prisma.splitPayment.count({
           where: {
             bookingId: splitPayment.bookingId,
@@ -174,7 +174,7 @@ export async function POST(request: NextRequest) {
             }
           })
         }
-      } else if (splitPayment.bookingGroup) {
+      } else if (splitPayment.BookingGroup) {
         const pendingSplitPayments = await prisma.splitPayment.count({
           where: {
             bookingGroupId: splitPayment.bookingGroupId,
@@ -207,8 +207,8 @@ export async function POST(request: NextRequest) {
       })
     }
 
-    booking = payment.booking || payment.bookingGroup
-    clubId = payment.booking?.clubId || payment.bookingGroup?.clubId
+    booking = payment.Booking || payment.BookingGroup
+    clubId = payment.Booking?.clubId || payment.BookingGroup?.clubId
 
     if (testMode) {
       console.log('Test mode payment confirmation')
@@ -263,7 +263,7 @@ export async function POST(request: NextRequest) {
     })
 
     // Update booking or bookingGroup
-    if (payment.booking) {
+    if (payment.Booking) {
       await prisma.booking.update({
         where: { id: payment.bookingId! },
         data: {
@@ -271,7 +271,7 @@ export async function POST(request: NextRequest) {
           paymentType: 'ONLINE_FULL'
         }
       })
-    } else if (payment.bookingGroup) {
+    } else if (payment.BookingGroup) {
       await prisma.bookingGroup.update({
         where: { id: payment.bookingGroupId! },
         data: {
