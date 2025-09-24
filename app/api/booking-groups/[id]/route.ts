@@ -279,16 +279,19 @@ export async function DELETE(
         })
       }
 
-      // 4. Create cancellation notification
-      await tx.notification.create({
-        data: {
-          bookingGroupId,
-          type: 'WHATSAPP',
-          template: 'BOOKING_GROUP_CANCELLED',
-          recipient: bookingGroup.playerPhone,
-          status: 'pending'
-        }
-      })
+      // 4. Create cancellation notifications for each individual booking
+      // Since notifications are linked to individual bookings, we create one for each
+      for (const booking of bookingGroup.bookings) {
+        await tx.notification.create({
+          data: {
+            bookingId: booking.id,
+            type: 'WHATSAPP',
+            template: 'BOOKING_CANCELLED',
+            recipient: bookingGroup.playerPhone,
+            status: 'pending'
+          }
+        })
+      }
 
       return cancelledGroup
     })

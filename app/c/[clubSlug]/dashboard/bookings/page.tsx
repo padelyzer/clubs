@@ -377,22 +377,80 @@ function BookingsPageContent() {
     }
 
     try {
-      const response = await fetch(`/api/bookings/${bookingId}/cancel`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json'
-        },
-        body: JSON.stringify({
-          reason: 'Cancelado desde dashboard administrativo'
-        })
-      })
+      // Find the booking in our local state
+      const booking = bookings.find(b => b.id === bookingId)
+      
+      // Check multiple ways to determine if it's a group booking:
+      // 1. Check if it has the isGroup flag
+      // 2. Check if it has courtNames (groups have concatenated court names)
+      // 3. Check if the booking object has multiple courts listed
+      const isGroupBooking = booking?.isGroup || 
+                            (booking?.courtNames && booking.courtNames.includes(',')) ||
+                            false
 
-      const data = await response.json()
+      console.log('Canceling booking:')
+      console.log('- Booking ID:', bookingId)
+      console.log('- Is Group:', isGroupBooking)
+      console.log('- Booking object:', booking)
+      console.log('- Has courtNames:', booking?.courtNames)
+      console.log('- Court names includes comma:', booking?.courtNames?.includes(','))
+
+      let response
+      if (isGroupBooking) {
+        // For group bookings, use the DELETE method on booking-groups endpoint
+        response = await fetch(`/api/booking-groups/${bookingId}`, {
+          method: 'DELETE',
+          headers: {
+            'Content-Type': 'application/json'
+          }
+        })
+      } else {
+        // For individual bookings, use the POST method on bookings cancel endpoint
+        response = await fetch(`/api/bookings/${bookingId}/cancel`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify({
+            reason: 'Cancelado desde dashboard administrativo'
+          })
+        })
+      }
+
+      let data = { success: false, error: 'Error desconocido' }
+      
+      try {
+        const responseText = await response.text()
+        console.log('Raw response:', responseText)
+        
+        if (responseText) {
+          try {
+            data = JSON.parse(responseText)
+          } catch (parseError) {
+            console.error('Failed to parse response as JSON:', parseError)
+            data = { success: false, error: responseText }
+          }
+        }
+      } catch (error) {
+        console.error('Error reading response:', error)
+      }
+
+      if (!response.ok) {
+        console.error('Cancel response error:')
+        console.error('- Status:', response.status)
+        console.error('- Status Text:', response.statusText)
+        console.error('- URL:', response.url)
+        console.error('- Is Group Booking:', isGroupBooking)
+        console.error('- Booking ID:', bookingId)
+        console.error('- Response Data:', data)
+      }
 
       if (data.success) {
         notify.success({
-          title: 'Reserva cancelada',
-          message: 'La reserva ha sido cancelada exitosamente',
+          title: isGroupBooking ? 'Grupo cancelado' : 'Reserva cancelada',
+          message: isGroupBooking 
+            ? 'El grupo de reservas ha sido cancelado exitosamente' 
+            : 'La reserva ha sido cancelada exitosamente',
           duration: 5000
         })
         setSelectedBooking(null)
