@@ -201,60 +201,13 @@ export async function POST(request: NextRequest) {
     })
 
     if (!stripeProvider || !stripeProvider.config) {
-      // Use test mode if no Stripe configured
-      console.log('Club has no Stripe configuration, using test mode')
-      
-      // Create a test client secret
-      const testClientSecret = `pi_test_${Date.now()}_secret_${Math.random().toString(36).substr(2, 9)}`
-      
-      // Update booking status to processing
-      if (!splitPaymentId) {
-        if (booking.isClass) {
-          await prisma.classBooking.update({
-            where: { id: booking.id },
-            data: {
-              paymentStatus: 'processing',
-              paymentMethod: 'online',
-            }
-          })
-        } else if (booking.isGroup) {
-          await prisma.bookingGroup.update({
-            where: { id: booking.id },
-            data: {
-              status: 'CONFIRMED'
-            }
-          })
-        } else {
-          await prisma.booking.update({
-            where: { id: booking.id },
-            data: {
-              paymentStatus: 'processing',
-            }
-          })
-        }
-      }
-
-      return NextResponse.json({
-        success: true,
-        clientSecret: testClientSecret,
-        paymentIntentId: testClientSecret.split('_secret_')[0],
-        amount,
-        testMode: true,
-        bookingDetails: {
-          id: booking.id,
-          date: booking.date,
-          startTime: booking.startTime,
-          endTime: booking.endTime,
-          clubName: club.name,
-          courtName: booking.isGroup ? booking.bookings.map(b => b.Court.name).join(', ') : booking.Court?.name,
-          playerName: booking.playerName,
-          totalPlayers: booking.totalPlayers || 1,
-          price: booking.price,
-          splitPaymentEnabled: booking.splitPaymentEnabled || false,
-          splitPaymentCount: booking.splitPaymentCount || 0,
-          isGroup: booking.isGroup || false
-        }
-      })
+      return NextResponse.json(
+        { 
+          error: 'Este club no tiene configurado Stripe. Por favor, contacte al club directamente para coordinar el pago.',
+          code: 'STRIPE_NOT_CONFIGURED'
+        },
+        { status: 400 }
+      )
     }
 
     const config = stripeProvider.config as any

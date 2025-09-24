@@ -50,10 +50,9 @@ export async function GET(request: NextRequest) {
     })
 
     if (!stripeProvider || !stripeProvider.config) {
-      // Retornar llave pública por defecto si no hay configuración
       return NextResponse.json({
-        success: true,
-        publicKey: process.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY || 'pk_test_51IeqH4HZxVJhPIzs1kLkQzYWFRRLGzMrDKQqFYDWZ8eXKoGHXaQYKlePQCwpqDe3Bq5JQwGmVpVGYbNdBOgO00V000pZQOtRJ',
+        success: false,
+        error: 'Club does not have Stripe configuration',
         hasClubConfig: false
       })
     }
@@ -61,8 +60,8 @@ export async function GET(request: NextRequest) {
     const config = stripeProvider.config as any
     if (!config.publicKey) {
       return NextResponse.json({
-        success: true,
-        publicKey: process.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY || 'pk_test_51IeqH4HZxVJhPIzs1kLkQzYWFRRLGzMrDKQqFYDWZ8eXKoGHXaQYKlePQCwpqDe3Bq5JQwGmVpVGYbNdBOgO00V000pZQOtRJ',
+        success: false,
+        error: 'Stripe public key not configured',
         hasClubConfig: false
       })
     }
@@ -75,11 +74,10 @@ export async function GET(request: NextRequest) {
 
   } catch (error) {
     console.error('Error fetching Stripe config:', error)
-    // En caso de error, retornar llave por defecto
     return NextResponse.json({
-      success: true,
-      publicKey: process.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY || 'pk_test_51IeqH4HZxVJhPIzs1kLkQzYWFRRLGzMrDKQqFYDWZ8eXKoGHXaQYKlePQCwpqDe3Bq5JQwGmVpVGYbNdBOgO00V000pZQOtRJ',
+      success: false,
+      error: 'Error fetching Stripe configuration',
       hasClubConfig: false
-    })
+    }, { status: 500 })
   }
 }

@@ -89,43 +89,6 @@ function PaymentForm({ bookingId, splitPaymentId }: PaymentPageProps) {
     setLoading(true)
     setError(null)
 
-    // Detectar si estamos en modo de prueba (client_secret simulado)
-    const isTestMode = clientSecret.includes('_secret_') && !clientSecret.startsWith('pi_test_') && !clientSecret.startsWith('pi_live_')
-    
-    if (isTestMode) {
-      console.log('🧪 Modo de prueba detectado, simulando pago exitoso...')
-      
-      // Simular procesamiento
-      await new Promise(resolve => setTimeout(resolve, 2000))
-      
-      // Simular pago exitoso y confirmar en el backend
-      try {
-        const response = await fetch('/api/public/payments/confirm', {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify({
-            paymentIntentId: clientSecret.split('_secret_')[0],
-            bookingId: bookingId,
-            testMode: true
-          }),
-        })
-
-        if (response.ok) {
-          setSuccess(true)
-        } else {
-          const data = await response.json()
-          setError(data.error || 'Error confirmando el pago')
-        }
-      } catch (err) {
-        setError('Error confirmando el pago')
-      }
-      
-      setLoading(false)
-      return
-    }
-
     const cardElement = elements.getElement(CardElement)
     if (!cardElement) {
       setError('No se pudo cargar el formulario de tarjeta')
@@ -606,26 +569,18 @@ export default function PaymentPage() {
       const response = await fetch(`/api/public/stripe/config?bookingId=${bookingId}`)
       const data = await response.json()
       
-      let publicKey = null
       if (data.success && data.publicKey) {
-        publicKey = data.publicKey
+        const publicKey = data.publicKey
         console.log('Using club-specific Stripe public key')
-      } else {
-        // Fallback a la llave global
-        publicKey = process.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY || 'pk_test_51IeqH4HZxVJhPIzs1kLkQzYWFRRLGzMrDKQqFYDWZ8eXKoGHXaQYKlePQCwpqDe3Bq5JQwGmVpVGYbNdBOgO00V000pZQOtRJ'
-        console.log('Using global Stripe public key')
-      }
-      
-      if (publicKey) {
         const stripe = await loadStripe(publicKey)
         setStripePromise(stripe)
+      } else {
+        console.error('Club does not have Stripe configured')
+        setStripePromise(null)
       }
     } catch (error) {
       console.error('Error loading Stripe config:', error)
-      // Usar llave por defecto en caso de error
-      const publicKey = process.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY || 'pk_test_51IeqH4HZxVJhPIzs1kLkQzYWFRRLGzMrDKQqFYDWZ8eXKoGHXaQYKlePQCwpqDe3Bq5JQwGmVpVGYbNdBOgO00V000pZQOtRJ'
-      const stripe = await loadStripe(publicKey)
-      setStripePromise(stripe)
+      setStripePromise(null)
     } finally {
       setLoading(false)
     }
@@ -653,9 +608,9 @@ export default function PaymentPage() {
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
               </svg>
             </div>
-            <h2 className="text-xl font-semibold text-gray-900 mb-2">Sistema de Pago No Disponible</h2>
+            <h2 className="text-xl font-semibold text-gray-900 mb-2">Stripe No Configurado</h2>
             <p className="text-gray-600 mb-6">
-              El sistema de pago en línea no está configurado actualmente. Por favor, contacta al club para coordinar el pago.
+              Este club aún no ha configurado su sistema de pagos con Stripe. Por favor, contacta al club directamente para coordinar el pago de tu reserva.
             </p>
             <div className="space-y-3">
               <button
