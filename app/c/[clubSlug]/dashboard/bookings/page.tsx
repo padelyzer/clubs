@@ -1582,19 +1582,19 @@ function BookingsPageContent() {
             </CardModern>
           </div>
         )}
-      </div>
 
-      {/* Split Payment Manager Modal */}
-      {splitPaymentModal && (
-        <SplitPaymentManager
-          bookingId={splitPaymentModal.id}
-          onClose={() => {
-            setSplitPaymentModal(null)
-            // Refresh bookings to update split payment status
-            fetchBookings()
-          }}
-        />
-      )}
+        {/* Split Payment Manager Modal */}
+        {splitPaymentModal && (
+          <SplitPaymentManager
+            bookingId={splitPaymentModal.id}
+            onClose={() => {
+              setSplitPaymentModal(null)
+              // Refresh bookings to update split payment status
+              fetchBookings()
+            }}
+          />
+        )}
+      </div>
   )
 }
 
