@@ -175,6 +175,7 @@ export async function GET(request: NextRequest) {
 
       return {
         ...group,
+        splitPayments: group.splitPayments, // Map Prisma's splitPayments to frontend's splitPayments
         isGroup: true, // Flag to identify this as a group
         courtNames: group.bookings.map((b: any) => b.Court.name).join(', '),
         splitPaymentProgress,
@@ -191,6 +192,7 @@ export async function GET(request: NextRequest) {
 
       return {
         ...booking,
+        splitPayments: booking.SplitPayment, // Map Prisma's SplitPayment to frontend's splitPayments
         isGroup: false, // Flag to identify this as individual
         splitPaymentProgress,
         splitPaymentComplete: booking.splitPaymentEnabled 
