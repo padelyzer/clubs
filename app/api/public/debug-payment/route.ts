@@ -1,0 +1,23 @@
+import { NextRequest, NextResponse } from 'next/server'
+
+export async function GET(request: NextRequest) {
+  const { searchParams } = new URL(request.url)
+  const bookingId = searchParams.get('bookingId')
+  
+  return NextResponse.json({
+    success: true,
+    debug: {
+      bookingId,
+      env: {
+        NODE_ENV: process.env.NODE_ENV,
+        NEXTAUTH_URL: process.env.NEXTAUTH_URL,
+        NEXT_PUBLIC_APP_URL: process.env.NEXT_PUBLIC_APP_URL,
+        hasStripePublishableKey: !!process.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY,
+        stripeKeyPrefix: process.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY?.substring(0, 10),
+        hasStripeSecretKey: !!process.env.STRIPE_SECRET_KEY,
+        hasDatabaseUrl: !!process.env.DATABASE_URL,
+      },
+      timestamp: new Date().toISOString()
+    }
+  })
+}
