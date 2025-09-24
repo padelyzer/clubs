@@ -4,6 +4,7 @@ import { useState, useEffect } from 'react'
 import { AppleModal } from '@/components/design-system/AppleModal'
 import { AppleButton } from '@/components/design-system/AppleButton'
 import { SettingsCard } from '@/components/design-system/SettingsCard'
+import { SplitPaymentManager } from '@/components/bookings/split-payment-manager'
 import { useNotify } from '@/contexts/NotificationContext'
 import { 
   CheckCircle2, Clock, CreditCard, DollarSign, 
@@ -85,6 +86,7 @@ export function CheckInModal({
   const [terminalReferences, setTerminalReferences] = useState<Record<string, string>>({})
   const [copiedPaymentIds, setCopiedPaymentIds] = useState<Record<string, boolean>>({})
   const [regularPaymentLink, setRegularPaymentLink] = useState<string | null>(null)
+  const [showSplitPaymentModal, setShowSplitPaymentModal] = useState(false)
   const [generatingRegularLink, setGeneratingRegularLink] = useState(false)
   const [hasExistingPaymentIntent, setHasExistingPaymentIntent] = useState(false)
   const [studentPaymentLinks, setStudentPaymentLinks] = useState<Record<string, string>>({})
@@ -2526,20 +2528,16 @@ export function CheckInModal({
             return (
               <AppleButton
                 variant="primary"
-                onClick={() => notify.warning({
-                  title: 'Pagos pendientes',
-                  message: 'Completa todos los pagos divididos antes de hacer check-in',
-                  duration: 5000
-                })}
+                onClick={() => setShowSplitPaymentModal(true)}
                 disabled={loading}
-                icon={<AlertCircle size={16} />}
+                icon={<Users size={16} />}
                 style={{
-                  background: 'linear-gradient(135deg, rgba(255, 193, 7, 0.8), rgba(255, 152, 0, 0.8))',
+                  background: 'linear-gradient(135deg, #2196F3, #03A9F4)',
                   color: 'white',
                   border: 'none'
                 }}
               >
-                Pagos Pendientes ({completedCount}/{totalCount})
+                Gestionar Pagos Divididos ({completedCount}/{totalCount})
               </AppleButton>
             )
           }
@@ -2665,6 +2663,20 @@ export function CheckInModal({
             </div>
           </div>
         </AppleModal>
+      )}
+
+      {/* Split Payment Manager Modal */}
+      {showSplitPaymentModal && booking && (
+        <SplitPaymentManager
+          bookingId={booking.id}
+          onClose={() => {
+            setShowSplitPaymentModal(false)
+            // Refresh booking data
+            if (onRefreshBooking) {
+              onRefreshBooking()
+            }
+          }}
+        />
       )}
     </>
   )
