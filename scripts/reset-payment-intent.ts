@@ -1,51 +1,64 @@
-import { prisma } from '../lib/config/prisma'
+import { PrismaClient } from '@prisma/client'
+
+// Use production database URL - Supabase production
+const PRODUCTION_DATABASE_URL = 'postgresql://postgres.espmqzfvgzuzpbpsgmpw:ClaudeCodeSuper2@aws-1-us-east-2.pooler.supabase.com:6543/postgres?pgbouncer=true'
+
+const prisma = new PrismaClient({
+  datasources: {
+    db: {
+      url: PRODUCTION_DATABASE_URL
+    }
+  }
+})
 
 async function resetPaymentIntent() {
+  const bookingId = '9b799d4a-b6b4-499b-a879-f1f686091425'
+  console.log(`🔧 Reseteando payment intent para booking: ${bookingId}`)
+  
   try {
-    console.log('🔄 Regenerando Payment Intent con formato correcto...\n')
+    await prisma.$connect()
+    console.log('✅ Conexión exitosa a Supabase')
     
-    // Buscar el split payment en processing
-    const splitPayment = await prisma.splitPayment.findFirst({
-      where: {
-        status: 'processing',
-        stripePaymentIntentId: { not: null }
-      },
-      include: {
-        booking: true
+    // Encontrar el pago existente
+    const existingPayment = await prisma.payment.findFirst({
+      where: { 
+        bookingId: bookingId,
+        status: 'processing'
       }
     })
     
-    if (!splitPayment) {
-      console.log('❌ No se encontró split payment en processing')
-      return
+    if (existingPayment) {
+      console.log(`\n💳 Payment intent existente: ${existingPayment.stripePaymentIntentId}`)
+      console.log('   Eliminando payment record para permitir nuevo intento...')
+      
+      // Eliminar el payment record
+      await prisma.payment.delete({
+        where: { id: existingPayment.id }
+      })
+      
+      console.log('✅ Payment record eliminado')
+    } else {
+      console.log('❌ No se encontró payment intent activo')
     }
     
-    console.log(`💳 Split payment encontrado:`)
-    console.log(`   Jugador: ${splitPayment.playerName}`)
-    console.log(`   Estado: ${splitPayment.status}`)
-    console.log(`   Payment Intent actual: ${splitPayment.stripePaymentIntentId}`)
-    
-    // Generar nuevo Payment Intent ID y client secret con formato correcto
-    const newPaymentIntentId = `pi_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`
-    
-    // Actualizar el split payment
-    await prisma.splitPayment.update({
-      where: { id: splitPayment.id },
-      data: {
-        stripePaymentIntentId: newPaymentIntentId,
-        updatedAt: new Date()
+    // Resetear el estado de pago de la reserva
+    const booking = await prisma.booking.update({
+      where: { id: bookingId },
+      data: { 
+        paymentStatus: 'pending'
       }
     })
     
-    console.log(`\n✅ Payment Intent actualizado:`)
-    console.log(`   Nuevo ID: ${newPaymentIntentId}`)
-    console.log(`   Link actualizado: http://localhost:3000/pay/${splitPayment.bookingId}?split=${splitPayment.id}`)
+    console.log('\n✅ Estado de la reserva reseteado:')
+    console.log(`   Payment Status: ${booking.paymentStatus}`)
+    console.log('\n🎯 Ahora puedes intentar el pago nuevamente')
     
     await prisma.$disconnect()
     
   } catch (error) {
     console.error('❌ Error:', error)
+    await prisma.$disconnect()
   }
 }
 
-resetPaymentIntent()
+resetPaymentIntent().catch(console.error)

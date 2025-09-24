@@ -437,6 +437,24 @@ export async function POST(request: NextRequest) {
 
   } catch (error) {
     console.error('Error creating payment intent:', error)
+    
+    // Log más detallado del error
+    if (error instanceof Error) {
+      console.error('Error details:', {
+        message: error.message,
+        stack: error.stack,
+        name: error.name
+      })
+      
+      // Devolver mensaje más específico en desarrollo
+      if (process.env.NODE_ENV === 'development') {
+        return NextResponse.json(
+          { error: `Error: ${error.message}` },
+          { status: 500 }
+        )
+      }
+    }
+    
     return NextResponse.json(
       { error: 'Error interno del servidor' },
       { status: 500 }

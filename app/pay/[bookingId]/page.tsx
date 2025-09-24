@@ -602,8 +602,8 @@ export default function PaymentPage() {
 
   const fetchStripeConfig = async () => {
     try {
-      // Primero intentar obtener la configuración del club
-      const response = await fetch(`/api/stripe/config?bookingId=${bookingId}`)
+      // Primero intentar obtener la configuración del club (usando endpoint público)
+      const response = await fetch(`/api/public/stripe/config?bookingId=${bookingId}`)
       const data = await response.json()
       
       let publicKey = null
