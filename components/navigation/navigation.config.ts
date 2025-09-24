@@ -6,7 +6,7 @@ export const clubNavigation = {
     { label: 'Reservas', href: '/dashboard/bookings', icon: '📅' },
     { label: 'Canchas', href: '/dashboard/courts', icon: '🎾' },
     { label: 'Clases', href: '/dashboard/classes', icon: '📚' },
-    { label: 'Instructores', href: '/dashboard/instructors', icon: '👨‍🏫' },
+    { label: 'Instructores', href: '/dashboard/coaches', icon: '👨‍🏫' },
     { label: 'Precios', href: '/dashboard/pricing', icon: '💰' },
     { label: 'Horarios', href: '/dashboard/schedule', icon: '⏰' },
     { label: 'Recepción', href: '/dashboard/reception', icon: '📱' },

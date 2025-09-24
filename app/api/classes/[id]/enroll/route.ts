@@ -4,6 +4,7 @@ import { prisma } from '@/lib/config/prisma'
 import { z } from 'zod'
 import { createSplitPayments, generateSplitPaymentLinks } from '@/lib/payments/split-payment'
 import { syncClassStudentCounter } from '@/lib/utils/class-counter'
+import { findOrCreatePlayer, updatePlayerClassStats } from '@/lib/services/player-service'
 
 const enrollSchema = z.object({
   studentName: z.string().min(1),
@@ -79,10 +80,19 @@ export async function POST(
       )
     }
     
-    // Create enrollment
+    // Find or create player
+    const player = await findOrCreatePlayer({
+      name: validatedData.studentName,
+      email: validatedData.studentEmail,
+      phone: validatedData.studentPhone,
+      clubId: session.clubId
+    })
+    
+    // Create enrollment with player relation
     const enrollment = await prisma.classBooking.create({
       data: {
         classId,
+        playerId: player.id,
         playerName: validatedData.studentName,
         playerEmail: validatedData.studentEmail || null,
         playerPhone: validatedData.studentPhone,
@@ -91,7 +101,6 @@ export async function POST(
         paymentMethod: validatedData.paymentMethod,
         status: 'CONFIRMED',
         paidAmount: 0, // Will be updated when payment is completed
-        // dueAmount field doesn't exist in schema, using price from class
       }
     })
     

@@ -33,7 +33,8 @@ model Booking {
   startTime           String
   endTime             String
   duration            Int
-  playerName          String
+  playerId            String?        // Relación opcional con Player
+  playerName          String         // Mantener para compatibilidad
   playerEmail         String?
   playerPhone         String
   totalPlayers        Int            @default(4)
@@ -55,6 +56,7 @@ model Booking {
   BookingGroup        BookingGroup?  @relation(fields: [bookingGroupId], references: [id])
   Club                Club           @relation(fields: [clubId], references: [id])
   Court               Court          @relation(fields: [courtId], references: [id])
+  Player              Player?        @relation("PlayerBookings", fields: [playerId], references: [id])
   Notification        Notification[]
   Payment             Payment[]
   SplitPayment        SplitPayment[]
@@ -63,6 +65,7 @@ model Booking {
   @@index([clubId, date])
   @@index([courtId, date])
   @@index([playerPhone])
+  @@index([playerId])
   @@index([status])
   @@index([bookingGroupId])
 }
@@ -375,10 +378,14 @@ model Player {
   totalBookings     Int           @default(0)
   totalSpent        Int           @default(0)
   lastBookingAt     DateTime?
+  totalClasses      Int           @default(0)  // Total de clases tomadas
+  lastClassAt       DateTime?                   // Última clase
   createdAt         DateTime      @default(now())
   updatedAt         DateTime
   gender            String?
   Club              Club          @relation(fields: [clubId], references: [id], onDelete: Cascade)
+  Booking           Booking[]     @relation("PlayerBookings")
+  ClassBooking      ClassBooking[] @relation("PlayerClassBookings")
   Transaction       Transaction[]
 
   @@unique([clubId, memberNumber])
@@ -767,8 +774,8 @@ model Instructor {
 model ClassBooking {
   id            String           @id
   classId       String
-  playerId      String?
-  playerName    String
+  playerId      String?          // Relación con Player del club
+  playerName    String           // Mantener para compatibilidad
   playerEmail   String?
   playerPhone   String
   status        EnrollmentStatus @default(CONFIRMED)
@@ -782,6 +789,7 @@ model ClassBooking {
   enrollmentDate DateTime?       @default(now())
   paymentMethod  String?
   Class         Class            @relation(fields: [classId], references: [id], onDelete: Cascade)
+  Player        Player?          @relation("PlayerClassBookings", fields: [playerId], references: [id])
 
   @@index([classId])
   @@index([playerId])

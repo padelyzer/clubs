@@ -10,6 +10,7 @@ import {
   getDayBoundariesInTimezone
 } from '@/lib/utils/timezone'
 import { withRateLimit } from '@/lib/rate-limit'
+import { findOrCreatePlayer, updatePlayerBookingStats } from '@/lib/services/player-service'
 
 // Validation schemas
 const createBookingSchema = z.object({
@@ -437,6 +438,14 @@ export async function POST(request: NextRequest) {
       updatedAt: new Date()
     })
     
+    // Find or create player
+    const player = await findOrCreatePlayer({
+      name: validatedData.playerName,
+      email: validatedData.playerEmail,
+      phone: validatedData.playerPhone,
+      clubId: session.clubId
+    })
+    
     const booking = await prisma.booking.create({
       data: {
         id: bookingId,
@@ -446,6 +455,7 @@ export async function POST(request: NextRequest) {
         startTime: validatedData.startTime,
         endTime,
         duration: validatedData.duration,
+        playerId: player.id,
         playerName: validatedData.playerName,
         playerEmail: validatedData.playerEmail || null,
         playerPhone: validatedData.playerPhone,
