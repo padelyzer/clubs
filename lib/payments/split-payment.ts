@@ -242,7 +242,9 @@ export async function getSplitPaymentStatus(bookingId: string) {
     include: {
       splitPayments: {
         orderBy: { createdAt: 'asc' }
-      }
+      },
+      court: true,
+      club: true
     }
   })
 
@@ -254,14 +256,47 @@ export async function getSplitPaymentStatus(bookingId: string) {
   const pendingPayments = booking.splitPayments.filter(sp => sp.status === 'pending').length
   const failedPayments = booking.splitPayments.filter(sp => sp.status === 'failed').length
 
+  const completedAmount = booking.splitPayments
+    .filter(sp => sp.status === 'completed')
+    .reduce((sum, sp) => sum + sp.amount, 0)
+    
+  const totalAmount = booking.price || 0
+  const pendingAmount = totalAmount - completedAmount
+
   return {
+    booking: {
+      id: booking.id,
+      date: booking.date.toISOString(),
+      startTime: booking.startTime,
+      endTime: booking.endTime,
+      club: {
+        name: booking.club.name
+      },
+      court: {
+        name: booking.court.name
+      },
+      playerName: booking.playerName,
+      totalPlayers: booking.totalPlayers || 4,
+      price: booking.price,
+      paymentStatus: booking.paymentStatus
+    },
+    splitPayments: booking.splitPayments.map(sp => ({
+      id: sp.id,
+      playerName: sp.playerName,
+      playerEmail: sp.playerEmail,
+      playerPhone: sp.playerPhone,
+      amount: sp.amount,
+      status: sp.status,
+      completedAt: sp.completedAt?.toISOString(),
+      stripePaymentIntentId: sp.stripePaymentIntentId,
+      paymentLink: sp.paymentLink
+    })),
     totalPayments: booking.splitPaymentCount,
     completedPayments,
     pendingPayments,
-    failedPayments,
-    isFullyPaid: completedPayments === booking.splitPaymentCount,
-    progress: Math.round((completedPayments / booking.splitPaymentCount) * 100),
-    splitPayments: booking.splitPayments
+    totalAmount,
+    completedAmount,
+    pendingAmount
   }
 }
 

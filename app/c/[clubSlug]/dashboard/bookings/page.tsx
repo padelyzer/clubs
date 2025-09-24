@@ -9,6 +9,7 @@ import { InputModern } from '@/components/design-system/InputModern'
 import { BookingModal } from '@/components/bookings/booking-modal'
 import { CheckInModal } from '@/components/bookings/checkin-modal'
 import { PaymentModal } from '@/components/modals/PaymentModal'
+import { SplitPaymentManager } from '@/components/bookings/split-payment-manager'
 import { 
   Calendar, Plus, Search, Filter, ChevronLeft, ChevronRight,
   Clock, MapPin, User, Phone, Mail, CreditCard, CheckCircle,
@@ -79,6 +80,7 @@ function BookingsPageContent() {
   const [selectedBooking, setSelectedBooking] = useState<Booking | null>(null)
   const [copySuccess, setCopySuccess] = useState(false)
   const [checkInBooking, setCheckInBooking] = useState<Booking | null>(null)
+  const [splitPaymentModal, setSplitPaymentModal] = useState<Booking | null>(null)
   const [searchQuery, setSearchQuery] = useState('')
   const [whatsappLink, setWhatsappLink] = useState<string | null>(null)
   const [paymentSettings, setPaymentSettings] = useState({
@@ -1164,17 +1166,25 @@ function BookingsPageContent() {
                             <div style={{
                               display: 'flex',
                               alignItems: 'center',
-                              gap: '6px'
-                            }}>
+                              gap: '6px',
+                              cursor: 'pointer'
+                            }}
+                            onClick={() => setSplitPaymentModal(booking)}>
                               <Share2 size={12} />
                               Pago dividido: {splitProgress.completed}/{splitProgress.total} completados
                             </div>
-                            <span style={{
-                              fontWeight: 600,
-                              color: '#182A01'
-                            }}>
-                              ${Math.round(((booking.price || 0) / 100) / booking.splitPaymentCount)} c/u
-                            </span>
+                            <ButtonModern
+                              variant="ghost"
+                              size="sm"
+                              onClick={() => setSplitPaymentModal(booking)}
+                              style={{
+                                padding: '4px 12px',
+                                fontSize: '12px',
+                                height: 'auto'
+                              }}
+                            >
+                              Gestionar
+                            </ButtonModern>
                           </div>
                         )}
                       </div>
@@ -1573,6 +1583,18 @@ function BookingsPageContent() {
           </div>
         )}
       </div>
+
+      {/* Split Payment Manager Modal */}
+      {splitPaymentModal && (
+        <SplitPaymentManager
+          bookingId={splitPaymentModal.id}
+          onClose={() => {
+            setSplitPaymentModal(null)
+            // Refresh bookings to update split payment status
+            fetchBookings()
+          }}
+        />
+      )}
   )
 }
 
