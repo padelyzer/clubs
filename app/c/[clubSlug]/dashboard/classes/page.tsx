@@ -801,10 +801,10 @@ function ClassesContent() {
           }
         }
       `}</style>
-      <div style={{/* padding: '32px' */}}>
+      <div style={{ padding: '32px' }}>
         {/* Header */}
-        <div style={{/* marginBottom: '32px' */}}>
-          <div style={{/* display: 'flex', justifyContent: 'space-between', alignItems: 'center' */}}>
+        <div style={{ marginBottom: '32px' }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
             <div>
               <h1 style={{
                 fontSize: '32px',
@@ -824,7 +824,7 @@ function ClassesContent() {
                 Gestiona las clases y programas de entrenamiento
               </p>
             </div>
-            <div style={{/* display: 'flex', gap: '12px' */}}>
+            <div style={{ display: 'flex', gap: '12px' }}>
               <ButtonModern 
                 variant="secondary"
                 icon={<DollarSign size={18} />}
@@ -873,10 +873,10 @@ function ClassesContent() {
         </div>
 
         {/* Stats Cards */}
-        <div style={{/* display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '20px', marginBottom: '24px' */}}>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '20px', marginBottom: '24px' }}>
           <CardModern variant="glass">
-            <div style={{/* padding: '20px' */}}>
-              <div style={{/* display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '12px' */}}>
+            <div style={{ padding: '20px' }}>
+              <div style={{ display: 'flex', alignItems: 'flex-start', marginBottom: '12px' }}>
                 <div style={{
                   width: '40px',
                   height: '40px',
@@ -889,18 +889,18 @@ function ClassesContent() {
                   <BookOpen size={20} color="#182A01" />
                 </div>
               </div>
-              <div style={{/* fontSize: '24px', fontWeight: 700, color: '#182A01' */}}>
+              <div style={{ fontSize: '24px', fontWeight: 700, color: '#182A01', marginBottom: '4px' }}>
                 {classes.filter(c => c.status === 'SCHEDULED' || c.status === 'scheduled').length}
               </div>
-              <div style={{/* fontSize: '13px', color: '#516640' */}}>
+              <div style={{ fontSize: '13px', color: '#516640' }}>
                 Clases hoy
               </div>
             </div>
           </CardModern>
 
           <CardModern variant="glass">
-            <div style={{/* padding: '20px' */}}>
-              <div style={{/* display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '12px' */}}>
+            <div style={{ padding: '20px' }}>
+              <div style={{ display: 'flex', alignItems: 'flex-start', marginBottom: '12px' }}>
                 <div style={{
                   width: '40px',
                   height: '40px',
@@ -913,18 +913,18 @@ function ClassesContent() {
                   <Users size={20} color="#182A01" />
                 </div>
               </div>
-              <div style={{/* fontSize: '24px', fontWeight: 700, color: '#182A01' */}}>
+              <div style={{ fontSize: '24px', fontWeight: 700, color: '#182A01', marginBottom: '4px' }}>
                 {classes.reduce((sum, c) => sum + (c.currentStudents || 0), 0)}
               </div>
-              <div style={{/* fontSize: '13px', color: '#516640' */}}>
+              <div style={{ fontSize: '13px', color: '#516640' }}>
                 Estudiantes inscritos
               </div>
             </div>
           </CardModern>
 
           <CardModern variant="glass">
-            <div style={{/* padding: '20px' */}}>
-              <div style={{/* display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '12px' */}}>
+            <div style={{ padding: '20px' }}>
+              <div style={{ display: 'flex', alignItems: 'flex-start', marginBottom: '12px' }}>
                 <div style={{
                   width: '40px',
                   height: '40px',
@@ -937,18 +937,18 @@ function ClassesContent() {
                   <GraduationCap size={20} color="#182A01" />
                 </div>
               </div>
-              <div style={{/* fontSize: '24px', fontWeight: 700, color: '#182A01' */}}>
+              <div style={{ fontSize: '24px', fontWeight: 700, color: '#182A01', marginBottom: '4px' }}>
                 {instructors.filter(i => i.active).length}
               </div>
-              <div style={{/* fontSize: '13px', color: '#516640' */}}>
+              <div style={{ fontSize: '13px', color: '#516640' }}>
                 Instructores activos
               </div>
             </div>
           </CardModern>
 
           <CardModern variant="glass">
-            <div style={{/* padding: '20px' */}}>
-              <div style={{/* display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '12px' */}}>
+            <div style={{ padding: '20px' }}>
+              <div style={{ display: 'flex', alignItems: 'flex-start', marginBottom: '12px' }}>
                 <div style={{
                   width: '40px',
                   height: '40px',
@@ -961,10 +961,10 @@ function ClassesContent() {
                   <DollarSign size={20} color="#182A01" />
                 </div>
               </div>
-              <div style={{/* fontSize: '24px', fontWeight: 700, color: '#182A01' */}}>
+              <div style={{ fontSize: '24px', fontWeight: 700, color: '#182A01', marginBottom: '4px' }}>
                 {formatCurrency(classes.reduce((sum, c) => sum + ((c.revenue || c.price * c.currentStudents) || 0), 0) / 100)}
               </div>
-              <div style={{/* fontSize: '13px', color: '#516640' */}}>
+              <div style={{ fontSize: '13px', color: '#516640' }}>
                 Ingresos del día
               </div>
             </div>
@@ -972,11 +972,11 @@ function ClassesContent() {
         </div>
 
         {/* Controls Bar */}
-        <CardModern variant="glass" style={{/* marginBottom: '24px' */}}>
-          <div style={{/* padding: '20px' */}}>
-            <div style={{/* display: 'flex', justifyContent: 'space-between', alignItems: 'center' */}}>
+        <CardModern variant="glass" style={{ marginBottom: '24px' }}>
+          <div style={{ padding: '20px' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
               {/* Date Navigation */}
-              <div style={{/* display: 'flex', alignItems: 'center', gap: '16px' */}}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
                 <button
                   onClick={() => navigateDate('prev')}
                   style={{
@@ -990,8 +990,8 @@ function ClassesContent() {
                   <ChevronLeft size={20} color="#516640" />
                 </button>
                 
-                <div style={{/* minWidth: '200px', textAlign: 'center' */}}>
-                  <div style={{/* fontSize: '16px', fontWeight: 600, color: '#182A01' */}}>
+                <div style={{ minWidth: '200px', textAlign: 'center' }}>
+                  <div style={{ fontSize: '16px', fontWeight: 600, color: '#182A01' }}>
                     {selectedDate.toLocaleDateString('es-MX', { 
                       day: 'numeric',
                       month: 'long',
@@ -1031,7 +1031,7 @@ function ClassesContent() {
               </div>
 
               {/* Filters */}
-              <div style={{/* display: 'flex', gap: '12px', alignItems: 'center' */}}>
+              <div style={{ display: 'flex', gap: '12px', alignItems: 'center' }}>
                 <select
                   value={selectedLevel}
                   onChange={(e) => setSelectedLevel(e.target.value)}
@@ -1066,7 +1066,7 @@ function ClassesContent() {
                   ))}
                 </select>
                 
-                <div style={{/* display: 'flex', background: 'white', borderRadius: '8px', border: '1px solid rgba(164, 223, 78, 0.2)' */}}>
+                <div style={{ display: 'flex', background: 'white', borderRadius: '8px', border: '1px solid rgba(164, 223, 78, 0.2)' }}>
                   <button
                     onClick={() => setViewMode('calendar')}
                     style={{
