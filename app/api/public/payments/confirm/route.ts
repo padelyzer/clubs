@@ -88,7 +88,7 @@ export async function POST(request: NextRequest) {
             })
 
             // Create payment record for tracking
-            await prisma.payment.create({
+            const newPayment = await prisma.payment.create({
               data: {
                 id: `payment_${booking.clubId}_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
                 bookingId: booking.id,
@@ -99,6 +99,22 @@ export async function POST(request: NextRequest) {
                 stripePaymentIntentId: paymentIntentId,
                 createdAt: new Date(),
                 updatedAt: new Date(),
+              }
+            })
+
+            // Create transaction record
+            await prisma.transaction.create({
+              data: {
+                id: `txn_${booking.clubId}_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
+                type: 'INCOME',
+                amount: booking.price,
+                description: `Pago de reserva - ${booking.playerName}`,
+                category: 'BOOKING',
+                date: new Date(),
+                clubId: booking.clubId,
+                paymentId: newPayment.id,
+                createdAt: new Date(),
+                updatedAt: new Date()
               }
             })
 
@@ -285,6 +301,28 @@ export async function POST(request: NextRequest) {
         data: {
           paymentStatus: 'completed',
           paymentType: 'ONLINE_FULL'
+        }
+      })
+    }
+
+    // Create transaction record if doesn't exist
+    const existingTransaction = await prisma.transaction.findFirst({
+      where: { paymentId: payment.id }
+    })
+
+    if (!existingTransaction) {
+      await prisma.transaction.create({
+        data: {
+          id: `txn_${clubId}_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
+          type: 'INCOME',
+          amount: payment.amount,
+          description: `Pago de reserva - ${booking?.playerName || 'Cliente'}`,
+          category: 'BOOKING',
+          date: new Date(),
+          clubId: clubId || booking?.clubId,
+          paymentId: payment.id,
+          createdAt: new Date(),
+          updatedAt: new Date()
         }
       })
     }
