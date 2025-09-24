@@ -47,8 +47,8 @@ function PaymentForm({ bookingId, splitPaymentId }: PaymentPageProps) {
       setLoading(true)
       console.log('[PaymentForm] Creating payment intent for:', { bookingId, splitPaymentId })
       
-      // Usar el nuevo endpoint que maneja las llaves del club
-      const response = await fetch('/api/stripe/payments/create-intent-simple', {
+      // Usar el endpoint público que no requiere autenticación
+      const response = await fetch('/api/public/payments/create-intent', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -100,13 +100,14 @@ function PaymentForm({ bookingId, splitPaymentId }: PaymentPageProps) {
       
       // Simular pago exitoso y confirmar en el backend
       try {
-        const response = await fetch('/api/stripe/payments/confirm', {
+        const response = await fetch('/api/public/payments/confirm', {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
           },
           body: JSON.stringify({
             paymentIntentId: clientSecret.split('_secret_')[0],
+            bookingId: bookingId,
             testMode: true
           }),
         })
@@ -147,7 +148,7 @@ function PaymentForm({ bookingId, splitPaymentId }: PaymentPageProps) {
       // Confirm payment on our backend
       try {
         console.log('[PaymentForm] Confirming payment with bookingId:', bookingId)
-        const response = await fetch('/api/stripe/payments/confirm', {
+        const response = await fetch('/api/public/payments/confirm', {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
@@ -155,7 +156,7 @@ function PaymentForm({ bookingId, splitPaymentId }: PaymentPageProps) {
           body: JSON.stringify({
             paymentIntentId: paymentIntent.id,
             bookingId: bookingId, // Include the booking ID to help identify ClassBookings
-            testMode: true,
+            testMode: false,
           }),
         })
 
@@ -183,7 +184,7 @@ function PaymentForm({ bookingId, splitPaymentId }: PaymentPageProps) {
     setError(null)
 
     try {
-      const response = await fetch('/api/stripe/payments/oxxo', {
+      const response = await fetch('/api/public/payments/oxxo', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -225,7 +226,7 @@ function PaymentForm({ bookingId, splitPaymentId }: PaymentPageProps) {
     setError(null)
 
     try {
-      const response = await fetch('/api/stripe/payments/spei', {
+      const response = await fetch('/api/public/payments/spei', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',

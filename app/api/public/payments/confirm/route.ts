@@ -1,0 +1,263 @@
+import { NextRequest, NextResponse } from 'next/server'
+import { prisma } from '@/lib/config/prisma'
+import Stripe from 'stripe'
+
+export async function POST(request: NextRequest) {
+  try {
+    const body = await request.json()
+    const { paymentIntentId, bookingId, testMode } = body
+
+    console.log('=== PUBLIC CONFIRM PAYMENT REQUEST ===')
+    console.log('PaymentIntentId:', paymentIntentId)
+    console.log('BookingId:', bookingId)
+    console.log('Test Mode:', testMode)
+
+    if (!paymentIntentId) {
+      return NextResponse.json(
+        { error: 'Se requiere paymentIntentId' },
+        { status: 400 }
+      )
+    }
+
+    // Find the payment record
+    const payment = await prisma.payment.findFirst({
+      where: { stripePaymentIntentId: paymentIntentId },
+      include: {
+        booking: {
+          include: {
+            Club: true,
+            Court: true
+          }
+        },
+        bookingGroup: {
+          include: {
+            Club: true,
+            bookings: {
+              include: {
+                Court: true
+              }
+            }
+          }
+        }
+      }
+    })
+
+    let booking
+    let clubId
+
+    if (!payment) {
+      // Try to find split payment
+      const splitPayment = await prisma.splitPayment.findFirst({
+        where: { stripePaymentIntentId: paymentIntentId },
+        include: {
+          booking: {
+            include: {
+              Club: true
+            }
+          },
+          bookingGroup: {
+            include: {
+              Club: true
+            }
+          }
+        }
+      })
+
+      if (!splitPayment) {
+        // Try to find by bookingId for class bookings
+        if (bookingId) {
+          const classBooking = await prisma.classBooking.findUnique({
+            where: { id: bookingId },
+            include: {
+              class: {
+                include: {
+                  Club: true
+                }
+              }
+            }
+          })
+
+          if (classBooking) {
+            // Update class booking directly
+            await prisma.classBooking.update({
+              where: { id: classBooking.id },
+              data: {
+                paymentStatus: 'completed',
+                paymentMethod: 'online',
+                paidAt: new Date()
+              }
+            })
+
+            return NextResponse.json({
+              success: true,
+              message: 'Pago confirmado correctamente'
+            })
+          }
+        }
+
+        return NextResponse.json(
+          { error: 'Pago no encontrado' },
+          { status: 404 }
+        )
+      }
+
+      // Update split payment
+      await prisma.splitPayment.update({
+        where: { id: splitPayment.id },
+        data: {
+          status: 'completed',
+          completedAt: new Date()
+        }
+      })
+
+      booking = splitPayment.booking || splitPayment.bookingGroup
+      clubId = splitPayment.booking?.clubId || splitPayment.bookingGroup?.clubId
+
+      // Check if all split payments are completed
+      if (splitPayment.booking) {
+        const pendingSplitPayments = await prisma.splitPayment.count({
+          where: {
+            bookingId: splitPayment.bookingId,
+            status: { not: 'completed' }
+          }
+        })
+
+        if (pendingSplitPayments === 0) {
+          await prisma.booking.update({
+            where: { id: splitPayment.bookingId },
+            data: {
+              paymentStatus: 'completed',
+              paymentType: 'ONLINE_FULL'
+            }
+          })
+        }
+      } else if (splitPayment.bookingGroup) {
+        const pendingSplitPayments = await prisma.splitPayment.count({
+          where: {
+            bookingGroupId: splitPayment.bookingGroupId,
+            status: { not: 'completed' }
+          }
+        })
+
+        if (pendingSplitPayments === 0) {
+          await prisma.bookingGroup.update({
+            where: { id: splitPayment.bookingGroupId },
+            data: {
+              status: 'CONFIRMED'
+            }
+          })
+
+          // Update all bookings in the group
+          await prisma.booking.updateMany({
+            where: { bookingGroupId: splitPayment.bookingGroupId },
+            data: {
+              paymentStatus: 'completed',
+              paymentType: 'ONLINE_FULL'
+            }
+          })
+        }
+      }
+
+      return NextResponse.json({
+        success: true,
+        message: 'Pago dividido confirmado correctamente'
+      })
+    }
+
+    booking = payment.booking || payment.bookingGroup
+    clubId = payment.booking?.clubId || payment.bookingGroup?.clubId
+
+    if (testMode) {
+      console.log('Test mode payment confirmation')
+    } else {
+      // Verify with Stripe if not in test mode
+      const club = booking?.Club
+      if (!club) {
+        return NextResponse.json(
+          { error: 'Club no encontrado' },
+          { status: 400 }
+        )
+      }
+
+      const stripeProvider = await prisma.paymentProvider.findFirst({
+        where: {
+          clubId: club.id,
+          providerId: 'stripe',
+          enabled: true
+        }
+      })
+
+      if (stripeProvider && stripeProvider.config) {
+        const config = stripeProvider.config as any
+        if (config.secretKey) {
+          const stripe = new Stripe(config.secretKey, {
+            apiVersion: '2024-11-20.acacia'
+          })
+
+          try {
+            const paymentIntent = await stripe.paymentIntents.retrieve(paymentIntentId)
+            if (paymentIntent.status !== 'succeeded') {
+              return NextResponse.json(
+                { error: 'El pago no ha sido completado' },
+                { status: 400 }
+              )
+            }
+          } catch (error) {
+            console.error('Error verifying with Stripe:', error)
+            // Continue anyway in case of Stripe API issues
+          }
+        }
+      }
+    }
+
+    // Update payment record
+    await prisma.payment.update({
+      where: { id: payment.id },
+      data: {
+        status: 'completed',
+        updatedAt: new Date()
+      }
+    })
+
+    // Update booking or bookingGroup
+    if (payment.booking) {
+      await prisma.booking.update({
+        where: { id: payment.bookingId! },
+        data: {
+          paymentStatus: 'completed',
+          paymentType: 'ONLINE_FULL'
+        }
+      })
+    } else if (payment.bookingGroup) {
+      await prisma.bookingGroup.update({
+        where: { id: payment.bookingGroupId! },
+        data: {
+          status: 'CONFIRMED'
+        }
+      })
+
+      // Update all bookings in the group
+      await prisma.booking.updateMany({
+        where: { bookingGroupId: payment.bookingGroupId! },
+        data: {
+          paymentStatus: 'completed',
+          paymentType: 'ONLINE_FULL'
+        }
+      })
+    }
+
+    // TODO: Send WhatsApp confirmation notification
+
+    return NextResponse.json({
+      success: true,
+      message: 'Pago confirmado correctamente'
+    })
+
+  } catch (error) {
+    console.error('Error confirming payment:', error)
+    return NextResponse.json(
+      { error: 'Error interno del servidor' },
+      { status: 500 }
+    )
+  }
+}
