@@ -112,7 +112,8 @@ export async function POST(request: NextRequest) {
                 category: 'BOOKING',
                 date: new Date(),
                 clubId: booking.clubId,
-                paymentId: newPayment.id,
+                bookingId: booking.id,
+                reference: `STRIPE-${paymentIntentId}`,
                 createdAt: new Date(),
                 updatedAt: new Date()
               }
@@ -307,7 +308,10 @@ export async function POST(request: NextRequest) {
 
     // Create transaction record if doesn't exist
     const existingTransaction = await prisma.transaction.findFirst({
-      where: { paymentId: payment.id }
+      where: { 
+        reference: `STRIPE-${paymentIntentId}`,
+        clubId: clubId || booking?.clubId
+      }
     })
 
     if (!existingTransaction) {
@@ -320,7 +324,8 @@ export async function POST(request: NextRequest) {
           category: 'BOOKING',
           date: new Date(),
           clubId: clubId || booking?.clubId,
-          paymentId: payment.id,
+          bookingId: payment.bookingId || undefined,
+          reference: `STRIPE-${paymentIntentId}`,
           createdAt: new Date(),
           updatedAt: new Date()
         }

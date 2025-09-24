@@ -12,10 +12,11 @@ async function main() {
         type: 'INCOME',
         amount: 80000,
         description: 'Pago de reserva - Ana Martínez',
-        category: 'COURT_RENTAL',
+        category: 'BOOKING',
         date: new Date('2025-09-24'),
         clubId: '90e75af6-4ef5-49bf-adb3-a6f2a78e2e8d',
-        paymentId: 'payment_90e75af6-4ef5-49bf-adb3-a6f2a78e2e8d_1758674147525_lf4dmbcaq',
+        bookingId: '9b799d4a-b6b4-499b-a879-f1f686091425',
+        reference: 'STRIPE-pi_3SAhk4Etwpks3MKf0ooIieDR',
         createdAt: new Date('2025-09-24T00:35:47.525Z'),
         updatedAt: new Date()
       }
