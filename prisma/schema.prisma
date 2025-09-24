@@ -733,7 +733,7 @@ model Class {
   Club            Club              @relation(fields: [clubId], references: [id], onDelete: Cascade)
   Court           Court?            @relation(fields: [courtId], references: [id])
   Instructor      Instructor?       @relation(fields: [instructorId], references: [id])
-  ClassEnrollment ClassEnrollment[]
+  ClassBooking    ClassBooking[]
 
   @@index([clubId, date])
   @@index([courtId])
@@ -764,7 +764,7 @@ model Instructor {
   @@index([active])
 }
 
-model ClassEnrollment {
+model ClassBooking {
   id            String           @id
   classId       String
   playerId      String?
@@ -779,6 +779,8 @@ model ClassEnrollment {
   checkedInAt   DateTime?
   createdAt     DateTime         @default(now())
   updatedAt     DateTime
+  enrollmentDate DateTime?       @default(now())
+  paymentMethod  String?
   Class         Class            @relation(fields: [classId], references: [id], onDelete: Cascade)
 
   @@index([classId])

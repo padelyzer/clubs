@@ -68,7 +68,7 @@ export async function POST(
     const existingEnrollment = await prisma.classBooking.findFirst({
       where: {
         classId,
-        studentPhone: validatedData.studentPhone
+        playerPhone: validatedData.studentPhone
       }
     })
     
@@ -83,15 +83,15 @@ export async function POST(
     const enrollment = await prisma.classBooking.create({
       data: {
         classId,
-        studentName: validatedData.studentName,
-        studentEmail: validatedData.studentEmail || null,
-        studentPhone: validatedData.studentPhone,
+        playerName: validatedData.studentName,
+        playerEmail: validatedData.studentEmail || null,
+        playerPhone: validatedData.studentPhone,
         enrollmentDate: new Date(),
         paymentStatus: validatedData.paymentMethod === 'onsite' ? 'pending' : 'pending',
         paymentMethod: validatedData.paymentMethod,
-        status: 'ENROLLED',
+        status: 'CONFIRMED',
         paidAmount: 0, // Will be updated when payment is completed
-        dueAmount: classItem.price
+        // dueAmount field doesn't exist in schema, using price from class
       }
     })
     
@@ -227,7 +227,7 @@ export async function POST(
         : 'Inscripción exitosa. El pago se realizará en sitio',
       enrollment: {
         id: enrollment.id,
-        studentName: enrollment.studentName,
+        studentName: enrollment.playerName,
         classId: enrollment.classId,
         className: classItem.name,
         instructor: classItem.instructor?.name,
