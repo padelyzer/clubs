@@ -23,14 +23,18 @@ export default async function DashboardLayout({
 
   // Obtener los permisos del usuario
   let enabledModuleCodes = await getUserPermissions(user.id)
+  console.log('Initial enabledModuleCodes from permissions:', enabledModuleCodes)
 
   // Si no tiene permisos específicos y es CLUB_OWNER, obtener todos los módulos del club
   if (enabledModuleCodes.length === 0 && user.role === 'CLUB_OWNER' && user.clubId) {
     const modules = await getEnabledModulesForClub(user.clubId)
+    console.log('Modules from getEnabledModulesForClub:', modules)
     enabledModuleCodes = modules
       .filter(m => m.isIncluded)
       .map(m => m.code)
   }
+
+  console.log('Final enabledModuleCodes:', enabledModuleCodes)
   
   return (
     <NotificationProvider>

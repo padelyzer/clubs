@@ -12,6 +12,64 @@ export interface EnabledModule {
  */
 export async function getEnabledModulesForClub(clubId: string): Promise<EnabledModule[]> {
   try {
+    console.log('[getEnabledModulesForClub] Checking modules for club:', clubId)
+
+    // First, check for individually enabled modules
+    const clubModules = await prisma.clubModule.findMany({
+      where: {
+        clubId,
+        isEnabled: true
+      },
+      include: {
+        module: true
+      }
+    })
+
+    console.log('[getEnabledModulesForClub] Found club modules:', clubModules.map(cm => ({
+      code: cm.module.code,
+      name: cm.module.name,
+      isEnabled: cm.isEnabled
+    })))
+
+    // If there are individually enabled modules, return them
+    if (clubModules.length > 0) {
+      const modules = clubModules.map(cm => {
+        // Map database codes to frontend codes
+        let frontendCode = cm.module.code.toLowerCase()
+        if (cm.module.code === 'TOURNAMENTS') {
+          frontendCode = 'tournaments'
+        } else if (cm.module.code === 'CLASSES') {
+          frontendCode = 'classes'
+        }
+
+        return {
+          code: frontendCode,
+          name: cm.module.name,
+          displayName: cm.module.name,
+          isIncluded: true
+        }
+      })
+
+      // Always include basic modules
+      const basicModules = [
+        { code: 'bookings', name: 'Sistema de Reservas', isIncluded: true },
+        { code: 'customers', name: 'Registro de Clientes', isIncluded: true },
+        { code: 'finance', name: 'Finanzas', isIncluded: true },
+      ]
+
+      // Merge unique modules
+      const allModules = [...basicModules]
+      modules.forEach(m => {
+        if (!allModules.some(am => am.code === m.code)) {
+          allModules.push(m)
+        }
+      })
+
+      console.log('[getEnabledModulesForClub] Returning modules:', allModules.map(m => m.code))
+      return allModules
+    }
+
+    // If no individual modules, check for package-based modules
     const clubPackage = await prisma.clubPackage.findFirst({
       where: { 
         clubId,

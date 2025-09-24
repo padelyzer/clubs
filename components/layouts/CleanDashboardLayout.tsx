@@ -65,7 +65,7 @@ export function CleanDashboardLayout({
     { href: `${basePath}/dashboard`, label: 'Dashboard', icon: <Home size={18} />, module: null },
     { href: `${basePath}/dashboard/bookings`, label: 'Reservas', icon: <Clock size={18} />, module: 'bookings' },
     { href: `${basePath}/dashboard/players`, label: 'Clientes', icon: <Users size={18} />, module: 'customers' },
-    { href: `${basePath}/dashboard/tournaments`, label: 'Torneos', icon: <Trophy size={18} />, module: 'tournaments' },
+    { href: `/dashboard/tournaments-v2`, label: 'Torneos', icon: <Trophy size={18} />, module: 'tournaments' },
   ]
   
   // Filtrar elementos según los módulos habilitados

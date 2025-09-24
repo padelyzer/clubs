@@ -96,6 +96,44 @@ export async function PUT(
       )
     }
 
+    // Handle generating payment link
+    if (action === 'generate-link') {
+      // Verify the split payment exists and belongs to this booking
+      const splitPayment = await prisma.splitPayment.findFirst({
+        where: {
+          id: splitPaymentId,
+          OR: [
+            { bookingId },
+            { bookingGroupId: bookingId }
+          ]
+        }
+      })
+
+      if (!splitPayment) {
+        return NextResponse.json(
+          { success: false, error: 'Pago dividido no encontrado' },
+          { status: 404 }
+        )
+      }
+
+      if (splitPayment.status === 'completed') {
+        return NextResponse.json(
+          { success: false, error: 'Este pago ya fue completado' },
+          { status: 400 }
+        )
+      }
+
+      // Generate payment link
+      const baseUrl = process.env.NEXT_PUBLIC_APP_URL || request.headers.get('origin') || 'https://app.padelyzer.com'
+      const paymentLink = `${baseUrl}/pay/${bookingId}?split=${splitPaymentId}`
+
+      return NextResponse.json({
+        success: true,
+        paymentLink,
+        message: 'Link de pago generado exitosamente'
+      })
+    }
+
     // Handle marking payment as complete
     if (action === 'complete') {
       // Verify the split payment exists and belongs to this booking or bookingGroup

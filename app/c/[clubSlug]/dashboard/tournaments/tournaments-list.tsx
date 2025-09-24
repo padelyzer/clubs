@@ -59,7 +59,7 @@ export function TournamentsList() {
     }
   }
 
-  const filteredTournaments = tournaments.filter(tournament => {
+  const filteredTournaments = (tournaments || []).filter(tournament => {
     const matchesSearch = tournament.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
                          tournament.description.toLowerCase().includes(searchTerm.toLowerCase())
     const matchesStatus = statusFilter === 'all' || tournament.status === statusFilter

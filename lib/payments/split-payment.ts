@@ -114,14 +114,14 @@ export async function processSplitPaymentCompletion(splitPaymentId: string) {
   const splitPayment = await prisma.splitPayment.findUnique({
     where: { id: splitPaymentId },
     include: {
-      booking: {
+      Booking: {
         include: {
           SplitPayment: true,
           Court: true,
           Club: true
         }
       },
-      bookingGroup: {
+      BookingGroup: {
         include: {
           SplitPayment: true,
           bookings: {
@@ -264,7 +264,7 @@ export async function getSplitPaymentStatus(bookingId: string) {
   const pendingAmount = totalAmount - completedAmount
 
   return {
-    booking: {
+    Booking: {
       id: booking.id,
       date: booking.date.toISOString(),
       startTime: booking.startTime,
@@ -304,7 +304,7 @@ export async function resendSplitPaymentNotification(splitPaymentId: string) {
   const splitPayment = await prisma.splitPayment.findUnique({
     where: { id: splitPaymentId },
     include: {
-      booking: {
+      Booking: {
         include: {
           Court: true,
           Club: true
@@ -345,7 +345,7 @@ async function sendSplitPaymentNotification(splitPaymentId: string, paymentLink:
   const splitPayment = await prisma.splitPayment.findUnique({
     where: { id: splitPaymentId },
     include: {
-      booking: {
+      Booking: {
         include: {
           Court: true,
           Club: true

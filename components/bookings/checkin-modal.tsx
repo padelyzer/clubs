@@ -2557,7 +2557,8 @@ export function CheckInModal({
             ? booking.splitPayments.some(sp => sp.status !== 'completed')
             : !isPaid
           
-          // Mostrar botón de gestionar pagos divididos si están habilitados (aunque no tengamos los datos aún)
+          // Botón de gestionar pagos divididos - DESHABILITADO por solicitud del usuario
+          /*
           if (hasSplitPaymentsEnabled && (!hasSplitPayments || somePaymentsPending)) {
             // Para pagos divididos con pagos pendientes o sin datos cargados
             const completedCount = booking.splitPayments?.filter(sp => sp.status === 'completed').length || 0
@@ -2579,6 +2580,7 @@ export function CheckInModal({
               </AppleButton>
             )
           }
+          */
           
           if (!isPaid && step === 'payment' && !booking.splitPaymentEnabled) {
             return (

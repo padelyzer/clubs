@@ -1538,3 +1538,7 @@ prisma:query DEALLOCATE ALL
 prisma:query SELECT "public"."ClubPackage"."id", "public"."ClubPackage"."clubId", "public"."ClubPackage"."packageId", "public"."ClubPackage"."isActive", "public"."ClubPackage"."activatedAt", "public"."ClubPackage"."deactivatedAt", "public"."ClubPackage"."customPricing", "public"."ClubPackage"."notes", "public"."ClubPackage"."createdAt", "public"."ClubPackage"."updatedAt" FROM "public"."ClubPackage" WHERE ("public"."ClubPackage"."clubId" = $1 AND "public"."ClubPackage"."isActive" = $2) LIMIT $3 OFFSET $4
 prisma:query COMMIT
  GET /c/club-demo-padelyzer/dashboard/bookings 200 in 2616ms
+ ○ Compiling /_not-found ...
+ ✓ Compiled /_not-found in 705ms (2160 modules)
+ GET /c/club-demo-padelyzer/dashboard/bookings 404 in 907ms
+[?25h

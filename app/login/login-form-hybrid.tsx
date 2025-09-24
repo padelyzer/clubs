@@ -30,31 +30,6 @@ export function LoginFormHybrid() {
 
   return (
     <>
-      {/* Indicador del método de autenticación */}
-      <div className={`mb-4 p-3 rounded-lg text-sm ${
-        canUseCookies 
-          ? 'bg-green-50 border border-green-200 text-green-800' 
-          : 'bg-orange-50 border border-orange-200 text-orange-800'
-      }`}>
-        <div className="flex items-center gap-2">
-          {canUseCookies ? (
-            <>
-              <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
-                <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
-              </svg>
-              <span><strong>Modo estándar:</strong> Usando cookies para sesiones</span>
-            </>
-          ) : (
-            <>
-              <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
-                <path fillRule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" clipRule="evenodd" />
-              </svg>
-              <span><strong>Modo compatible:</strong> Sesiones adaptadas a tu navegador</span>
-            </>
-          )}
-        </div>
-      </div>
-      
       <form onSubmit={handleSubmit} className="space-y-6">
         {error && (
         <div className="bg-red-50 border border-red-200 text-red-600 px-4 py-3 rounded-xl text-sm">

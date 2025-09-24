@@ -34,18 +34,18 @@ export async function POST(request: NextRequest) {
     const splitPayment = await prisma.splitPayment.findUnique({
       where: { id: splitPaymentId },
       include: {
-        booking: {
+        Booking: {
           include: {
-            club: true,
-            court: true
+            Club: true,
+            Court: true
           }
         },
-        bookingGroup: {
+        BookingGroup: {
           include: {
-            club: true,
+            Club: true,
             bookings: {
               include: {
-                court: true
+                Court: true
               }
             }
           }

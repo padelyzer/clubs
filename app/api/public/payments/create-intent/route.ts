@@ -39,13 +39,13 @@ export async function POST(request: NextRequest) {
       const splitPayment = await prisma.splitPayment.findUnique({
         where: { id: splitPaymentId },
         include: {
-          booking: {
+          Booking: {
             include: {
               Club: true,
               Court: true
             }
           },
-          bookingGroup: {
+          BookingGroup: {
             include: {
               Club: true,
               bookings: {
@@ -74,14 +74,14 @@ export async function POST(request: NextRequest) {
       }
 
       // Check if it's for a booking or bookingGroup
-      if (splitPayment.bookingGroup) {
-        booking = splitPayment.bookingGroup
+      if (splitPayment.BookingGroup) {
+        booking = splitPayment.BookingGroup
         booking.isGroup = true
-        clubId = splitPayment.bookingGroup.clubId
-      } else if (splitPayment.booking) {
-        booking = splitPayment.booking
+        clubId = splitPayment.BookingGroup.clubId
+      } else if (splitPayment.Booking) {
+        booking = splitPayment.Booking
         booking.isGroup = false
-        clubId = splitPayment.booking.clubId
+        clubId = splitPayment.Booking.clubId
       } else {
         return NextResponse.json(
           { error: 'Pago dividido sin reserva asociada' },

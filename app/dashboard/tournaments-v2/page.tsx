@@ -193,7 +193,8 @@ export default function TournamentsV2ListPage() {
           </p>
         </div>
 
-        <button 
+        <button
+          onClick={() => router.push('/dashboard/tournaments-v2/create')}
           style={{
             padding: '10px 20px',
             borderRadius: '12px',
@@ -207,6 +208,14 @@ export default function TournamentsV2ListPage() {
             alignItems: 'center',
             gap: '8px',
             transition: 'all 0.2s'
+          }}
+          onMouseEnter={(e) => {
+            e.currentTarget.style.transform = 'scale(1.05)'
+            e.currentTarget.style.boxShadow = '0 8px 24px rgba(0,0,0,0.15)'
+          }}
+          onMouseLeave={(e) => {
+            e.currentTarget.style.transform = 'scale(1)'
+            e.currentTarget.style.boxShadow = 'none'
           }}
         >
           <Plus size={18} />

@@ -7,6 +7,7 @@ import { CurrencyService } from '@/lib/modules/shared/currency'
 import { createTournamentSchema, updateTournamentSchema } from '@/lib/modules/tournaments/validation'
 import { generateTournamentSchedule, type TournamentFormat } from '@/lib/tournaments/match-generator'
 import { createTournamentCourtBlocks, removeTournamentCourtBlocks } from '@/lib/tournaments/court-blocker'
+import { v4 as uuidv4 } from 'uuid'
 
 // GET - Retrieve tournaments
 export async function GET(request: NextRequest) {
@@ -90,9 +91,11 @@ export async function POST(request: NextRequest) {
     for (const category of categories) {
       const tournament = await prisma.tournament.create({
         data: {
+          id: uuidv4(),
           clubId: session.clubId,
-          ...tournamentData,
           name: `${tournamentData.name} - ${getCategoryDisplayName(category)}`,
+          description: tournamentData.description,
+          type: tournamentData.type,
           category: category, // Store the category ID
           registrationFee: registrationFeeCents,
           prizePool: Math.floor(prizePoolCents / categories.length), // Distribute prize pool across categories
@@ -100,7 +103,14 @@ export async function POST(request: NextRequest) {
           registrationEnd: new Date(tournamentData.registrationEnd),
           startDate: new Date(tournamentData.startDate),
           endDate: tournamentData.endDate ? new Date(tournamentData.endDate) : null,
-          createdBy: session.userId
+          maxPlayers: tournamentData.maxPlayers,
+          matchDuration: tournamentData.matchDuration,
+          sets: tournamentData.sets,
+          games: tournamentData.games,
+          tiebreak: tournamentData.tiebreak,
+          rules: tournamentData.rules,
+          notes: tournamentData.notes,
+          updatedAt: new Date()
         }
       })
 

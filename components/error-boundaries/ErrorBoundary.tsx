@@ -3,6 +3,7 @@
 import React, { Component, ErrorInfo, ReactNode } from 'react'
 import { logger } from '@/lib/logging/logger'
 import { AlertTriangle, RefreshCw, Home, Bug } from 'lucide-react'
+import { generateId } from '@/lib/utils/generate-id'
 
 interface Props {
   children: ReactNode
@@ -34,13 +35,13 @@ export class ErrorBoundary extends Component<Props, State> {
     return {
       hasError: true,
       error,
-      errorId: crypto.randomUUID(),
+      errorId: generateId(),
     }
   }
 
   componentDidCatch(error: Error, errorInfo: ErrorInfo) {
     const { level = 'component', context, onError } = this.props
-    const errorId = crypto.randomUUID()
+    const errorId = generateId()
 
     this.setState({
       error,

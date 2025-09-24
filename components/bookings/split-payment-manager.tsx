@@ -66,6 +66,8 @@ export function SplitPaymentManager({ bookingId, onClose, embedded = false }: Sp
   const [showReferenceModal, setShowReferenceModal] = useState(false)
   const [selectedPayment, setSelectedPayment] = useState<{ id: string, method: string } | null>(null)
   const [referenceNumber, setReferenceNumber] = useState('')
+  const [showLinkModal, setShowLinkModal] = useState(false)
+  const [generatedLink, setGeneratedLink] = useState<{ playerName: string, link: string } | null>(null)
 
   useEffect(() => {
     fetchStatus()
@@ -185,9 +187,33 @@ export function SplitPaymentManager({ bookingId, onClose, embedded = false }: Sp
     setError(null)
 
     try {
-      // TODO: Implement payment link generation
-      // For now, just show a message
-      setError('Función de link de pago en desarrollo')
+      const response = await fetch(`/api/bookings/${bookingId}/split-payments/${splitPaymentId}`, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          action: 'generate-link'
+        }),
+      })
+
+      const data = await response.json()
+
+      if (data.success && data.paymentLink) {
+        // Copy link to clipboard
+        await navigator.clipboard.writeText(data.paymentLink)
+        
+        // Show modal with payment link
+        const splitPayment = status?.splitPayments?.find(sp => sp.id === splitPaymentId)
+        if (splitPayment) {
+          setGeneratedLink({ playerName: splitPayment.playerName, link: data.paymentLink })
+          setShowLinkModal(true)
+        }
+        
+        await fetchStatus()
+      } else {
+        setError(data.error || 'Error al generar link de pago')
+      }
     } catch (err) {
       setError('Error al generar link de pago')
     } finally {
@@ -992,6 +1018,138 @@ export function SplitPaymentManager({ bookingId, onClose, embedded = false }: Sp
           </div>
         </div>
       </div>
+
+      {/* Payment Link Modal */}
+      {showLinkModal && generatedLink && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-[60]">
+          <div className="bg-white rounded-lg shadow-lg max-w-md w-full mx-4 p-6">
+            <div className="mb-4">
+              <h3 className="text-lg font-semibold text-gray-900 mb-2">
+                Link de Pago Generado
+              </h3>
+              <p className="text-sm text-gray-600">
+                Envía este link a {generatedLink.playerName} para que complete su pago.
+              </p>
+            </div>
+
+            <div className="bg-gray-50 rounded-lg p-4 mb-4">
+              <div className="flex items-center justify-between mb-2">
+                <span className="text-xs font-medium text-gray-700">Link de pago:</span>
+                <button
+                  onClick={() => navigator.clipboard.writeText(generatedLink.link)}
+                  className="text-xs text-blue-600 hover:text-blue-800 flex items-center gap-1"
+                >
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <rect x="9" y="9" width="13" height="13" rx="2" ry="2" />
+                    <path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1" />
+                  </svg>
+                  Copiar
+                </button>
+              </div>
+              <input
+                type="text"
+                value={generatedLink.link}
+                readOnly
+                className="w-full bg-white border border-gray-300 rounded px-3 py-2 text-sm font-mono"
+                onClick={(e) => e.currentTarget.select()}
+              />
+            </div>
+
+            <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 mb-6">
+              <h4 className="font-medium text-blue-900 text-sm mb-2">Opciones para enviar:</h4>
+              <ul className="text-sm text-blue-800 space-y-1">
+                <li className="flex items-center gap-2">
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                    <rect x="2" y="2" width="20" height="16" rx="2" />
+                    <path d="m22 7-8.97 5.7a1.94 1.94 0 01-2.06 0L2 7" />
+                  </svg>
+                  Email
+                </li>
+                <li className="flex items-center gap-2">
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                    <path d="M21 15a2 2 0 01-2 2H7l-4 4V5a2 2 0 012-2h14a2 2 0 012 2z" />
+                  </svg>
+                  WhatsApp
+                </li>
+                <li className="flex items-center gap-2">
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                    <path d="M22 16.92v3a2 2 0 01-2.18 2 19.79 19.79 0 01-8.63-3.07 19.5 19.5 0 01-6-6 19.79 19.79 0 01-3.07-8.67A2 2 0 014.11 2h3a2 2 0 012 1.72 12.84 12.84 0 00.7 2.81 2 2 0 01-.45 2.11L8.09 9.91a16 16 0 006 6l1.27-1.27a2 2 0 012.11-.45 12.84 12.84 0 002.81.7A2 2 0 0122 16.92z" />
+                  </svg>
+                  SMS
+                </li>
+              </ul>
+            </div>
+
+            <div className="flex gap-3">
+              <button
+                onClick={() => {
+                  window.open(`https://wa.me/?text=${encodeURIComponent(`Hola ${generatedLink.playerName}, aquí está tu link para pagar tu parte de la reserva: ${generatedLink.link}`)}`, '_blank')
+                }}
+                className="flex-1 bg-green-600 text-white py-2 px-4 rounded-lg hover:bg-green-700 flex items-center justify-center gap-2 text-sm font-medium"
+              >
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                  <path d="M21 15a2 2 0 01-2 2H7l-4 4V5a2 2 0 012-2h14a2 2 0 012 2z" />
+                </svg>
+                WhatsApp
+              </button>
+              <button
+                onClick={() => {
+                  setShowLinkModal(false)
+                  setGeneratedLink(null)
+                }}
+                className="flex-1 bg-gray-200 text-gray-800 py-2 px-4 rounded-lg hover:bg-gray-300 text-sm font-medium"
+              >
+                Cerrar
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Reference Modal */}
+      {showReferenceModal && selectedPayment && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-[60]">
+          <div className="bg-white rounded-lg shadow-lg max-w-md w-full mx-4 p-6">
+            <h3 className="text-lg font-semibold text-gray-900 mb-4">
+              Ingresar Referencia de Pago
+            </h3>
+            <p className="text-sm text-gray-600 mb-4">
+              Por favor ingresa el número de referencia del pago con {selectedPayment.method === 'terminal' ? 'tarjeta' : 'transferencia'}.
+            </p>
+            <input
+              type="text"
+              value={referenceNumber}
+              onChange={(e) => setReferenceNumber(e.target.value)}
+              placeholder={selectedPayment.method === 'terminal' ? 'Ej: 1234' : 'Ej: REF-123456'}
+              className="w-full p-3 border border-gray-300 rounded-lg mb-4 focus:outline-none focus:ring-2 focus:ring-blue-500"
+              autoFocus
+            />
+            <div className="flex gap-3">
+              <button
+                onClick={() => {
+                  if (referenceNumber.trim()) {
+                    processPayment(selectedPayment.id, selectedPayment.method, referenceNumber.trim())
+                  }
+                }}
+                disabled={!referenceNumber.trim()}
+                className="flex-1 bg-blue-600 text-white py-2 px-4 rounded-lg hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                Confirmar Pago
+              </button>
+              <button
+                onClick={() => {
+                  setShowReferenceModal(false)
+                  setSelectedPayment(null)
+                  setReferenceNumber('')
+                }}
+                className="flex-1 bg-gray-200 text-gray-800 py-2 px-4 rounded-lg hover:bg-gray-300"
+              >
+                Cancelar
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }

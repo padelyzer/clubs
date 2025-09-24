@@ -1,4 +1,5 @@
 import { NextRequest } from 'next/server'
+import { generateId } from '@/lib/utils/generate-id'
 
 export interface LogContext {
   userId?: string
@@ -146,7 +147,7 @@ class Logger {
   public extractRequestContext(request: NextRequest, additionalContext?: LogContext): LogContext {
     const requestId = request.headers.get('x-request-id') ||
                      request.headers.get('x-trace-id') ||
-                     crypto.randomUUID()
+                     generateId()
 
     return {
       requestId,

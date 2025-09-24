@@ -1,5 +1,6 @@
 import { prisma } from '@/lib/config/prisma'
 import { NotificationType } from '@prisma/client'
+import { generateId } from '@/lib/utils/generate-id'
 
 export interface WhatsAppLinkOptions {
   clubId: string
@@ -81,7 +82,7 @@ export class WhatsAppLinkService {
       // Create notification record with WhatsApp link tracking
       const notification = await prisma.notification.create({
         data: {
-          id: crypto.randomUUID(),
+          id: generateId(),
           clubId: options.clubId,
           type: options.notificationType,
           recipient: options.playerName,
@@ -354,10 +355,10 @@ export class WhatsAppLinkService {
       const splitPayment = await prisma.splitPayment.findUnique({
         where: { id: splitPaymentId },
         include: {
-          booking: {
+          Booking: {
             include: {
-              club: { select: { id: true, name: true } },
-              court: { select: { name: true } }
+              Club: { select: { id: true, name: true } },
+              Court: { select: { name: true } }
             }
           }
         }

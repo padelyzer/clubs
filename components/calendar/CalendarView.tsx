@@ -169,7 +169,11 @@ export function CalendarView() {
           textColor: '#1F2937' // Dark gray text for better readability
         }))
         
-        setEvents(calendarEvents)
+        // Deduplicate events by ID to prevent duplicate key errors
+        const uniqueEvents = Array.from(
+          new Map(calendarEvents.map((event: Booking) => [event.id, event])).values()
+        )
+        setEvents(uniqueEvents)
         calculateStats(data.bookings)
       }
     } catch (error) {
@@ -744,7 +748,11 @@ export function CalendarView() {
                 const dayEvents = events.filter(e => 
                   e.start.startsWith(format(info.date, 'yyyy-MM-dd'))
                 )
-                setSelectedDayEvents(dayEvents)
+                // Deduplicate events by ID to prevent duplicate key errors
+                const uniqueEvents = Array.from(
+                  new Map(dayEvents.map(event => [event.id, event])).values()
+                )
+                setSelectedDayEvents(uniqueEvents)
                 setSelectedDayDate(info.date)
                 setShowDayModal(true)
               }}
@@ -757,7 +765,11 @@ export function CalendarView() {
                 const dayEvents = events.filter(e => 
                   e.start.startsWith(format(info.date, 'yyyy-MM-dd'))
                 )
-                const activeEvents = dayEvents.filter(e => e.status !== 'CANCELLED')
+                // Deduplicate events by ID
+                const uniqueDayEvents = Array.from(
+                  new Map(dayEvents.map(event => [event.id, event])).values()
+                )
+                const activeEvents = uniqueDayEvents.filter(e => e.status !== 'CANCELLED')
                 const totalSlots = 14
                 const availableSlots = totalSlots - activeEvents.length
                 

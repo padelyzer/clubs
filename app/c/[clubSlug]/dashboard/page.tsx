@@ -78,8 +78,12 @@ export default function DashboardPage() {
           b.paymentStatus === 'pending' || b.paymentStatus === 'processing'
         ).length
 
-        // Set recent bookings (latest 5)
-        setRecentBookings(todayBookings.slice(0, 5).map((b: any) => ({
+        // Set recent bookings (latest 5) - deduplicate by ID
+        const uniqueBookings = todayBookings.filter((booking: any, index: number, self: any[]) => 
+          index === self.findIndex((b: any) => b.id === booking.id)
+        )
+        
+        setRecentBookings(uniqueBookings.slice(0, 5).map((b: any) => ({
           id: b.id,
           player: b.playerName,
           court: b.court?.name || 'Sin asignar',

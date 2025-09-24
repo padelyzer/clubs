@@ -12,6 +12,7 @@ const loginSchema = z.object({
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json()
+    console.log('[Login] Request body:', { email: body.email })
 
     // Validar entrada
     const result = loginSchema.safeParse(body)
@@ -25,6 +26,7 @@ export async function POST(request: NextRequest) {
     const { email, password } = result.data
 
     // Buscar usuario
+    console.log('[Login] Looking for user:', email.toLowerCase())
     const user = await prisma.user.findUnique({
       where: { email: email.toLowerCase() },
       include: {
@@ -40,6 +42,7 @@ export async function POST(request: NextRequest) {
     })
 
     if (!user || !user.password) {
+      console.log('[Login] User not found or no password')
       return NextResponse.json(
         { success: false, error: 'Email o contraseña incorrectos' },
         { status: 401 }
@@ -47,7 +50,11 @@ export async function POST(request: NextRequest) {
     }
 
     // Verificar contraseña con bcrypt
+    console.log('[Login] User found, verifying password')
+    console.log('[Login] Password from request:', password)
+    console.log('[Login] User has password:', !!user.password)
     const isPasswordValid = await bcrypt.compare(password, user.password)
+    console.log('[Login] Password valid:', isPasswordValid)
 
     if (!isPasswordValid) {
       return NextResponse.json(
@@ -65,6 +72,7 @@ export async function POST(request: NextRequest) {
     }
 
     // Crear sesión con Lucia
+    console.log('[Login] Creating session for user:', user.id)
     const session = await lucia.createSession(user.id, {})
     const sessionCookie = lucia.createSessionCookie(session.id)
 
@@ -118,6 +126,7 @@ export async function POST(request: NextRequest) {
 
   } catch (error) {
     console.error('Login error:', error)
+    console.error('Stack trace:', error instanceof Error ? error.stack : 'No stack')
     return NextResponse.json(
       { success: false, error: 'Error interno del servidor' },
       { status: 500 }
