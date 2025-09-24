@@ -14,27 +14,31 @@ export async function GET(request: NextRequest) {
       )
     }
     
-    let pricing = await prisma.classPricing.findUnique({
+    // Obtener configuración desde ClubSettings
+    const clubSettings = await prisma.clubSettings.findFirst({
       where: { clubId: session.clubId }
     })
     
-    // Si no existe, crear con valores predeterminados
-    if (!pricing) {
-      pricing = await prisma.classPricing.create({
-        data: {
-          clubId: session.clubId,
-          individualPrice: 50000, // $500 MXN
-          groupPrice: 30000,      // $300 MXN
-          clinicPrice: 20000,     // $200 MXN
-          instructorPaymentType: 'HOURLY',
-          instructorHourlyRate: 20000, // $200 MXN por hora
-          instructorPercentage: 50,
-          instructorFixedRate: 30000,
-          enableBulkDiscount: false,
-          bulkDiscountThreshold: 10,
-          bulkDiscountPercentage: 10
-        }
-      })
+    if (!clubSettings) {
+      return NextResponse.json(
+        { success: false, error: 'Configuración del club no encontrada' },
+        { status: 404 }
+      )
+    }
+    
+    // Mapear los campos de ClubSettings al formato esperado
+    const pricing = {
+      clubId: session.clubId,
+      groupPrice: clubSettings.groupClassPrice,
+      privatePrice: clubSettings.privateClassPrice,
+      semiPrivatePrice: clubSettings.semiPrivateClassPrice,
+      defaultClassDuration: clubSettings.defaultClassDuration,
+      defaultMaxStudents: clubSettings.defaultMaxStudents,
+      defaultCourtCostPerHour: clubSettings.defaultCourtCostPerHour,
+      allowOnlineClassBooking: clubSettings.allowOnlineClassBooking,
+      requirePaymentUpfront: clubSettings.requirePaymentUpfront,
+      classBookingAdvanceDays: clubSettings.classBookingAdvanceDays,
+      classCancellationHours: clubSettings.classCancellationHours
     }
     
     return NextResponse.json({
@@ -64,38 +68,36 @@ export async function POST(request: NextRequest) {
     }
     const body = await request.json()
     
-    // Verificar si ya existe
-    const existing = await prisma.classPricing.findUnique({
-      where: { clubId: session.clubId }
+    // Actualizar ClubSettings con los nuevos precios
+    const clubSettings = await prisma.clubSettings.update({
+      where: { clubId: session.clubId },
+      data: {
+        groupClassPrice: body.groupPrice || body.groupClassPrice,
+        privateClassPrice: body.privatePrice || body.privateClassPrice, 
+        semiPrivateClassPrice: body.semiPrivatePrice || body.semiPrivateClassPrice,
+        defaultClassDuration: body.defaultClassDuration,
+        defaultMaxStudents: body.defaultMaxStudents,
+        defaultCourtCostPerHour: body.defaultCourtCostPerHour,
+        allowOnlineClassBooking: body.allowOnlineClassBooking,
+        requirePaymentUpfront: body.requirePaymentUpfront,
+        classBookingAdvanceDays: body.classBookingAdvanceDays,
+        classCancellationHours: body.classCancellationHours
+      }
     })
     
-    let pricing
-    
-    if (existing) {
-      // Actualizar existente
-      pricing = await prisma.classPricing.update({
-        where: { clubId: session.clubId },
-        data: {
-          individualPrice: body.individualPrice,
-          groupPrice: body.groupPrice,
-          clinicPrice: body.clinicPrice,
-          instructorPaymentType: body.instructorPaymentType,
-          instructorHourlyRate: body.instructorHourlyRate,
-          instructorPercentage: body.instructorPercentage,
-          instructorFixedRate: body.instructorFixedRate,
-          enableBulkDiscount: body.enableBulkDiscount,
-          bulkDiscountThreshold: body.bulkDiscountThreshold,
-          bulkDiscountPercentage: body.bulkDiscountPercentage
-        }
-      })
-    } else {
-      // Crear nuevo
-      pricing = await prisma.classPricing.create({
-        data: {
-          clubId: session.clubId,
-          ...body
-        }
-      })
+    // Mapear la respuesta al formato esperado
+    const pricing = {
+      clubId: session.clubId,
+      groupPrice: clubSettings.groupClassPrice,
+      privatePrice: clubSettings.privateClassPrice,
+      semiPrivatePrice: clubSettings.semiPrivateClassPrice,
+      defaultClassDuration: clubSettings.defaultClassDuration,
+      defaultMaxStudents: clubSettings.defaultMaxStudents,
+      defaultCourtCostPerHour: clubSettings.defaultCourtCostPerHour,
+      allowOnlineClassBooking: clubSettings.allowOnlineClassBooking,
+      requirePaymentUpfront: clubSettings.requirePaymentUpfront,
+      classBookingAdvanceDays: clubSettings.classBookingAdvanceDays,
+      classCancellationHours: clubSettings.classCancellationHours
     }
     
     return NextResponse.json({

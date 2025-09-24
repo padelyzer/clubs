@@ -384,15 +384,24 @@ function ClassesContent() {
         if (data.message) {
           console.log(data.message)
           if (data.unavailableDates && data.unavailableDates.length > 0) {
-            alert(`${data.message}\n\nFechas no disponibles: ${data.unavailableDates.join(', ')}`)
+            notify.warning({
+              title: 'Clases creadas parcialmente',
+              message: `${data.message}. Fechas no disponibles: ${data.unavailableDates.join(', ')}`
+            })
           }
         }
       } else {
-        alert(data.error || 'Error al crear clase')
+        notify.error({
+          title: 'Error',
+          message: data.error || 'Error al crear clase'
+        })
       }
     } catch (error) {
       console.error('Error creating class:', error)
-      alert('Error al crear clase')
+      notify.error({
+        title: 'Error',
+        message: 'Error al crear clase'
+      })
     }
   }
 
@@ -416,7 +425,10 @@ function ClassesContent() {
         setEditingClass(null)
         resetClassForm()
       } else {
-        alert(data.error || 'Error al actualizar clase')
+        notify.error({
+          title: 'Error',
+          message: data.error || 'Error al actualizar clase'
+        })
       }
     } catch (error) {
       console.error('Error updating class:', error)
@@ -449,11 +461,17 @@ function ClassesContent() {
           reason: ''
         })
       } else {
-        alert(data.error || 'Error al reprogramar clase')
+        notify.error({
+          title: 'Error',
+          message: data.error || 'Error al reprogramar clase'
+        })
       }
     } catch (error) {
       console.error('Error rescheduling class:', error)
-      alert('Error al reprogramar clase')
+      notify.error({
+        title: 'Error',
+        message: 'Error al reprogramar clase'
+      })
     } finally {
       setLoading(false)
     }
@@ -482,11 +500,17 @@ function ClassesContent() {
           refundStudents: false
         })
       } else {
-        alert(data.error || 'Error al cancelar clase')
+        notify.error({
+          title: 'Error',
+          message: data.error || 'Error al cancelar clase'
+        })
       }
     } catch (error) {
       console.error('Error cancelling class:', error)
-      alert('Error al cancelar clase')
+      notify.error({
+        title: 'Error',
+        message: 'Error al cancelar clase'
+      })
     } finally {
       setLoading(false)
     }
@@ -505,7 +529,10 @@ function ClassesContent() {
       if (data.success) {
         await fetchClasses()
       } else {
-        alert(data.error || 'Error al eliminar clase')
+        notify.error({
+          title: 'Error',
+          message: data.error || 'Error al eliminar clase'
+        })
       }
     } catch (error) {
       console.error('Error deleting class:', error)
@@ -671,18 +698,33 @@ function ClassesContent() {
         
         // Show success message with payment info
         if (data.payment?.paymentLink) {
-          alert(`Inscripción exitosa!\nLink de pago enviado por WhatsApp`)
+          notify.success({
+            title: 'Inscripción exitosa',
+            message: 'Link de pago enviado por WhatsApp'
+          })
         } else if (data.payment?.splitPayments) {
-          alert(`Inscripción exitosa!\nSe enviaron ${data.payment.splitCount} links de pago por WhatsApp`)
+          notify.success({
+            title: 'Inscripción exitosa',
+            message: `Se enviaron ${data.payment.splitCount} links de pago por WhatsApp`
+          })
         } else {
-          alert(data.message || 'Inscripción exitosa')
+          notify.success({
+            title: 'Éxito',
+            message: data.message || 'Inscripción exitosa'
+          })
         }
       } else {
-        alert(data.error || 'Error al inscribir estudiante')
+        notify.error({
+          title: 'Error',
+          message: data.error || 'Error al inscribir estudiante'
+        })
       }
     } catch (error) {
       console.error('Error enrolling student:', error)
-      alert('Error al inscribir estudiante')
+      notify.error({
+        title: 'Error',
+        message: 'Error al inscribir estudiante'
+      })
     }
   }
 
@@ -1795,12 +1837,12 @@ function ClassesContent() {
                         
                         // Auto-ajustar precio basado en configuración
                         if (classPricing) {
-                          if (type === 'INDIVIDUAL') {
-                            price = classPricing.individualPrice / 100
+                          if (type === 'PRIVATE') {
+                            price = classPricing.privatePrice / 100
                           } else if (type === 'GROUP') {
                             price = classPricing.groupPrice / 100
-                          } else if (type === 'CLINIC') {
-                            price = classPricing.clinicPrice / 100
+                          } else if (type === 'SEMI_PRIVATE') {
+                            price = classPricing.semiPrivatePrice / 100
                           }
                         }
                         
