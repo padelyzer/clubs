@@ -254,6 +254,45 @@ function InstructorsContent() {
 
   return (
     <div className="space-y-6">
+      {/* Floating gradient button when needed */}
+      {instructors.length === 0 && !loading && (
+        <div className="fixed top-4 right-4 z-50">
+          <button
+            onClick={() => {
+              setEditingInstructor(null)
+              resetForm()
+              setShowForm(true)
+            }}
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: '8px',
+              padding: '12px 24px',
+              background: 'linear-gradient(135deg, #A4DF4E, #66E7AA)',
+              border: 'none',
+              borderRadius: '12px',
+              color: '#182A01',
+              fontSize: '15px',
+              fontWeight: 600,
+              cursor: 'pointer',
+              boxShadow: '0 4px 12px rgba(164, 223, 78, 0.4)',
+              transition: 'all 0.2s ease'
+            }}
+            onMouseEnter={(e) => {
+              e.currentTarget.style.transform = 'translateY(-2px)'
+              e.currentTarget.style.boxShadow = '0 6px 16px rgba(164, 223, 78, 0.5)'
+            }}
+            onMouseLeave={(e) => {
+              e.currentTarget.style.transform = 'translateY(0)'
+              e.currentTarget.style.boxShadow = '0 4px 12px rgba(164, 223, 78, 0.4)'
+            }}
+          >
+            <Plus size={20} />
+            Nuevo Instructor
+          </button>
+        </div>
+      )}
+      
       <CardModern>
         <CardModernHeader>
           <CardModernTitle>
