@@ -42,20 +42,31 @@ interface SplitPaymentStatus {
   pendingAmount: number
 }
 
+interface ClubPaymentConfig {
+  acceptCash: boolean
+  terminalEnabled: boolean
+  transferEnabled: boolean
+  bankName?: string
+  accountNumber?: string
+}
+
 interface SplitPaymentManagerProps {
   bookingId: string
   onClose?: () => void
+  embedded?: boolean
 }
 
-export function SplitPaymentManager({ bookingId, onClose }: SplitPaymentManagerProps) {
+export function SplitPaymentManager({ bookingId, onClose, embedded = false }: SplitPaymentManagerProps) {
   const [status, setStatus] = useState<SplitPaymentStatus | null>(null)
   const [loading, setLoading] = useState(true)
   const [actionLoading, setActionLoading] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [showGenerateLinks, setShowGenerateLinks] = useState(false)
+  const [paymentConfig, setPaymentConfig] = useState<ClubPaymentConfig | null>(null)
 
   useEffect(() => {
     fetchStatus()
+    fetchPaymentConfig()
   }, [bookingId])
 
   async function fetchStatus() {
@@ -73,6 +84,26 @@ export function SplitPaymentManager({ bookingId, onClose }: SplitPaymentManagerP
       setError('Error de conexión')
     } finally {
       setLoading(false)
+    }
+  }
+
+  async function fetchPaymentConfig() {
+    try {
+      const response = await fetch(`/api/bookings/${bookingId}`)
+      const data = await response.json()
+      
+      if (data.booking?.Club?.ClubSettings) {
+        const settings = data.booking.Club.ClubSettings
+        setPaymentConfig({
+          acceptCash: settings.acceptCash ?? true,
+          terminalEnabled: settings.terminalEnabled ?? false,
+          transferEnabled: settings.transferEnabled ?? false,
+          bankName: settings.bankName,
+          accountNumber: settings.accountNumber
+        })
+      }
+    } catch (err) {
+      console.error('Error fetching payment config:', err)
     }
   }
 
@@ -103,41 +134,9 @@ export function SplitPaymentManager({ bookingId, onClose }: SplitPaymentManagerP
     }
   }
 
-  async function resendNotification(splitPaymentId: string) {
-    setActionLoading(`resend-${splitPaymentId}`)
-    setError(null)
 
-    try {
-      const response = await fetch(`/api/bookings/${bookingId}/split-payments`, {
-        method: 'PUT',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          splitPaymentId,
-          action: 'resend'
-        }),
-      })
-
-      const data = await response.json()
-
-      if (data.success) {
-        // Mostrar confirmación temporal
-        setTimeout(() => {
-          setActionLoading(null)
-        }, 2000)
-      } else {
-        setError(data.error || 'Error al reenviar notificación')
-        setActionLoading(null)
-      }
-    } catch (err) {
-      setError('Error al reenviar notificación')
-      setActionLoading(null)
-    }
-  }
-
-  async function markAsCompleted(splitPaymentId: string, paymentMethod: string = 'manual') {
-    setActionLoading(`complete-${splitPaymentId}`)
+  async function processPayment(splitPaymentId: string, paymentMethod: string) {
+    setActionLoading(`payment-${splitPaymentId}-${paymentMethod}`)
     setError(null)
 
     try {
@@ -150,7 +149,7 @@ export function SplitPaymentManager({ bookingId, onClose }: SplitPaymentManagerP
           splitPaymentId,
           action: 'complete',
           paymentMethod,
-          referenceNumber: `MANUAL_${Date.now().toString().slice(-6)}`
+          referenceNumber: `${paymentMethod.toUpperCase()}_${Date.now().toString().slice(-6)}`
         }),
       })
 
@@ -159,13 +158,87 @@ export function SplitPaymentManager({ bookingId, onClose }: SplitPaymentManagerP
       if (data.success) {
         await fetchStatus()
       } else {
-        setError(data.error || 'Error al marcar como completado')
+        setError(data.error || 'Error al procesar pago')
       }
     } catch (err) {
-      setError('Error al marcar como completado')
+      setError('Error al procesar pago')
     } finally {
       setActionLoading(null)
     }
+  }
+
+  const getPaymentMethodButtons = (splitPayment: SplitPayment) => {
+    if (!paymentConfig) return null
+    
+    const buttons = []
+    
+    if (paymentConfig.acceptCash) {
+      buttons.push(
+        <button
+          key="cash"
+          onClick={() => processPayment(splitPayment.id, 'cash')}
+          disabled={actionLoading === `payment-${splitPayment.id}-cash`}
+          style={{
+            fontSize: '12px',
+            backgroundColor: '#dcfce7',
+            color: '#166534',
+            padding: '6px 10px',
+            borderRadius: '6px',
+            border: 'none',
+            cursor: actionLoading === `payment-${splitPayment.id}-cash` ? 'not-allowed' : 'pointer',
+            opacity: actionLoading === `payment-${splitPayment.id}-cash` ? 0.6 : 1
+          }}
+        >
+          {actionLoading === `payment-${splitPayment.id}-cash` ? '⏳' : '💵'} Efectivo
+        </button>
+      )
+    }
+    
+    if (paymentConfig.terminalEnabled) {
+      buttons.push(
+        <button
+          key="terminal"
+          onClick={() => processPayment(splitPayment.id, 'terminal')}
+          disabled={actionLoading === `payment-${splitPayment.id}-terminal`}
+          style={{
+            fontSize: '12px',
+            backgroundColor: '#dbeafe',
+            color: '#1d4ed8',
+            padding: '6px 10px',
+            borderRadius: '6px',
+            border: 'none',
+            cursor: actionLoading === `payment-${splitPayment.id}-terminal` ? 'not-allowed' : 'pointer',
+            opacity: actionLoading === `payment-${splitPayment.id}-terminal` ? 0.6 : 1
+          }}
+        >
+          {actionLoading === `payment-${splitPayment.id}-terminal` ? '⏳' : '💳'} Tarjeta
+        </button>
+      )
+    }
+    
+    if (paymentConfig.transferEnabled) {
+      buttons.push(
+        <button
+          key="transfer"
+          onClick={() => processPayment(splitPayment.id, 'transfer')}
+          disabled={actionLoading === `payment-${splitPayment.id}-transfer`}
+          style={{
+            fontSize: '12px',
+            backgroundColor: '#fef3c7',
+            color: '#d97706',
+            padding: '6px 10px',
+            borderRadius: '6px',
+            border: 'none',
+            cursor: actionLoading === `payment-${splitPayment.id}-transfer` ? 'not-allowed' : 'pointer',
+            opacity: actionLoading === `payment-${splitPayment.id}-transfer` ? 0.6 : 1
+          }}
+        >
+          {actionLoading === `payment-${splitPayment.id}-transfer` ? '⏳' : '🏦'} Transferencia
+        </button>
+      )
+    }
+    
+    return buttons
   }
 
   const formatAmount = (cents: number) => {
@@ -191,6 +264,20 @@ export function SplitPaymentManager({ bookingId, onClose }: SplitPaymentManagerP
   }
 
   if (loading) {
+    if (embedded) {
+      return (
+        <div className="p-6">
+          <div className="animate-pulse">
+            <div className="h-6 bg-gray-200 rounded w-1/3 mb-4"></div>
+            <div className="h-4 bg-gray-200 rounded w-2/3 mb-8"></div>
+            <div className="space-y-4">
+              <div className="h-20 bg-gray-200 rounded"></div>
+              <div className="h-20 bg-gray-200 rounded"></div>
+            </div>
+          </div>
+        </div>
+      )
+    }
     return (
       <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
         <div className="bg-white rounded-lg shadow-lg max-w-2xl w-full mx-4 p-6">
@@ -208,6 +295,21 @@ export function SplitPaymentManager({ bookingId, onClose }: SplitPaymentManagerP
   }
 
   if (!status) {
+    if (embedded) {
+      return (
+        <div className="p-6">
+          <div className="text-center text-red-600 mb-4">
+            {error || 'Error al cargar información'}
+          </div>
+          <button
+            onClick={onClose}
+            className="w-full bg-gray-500 text-white py-2 px-4 rounded hover:bg-gray-600"
+          >
+            Volver al Check-in
+          </button>
+        </div>
+      )
+    }
     return (
       <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
         <div className="bg-white rounded-lg shadow-lg max-w-md w-full mx-4 p-6">
@@ -220,6 +322,225 @@ export function SplitPaymentManager({ bookingId, onClose }: SplitPaymentManagerP
           >
             Cerrar
           </button>
+        </div>
+      </div>
+    )
+  }
+
+  if (embedded) {
+    return (
+      <div>
+        {/* Progress indicator */}
+        <div style={{ 
+          marginBottom: '20px',
+          padding: '16px',
+          background: '#f8f9fa',
+          borderRadius: '8px',
+          border: '1px solid #e0e6ed'
+        }}>
+          <div style={{
+            display: 'flex',
+            justifyContent: 'space-between',
+            alignItems: 'center',
+            marginBottom: '8px'
+          }}>
+            <span style={{
+              fontSize: '14px',
+              fontWeight: '500',
+              color: '#374151'
+            }}>
+              Progreso de pagos: {status.completedPayments}/{status.totalPayments}
+            </span>
+            <span style={{
+              fontSize: '14px',
+              color: '#6b7280'
+            }}>
+              ${formatAmount(status.completedAmount)} / ${formatAmount(status.totalAmount)} MXN
+            </span>
+          </div>
+          <div style={{
+            width: '100%',
+            height: '8px',
+            backgroundColor: '#e5e7eb',
+            borderRadius: '4px',
+            overflow: 'hidden'
+          }}>
+            <div style={{
+              height: '100%',
+              backgroundColor: '#10b981',
+              borderRadius: '4px',
+              transition: 'all 0.3s ease',
+              width: `${status.totalPayments > 0 ? (status.completedPayments / status.totalPayments) * 100 : 0}%`
+            }}></div>
+          </div>
+        </div>
+
+        {/* Error Message */}
+        {error && (
+          <div style={{
+            marginBottom: '20px',
+            padding: '12px',
+            background: '#fef2f2',
+            border: '1px solid #fecaca',
+            borderRadius: '8px',
+            color: '#dc2626',
+            fontSize: '14px'
+          }}>
+            {error}
+          </div>
+        )}
+
+        {/* Split payments list */}
+        {showGenerateLinks ? (
+          <div style={{
+            textAlign: 'center',
+            padding: '40px 20px'
+          }}>
+            <div style={{
+              width: '64px',
+              height: '64px',
+              backgroundColor: '#dbeafe',
+              borderRadius: '50%',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              margin: '0 auto 16px',
+              fontSize: '24px'
+            }}>
+              💳
+            </div>
+            <h3 style={{
+              fontSize: '18px',
+              fontWeight: '600',
+              color: '#111827',
+              marginBottom: '8px'
+            }}>
+              Generar Pagos Divididos
+            </h3>
+            <p style={{
+              fontSize: '14px',
+              color: '#6b7280',
+              marginBottom: '24px'
+            }}>
+              Esta reserva será dividida en {status.totalPayments} pagos iguales de ${formatAmount(status.booking.price / status.totalPayments)} MXN cada uno.
+            </p>
+            <button
+              onClick={generateSplitPayments}
+              disabled={actionLoading === 'generate'}
+              style={{
+                backgroundColor: '#10b981',
+                color: 'white',
+                padding: '12px 24px',
+                borderRadius: '8px',
+                border: 'none',
+                fontSize: '14px',
+                fontWeight: '500',
+                cursor: actionLoading === 'generate' ? 'not-allowed' : 'pointer',
+                opacity: actionLoading === 'generate' ? 0.5 : 1
+              }}
+            >
+              {actionLoading === 'generate' ? 'Generando...' : '🚀 Generar Pagos Divididos'}
+            </button>
+          </div>
+        ) : (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+            {status.splitPayments.map((payment, index) => (
+              <div key={payment.id} style={{
+                padding: '16px',
+                background: 'white',
+                border: '1px solid #e0e6ed',
+                borderRadius: '8px'
+              }}>
+                <div style={{
+                  display: 'flex',
+                  justifyContent: 'space-between',
+                  alignItems: 'center'
+                }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                    <div style={{
+                      width: '32px',
+                      height: '32px',
+                      backgroundColor: '#f3f4f6',
+                      borderRadius: '50%',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      fontSize: '14px',
+                      fontWeight: '500',
+                      color: '#6b7280'
+                    }}>
+                      {index + 1}
+                    </div>
+                    <div>
+                      <div style={{
+                        fontSize: '14px',
+                        fontWeight: '500',
+                        color: '#111827'
+                      }}>
+                        {payment.playerName}
+                      </div>
+                      {(payment.playerEmail || payment.playerPhone) && (
+                        <div style={{
+                          fontSize: '12px',
+                          color: '#6b7280'
+                        }}>
+                          {payment.playerEmail && <div>{payment.playerEmail}</div>}
+                          {payment.playerPhone && <div>{payment.playerPhone}</div>}
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                    <div style={{ textAlign: 'right' }}>
+                      <div style={{
+                        fontSize: '14px',
+                        fontWeight: '500',
+                        color: '#111827'
+                      }}>
+                        ${formatAmount(payment.amount)} MXN
+                      </div>
+                      <div style={{
+                        display: 'inline-flex',
+                        alignItems: 'center',
+                        padding: '4px 8px',
+                        borderRadius: '12px',
+                        fontSize: '12px',
+                        fontWeight: '500'
+                      }} className={getStatusColor(payment.status)}>
+                        {getStatusIcon(payment.status)} {payment.status === 'completed' ? 'Pagado' : payment.status === 'processing' ? 'Procesando' : payment.status === 'failed' ? 'Falló' : 'Pendiente'}
+                      </div>
+                    </div>
+                    {payment.status === 'pending' && (
+                      <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
+                        {getPaymentMethodButtons(payment)}
+                      </div>
+                    )}
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+
+        {/* Status footer */}
+        <div style={{
+          marginTop: '20px',
+          padding: '16px',
+          background: '#f8f9fa',
+          borderRadius: '8px',
+          textAlign: 'center',
+          fontSize: '14px',
+          color: '#6b7280'
+        }}>
+          {status.completedPayments === status.totalPayments ? (
+            <span style={{ color: '#10b981', fontWeight: '500' }}>
+              ✅ Todos los pagos completados
+            </span>
+          ) : (
+            <span>
+              Faltan {status.totalPayments - status.completedPayments} pagos por completar
+            </span>
+          )}
         </div>
       </div>
     )
@@ -297,15 +618,15 @@ export function SplitPaymentManager({ bookingId, onClose }: SplitPaymentManagerP
                   Generar Pagos Divididos
                 </h3>
                 <p className="text-gray-600 mb-4">
-                  Esta reserva será dividida en 4 pagos iguales de ${formatAmount(status.booking.price / 4)} MXN cada uno.
+                  Esta reserva será dividida en {status.totalPayments} pagos iguales de ${formatAmount(status.booking.price / status.totalPayments)} MXN cada uno.
                 </p>
                 <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 text-left max-w-md mx-auto mb-6">
                   <h4 className="font-medium text-blue-900 mb-2">¿Cómo funciona?</h4>
                   <ul className="text-sm text-blue-800 space-y-1">
-                    <li>• Se generan 4 links de pago únicos</li>
+                    <li>• Se generan {status.totalPayments} registros de pago únicos</li>
                     <li>• Cada jugador paga su parte por separado</li>
                     <li>• La reserva se confirma cuando todos paguen</li>
-                    <li>• Se envían notificaciones automáticas por WhatsApp</li>
+                    <li>• Se pueden procesar pagos con múltiples métodos</li>
                   </ul>
                 </div>
               </div>
@@ -355,23 +676,36 @@ export function SplitPaymentManager({ bookingId, onClose }: SplitPaymentManagerP
                           {getStatusIcon(payment.status)} {payment.status === 'completed' ? 'Pagado' : payment.status === 'processing' ? 'Procesando' : payment.status === 'failed' ? 'Falló' : 'Pendiente'}
                         </div>
                       </div>
-                      <div className="flex space-x-2">
-                        {payment.status === 'pending' && (
+                      <div className="flex space-x-2 flex-wrap">
+                        {payment.status === 'pending' && paymentConfig && (
                           <>
-                            <button
-                              onClick={() => resendNotification(payment.id)}
-                              disabled={actionLoading === `resend-${payment.id}`}
-                              className="text-xs bg-blue-100 text-blue-700 px-2 py-1 rounded hover:bg-blue-200 disabled:opacity-50"
-                            >
-                              {actionLoading === `resend-${payment.id}` ? '⏳' : '📧'} Reenviar
-                            </button>
-                            <button
-                              onClick={() => markAsCompleted(payment.id)}
-                              disabled={actionLoading === `complete-${payment.id}`}
-                              className="text-xs bg-green-100 text-green-700 px-2 py-1 rounded hover:bg-green-200 disabled:opacity-50"
-                            >
-                              {actionLoading === `complete-${payment.id}` ? '⏳' : '✅'} Marcar Pagado
-                            </button>
+                            {paymentConfig.acceptCash && (
+                              <button
+                                onClick={() => processPayment(payment.id, 'cash')}
+                                disabled={actionLoading === `payment-${payment.id}-cash`}
+                                className="text-xs bg-green-100 text-green-700 px-2 py-1 rounded hover:bg-green-200 disabled:opacity-50"
+                              >
+                                {actionLoading === `payment-${payment.id}-cash` ? '⏳' : '💵'} Efectivo
+                              </button>
+                            )}
+                            {paymentConfig.terminalEnabled && (
+                              <button
+                                onClick={() => processPayment(payment.id, 'terminal')}
+                                disabled={actionLoading === `payment-${payment.id}-terminal`}
+                                className="text-xs bg-blue-100 text-blue-700 px-2 py-1 rounded hover:bg-blue-200 disabled:opacity-50"
+                              >
+                                {actionLoading === `payment-${payment.id}-terminal` ? '⏳' : '💳'} Tarjeta
+                              </button>
+                            )}
+                            {paymentConfig.transferEnabled && (
+                              <button
+                                onClick={() => processPayment(payment.id, 'transfer')}
+                                disabled={actionLoading === `payment-${payment.id}-transfer`}
+                                className="text-xs bg-yellow-100 text-yellow-700 px-2 py-1 rounded hover:bg-yellow-200 disabled:opacity-50"
+                              >
+                                {actionLoading === `payment-${payment.id}-transfer` ? '⏳' : '🏦'} Transferencia
+                              </button>
+                            )}
                           </>
                         )}
                         {payment.status === 'completed' && payment.completedAt && (

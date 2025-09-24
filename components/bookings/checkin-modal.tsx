@@ -87,6 +87,7 @@ export function CheckInModal({
   const [copiedPaymentIds, setCopiedPaymentIds] = useState<Record<string, boolean>>({})
   const [regularPaymentLink, setRegularPaymentLink] = useState<string | null>(null)
   const [showSplitPaymentModal, setShowSplitPaymentModal] = useState(false)
+  const [splitPaymentView, setSplitPaymentView] = useState(false) // Vista dentro del mismo modal
   const [generatingRegularLink, setGeneratingRegularLink] = useState(false)
   const [hasExistingPaymentIntent, setHasExistingPaymentIntent] = useState(false)
   const [studentPaymentLinks, setStudentPaymentLinks] = useState<Record<string, string>>({})
@@ -635,10 +636,45 @@ export function CheckInModal({
       <AppleModal
       isOpen={isOpen}
       onClose={onClose}
-      title="Check-in de Reserva"
+      title={splitPaymentView ? "Gestión de Pagos Divididos" : "Check-in de Reserva"}
       size="medium"
     >
-      {/* Booking Summary */}
+      {splitPaymentView ? (
+        // Vista de gestión de pagos divididos
+        <div>
+          {/* Botón volver */}
+          <div style={{ marginBottom: '20px' }}>
+            <AppleButton
+              variant="secondary"
+              onClick={() => setSplitPaymentView(false)}
+              style={{
+                background: 'rgba(0, 0, 0, 0.05)',
+                color: '#666',
+                border: 'none',
+                fontSize: '14px',
+                padding: '8px 16px'
+              }}
+            >
+              ← Volver al Check-in
+            </AppleButton>
+          </div>
+
+          {/* Contenido del Split Payment Manager integrado */}
+          <SplitPaymentManager
+            bookingId={booking.id}
+            onClose={() => {
+              setSplitPaymentView(false)
+              if (onRefreshBooking) {
+                onRefreshBooking()
+              }
+            }}
+            embedded={true} // Nueva prop para indicar que está integrado
+          />
+        </div>
+      ) : (
+        // Vista normal de check-in
+        <>
+          {/* Booking Summary */}
       <SettingsCard
         title="Detalles de la Reserva"
         description="Información del jugador y la reserva"
@@ -2513,6 +2549,7 @@ export function CheckInModal({
           
           // Determinar el estado del botón basado en el tipo de pago
           const hasSplitPayments = booking.splitPaymentEnabled && booking.splitPayments && booking.splitPayments.length > 0
+          const hasSplitPaymentsEnabled = booking.splitPaymentEnabled && booking.splitPaymentCount > 0 // Condición más simple
           const allPaid = hasSplitPayments 
             ? booking.splitPayments.every(sp => sp.status === 'completed')
             : isPaid
@@ -2520,15 +2557,16 @@ export function CheckInModal({
             ? booking.splitPayments.some(sp => sp.status !== 'completed')
             : !isPaid
           
-          if (hasSplitPayments && somePaymentsPending) {
-            // Para pagos divididos con pagos pendientes
+          // Mostrar botón de gestionar pagos divididos si están habilitados (aunque no tengamos los datos aún)
+          if (hasSplitPaymentsEnabled && (!hasSplitPayments || somePaymentsPending)) {
+            // Para pagos divididos con pagos pendientes o sin datos cargados
             const completedCount = booking.splitPayments?.filter(sp => sp.status === 'completed').length || 0
             const totalCount = booking.splitPaymentCount || booking.splitPayments?.length || 0
             
             return (
               <AppleButton
                 variant="primary"
-                onClick={() => setShowSplitPaymentModal(true)}
+                onClick={() => setSplitPaymentView(true)}
                 disabled={loading}
                 icon={<Users size={16} />}
                 style={{
@@ -2579,6 +2617,8 @@ export function CheckInModal({
           )
         })()}
       </div>
+        </>
+      )}
     </AppleModal>
 
       {/* Payment Confirmation Modal */}

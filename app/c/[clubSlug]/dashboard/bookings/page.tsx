@@ -488,18 +488,23 @@ function BookingsPageContent() {
                       'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre']
   const dayNames = ['Dom', 'Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb']
 
-  // Filter bookings based on search query
-  const filteredBookings = bookings.filter(booking => {
-    if (!searchQuery) return true
-    const query = searchQuery.toLowerCase()
-    return (
-      (booking.playerName?.toLowerCase().includes(query)) ||
-      (booking.name?.toLowerCase().includes(query)) ||
-      (booking.playerPhone?.includes(query)) ||
-      (booking.court?.name?.toLowerCase().includes(query)) ||
-      (booking.courtNames?.toLowerCase().includes(query))
+  // Filter bookings based on search query and remove duplicates
+  const filteredBookings = bookings
+    .filter((booking, index, self) => 
+      // Remove duplicates based on booking ID
+      index === self.findIndex(b => b.id === booking.id)
     )
-  })
+    .filter(booking => {
+      if (!searchQuery) return true
+      const query = searchQuery.toLowerCase()
+      return (
+        (booking.playerName?.toLowerCase().includes(query)) ||
+        (booking.name?.toLowerCase().includes(query)) ||
+        (booking.playerPhone?.includes(query)) ||
+        (booking.court?.name?.toLowerCase().includes(query)) ||
+        (booking.courtNames?.toLowerCase().includes(query))
+      )
+    })
 
   return (
       <div style={{ padding: '32px' }}>

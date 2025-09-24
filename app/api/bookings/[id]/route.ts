@@ -36,14 +36,19 @@ export async function GET(
         clubId: session.clubId
       },
       include: {
-        court: true,
-        splitPayments: {
+        Court: true,
+        Club: {
+          include: {
+            ClubSettings: true
+          }
+        },
+        SplitPayment: {
           orderBy: { createdAt: 'asc' }
         },
-        payments: {
+        Payment: {
           orderBy: { createdAt: 'desc' }
         },
-        notifications: {
+        Notification: {
           orderBy: { createdAt: 'desc' }
         }
       }
@@ -58,7 +63,7 @@ export async function GET(
 
     // Add computed fields
     const splitPaymentProgress = booking.splitPaymentEnabled 
-      ? booking.splitPayments.filter(sp => sp.status === 'completed').length
+      ? booking.SplitPayment.filter(sp => sp.status === 'completed').length
       : 0
 
     const bookingWithStatus = {
@@ -175,8 +180,8 @@ export async function PUT(
       where: { id },
       data: updateData,
       include: {
-        court: true,
-        splitPayments: true
+        Court: true,
+        SplitPayment: true
       }
     })
 
@@ -250,7 +255,7 @@ export async function DELETE(
         updatedAt: new Date()
       },
       include: {
-        court: true
+        Court: true
       }
     })
 
@@ -343,7 +348,7 @@ async function checkBookingConflicts(
   return await prisma.booking.findMany({
     where,
     include: {
-      court: true
+      Court: true
     }
   })
 }
