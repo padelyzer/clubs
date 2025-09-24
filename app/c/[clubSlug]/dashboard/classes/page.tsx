@@ -60,17 +60,16 @@ type Player = {
 }
 
 const classTypes = {
-  INDIVIDUAL: 'Individual',
   GROUP: 'Grupal',
-  CLINIC: 'Clínica',
-  INTENSIVE: 'Intensivo'
+  PRIVATE: 'Individual',
+  SEMI_PRIVATE: 'Semi-privado'
 }
 
 const classLevels = {
   BEGINNER: {/* label: 'Principiante', color: '#16a34a' */},
   INTERMEDIATE: {/* label: 'Intermedio', color: '#eab308' */},
   ADVANCED: {/* label: 'Avanzado', color: '#dc2626' */},
-  MIXED: {/* label: 'Mixto', color: '#8b5cf6' */}
+  ALL_LEVELS: {/* label: 'Todos los niveles', color: '#8b5cf6' */}
 }
 
 const classStatuses = {

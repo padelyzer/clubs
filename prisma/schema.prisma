@@ -158,6 +158,7 @@ model Club {
   User                      User[]
   whatsappConsents          WhatsAppConsent[]
   WidgetSettings            WidgetSettings?
+  Instructor                Instructor[]
 
   @@index([city])
   @@index([slug])
@@ -188,6 +189,19 @@ model ClubSettings {
   terminalEnabled     Boolean  @default(false)
   terminalId          String?
   transferEnabled     Boolean  @default(false)
+  
+  // Configuración de clases
+  defaultClassDuration     Int      @default(60) // Duración en minutos
+  defaultMaxStudents       Int      @default(8)
+  groupClassPrice          Int      @default(50000) // En centavos
+  privateClassPrice        Int      @default(100000) // En centavos
+  semiPrivateClassPrice    Int      @default(75000) // En centavos
+  defaultCourtCostPerHour  Int      @default(30000) // En centavos
+  allowOnlineClassBooking  Boolean  @default(true)
+  requirePaymentUpfront    Boolean  @default(false)
+  classBookingAdvanceDays  Int      @default(30)
+  classCancellationHours   Int      @default(24) // Horas antes para cancelar
+  
   Club                Club     @relation(fields: [clubId], references: [id], onDelete: Cascade)
 
   @@index([clubId])
@@ -701,7 +715,9 @@ model Class {
   type            ClassType         @default(GROUP)
   maxStudents     Int               @default(8)
   enrolledCount   Int               @default(0)
-  price           Int
+  price           Int               // Precio al estudiante en centavos
+  courtCost       Int               @default(0) // Costo de renta de cancha en centavos
+  instructorCost  Int               @default(0) // Costo del instructor calculado en centavos
   currency        String            @default("MXN")
   date            DateTime
   startTime       String
@@ -716,12 +732,36 @@ model Class {
   cancelledAt     DateTime?
   Club            Club              @relation(fields: [clubId], references: [id], onDelete: Cascade)
   Court           Court?            @relation(fields: [courtId], references: [id])
+  Instructor      Instructor?       @relation(fields: [instructorId], references: [id])
   ClassEnrollment ClassEnrollment[]
 
   @@index([clubId, date])
   @@index([courtId])
   @@index([instructorId])
   @@index([status])
+}
+
+model Instructor {
+  id                  String            @id @default(cuid())
+  clubId              String
+  name                String
+  email               String?
+  phone               String
+  bio                 String?
+  specialties         String[]
+  paymentType         InstructorPayment @default(HOURLY)
+  hourlyRate          Int               @default(0) // En centavos
+  fixedSalary         Int               @default(0) // Salario fijo mensual en centavos
+  commissionPercent   Int               @default(0) // Porcentaje de comisión (0-100)
+  active              Boolean           @default(true)
+  createdAt           DateTime          @default(now())
+  updatedAt           DateTime          @updatedAt
+  
+  Club                Club              @relation(fields: [clubId], references: [id], onDelete: Cascade)
+  Classes             Class[]
+  
+  @@index([clubId])
+  @@index([active])
 }
 
 model ClassEnrollment {
@@ -1404,6 +1444,13 @@ enum EnrollmentStatus {
   WAITLIST
   CANCELLED
   NO_SHOW
+}
+
+enum InstructorPayment {
+  HOURLY      // Pago por hora
+  FIXED       // Salario fijo mensual
+  COMMISSION  // Solo comisión sobre ingresos
+  MIXED       // Fijo + comisión
 }
 
 enum SubscriptionStatus {

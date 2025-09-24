@@ -27,7 +27,7 @@ export async function GET(request: NextRequest) {
       where.active = false
     }
     
-    const instructors = await prisma.classInstructor.findMany({
+    const instructors = await prisma.instructor.findMany({
       where,
       orderBy: [
         { active: 'desc' },
@@ -36,7 +36,7 @@ export async function GET(request: NextRequest) {
       include: {
         _count: {
           select: {
-            classes: true
+            Classes: true
           }
         }
       }
@@ -46,8 +46,7 @@ export async function GET(request: NextRequest) {
     const formattedInstructors = instructors.map(instructor => ({
       ...instructor,
       hourlyRate: instructor.hourlyRate / 100, // Convert from cents to pesos
-      monthlyRate: instructor.monthlyRate / 100, // Convert from cents to pesos
-      totalClasses: instructor._count.classes,
+      totalClasses: instructor._count.Classes,
       upcomingClasses: 0 // TODO: Calculate from classes
     }))
     
@@ -88,9 +87,8 @@ export async function POST(request: NextRequest) {
     
     // Convert rates from pesos to cents
     const hourlyRateInCents = Math.round((body.hourlyRate || 0) * 100)
-    const monthlyRateInCents = Math.round((body.monthlyRate || 0) * 100)
     
-    const instructor = await prisma.classInstructor.create({
+    const instructor = await prisma.instructor.create({
       data: {
         clubId: session.clubId,
         name: body.name,
@@ -98,15 +96,16 @@ export async function POST(request: NextRequest) {
         phone: body.phone,
         bio: body.bio || null,
         specialties: body.specialties || [],
-        hourlyRate: hourlyRateInCents,
         paymentType: body.paymentType || 'HOURLY',
-        monthlyRate: monthlyRateInCents,
+        hourlyRate: hourlyRateInCents,
+        fixedSalary: body.fixedSalary ? Math.round(body.fixedSalary * 100) : 0,
+        commissionPercent: body.commissionPercent ? Math.max(0, Math.min(100, body.commissionPercent)) : 0,
         active: true
       },
       include: {
         _count: {
           select: {
-            classes: true
+            Classes: true
           }
         }
       }
@@ -117,8 +116,7 @@ export async function POST(request: NextRequest) {
       instructor: {
         ...instructor,
         hourlyRate: instructor.hourlyRate / 100,
-        monthlyRate: instructor.monthlyRate / 100,
-        totalClasses: instructor._count.classes,
+        totalClasses: instructor._count.Classes,
         upcomingClasses: 0
       }
     })
@@ -153,7 +151,7 @@ export async function PUT(request: NextRequest) {
     }
     
     // Check if instructor exists and belongs to the user's club
-    const existingInstructor = await prisma.classInstructor.findFirst({
+    const existingInstructor = await prisma.instructor.findFirst({
       where: { 
         id: body.id,
         clubId: session.clubId 
@@ -177,19 +175,21 @@ export async function PUT(request: NextRequest) {
     if (body.hourlyRate !== undefined) {
       updateData.hourlyRate = Math.round(body.hourlyRate * 100)
     }
-    if (body.paymentType !== undefined) updateData.paymentType = body.paymentType
-    if (body.monthlyRate !== undefined) {
-      updateData.monthlyRate = Math.round(body.monthlyRate * 100)
-    }
     if (body.active !== undefined) updateData.active = body.active
+    if (body.commissionPercent !== undefined) {
+      updateData.commissionPercent = Math.max(0, Math.min(100, body.commissionPercent))
+    }
+    if (body.fixedSalary !== undefined) {
+      updateData.fixedSalary = Math.round(body.fixedSalary * 100)
+    }
     
-    const instructor = await prisma.classInstructor.update({
+    const instructor = await prisma.instructor.update({
       where: { id: body.id },
       data: updateData,
       include: {
         _count: {
           select: {
-            classes: true
+            Classes: true
           }
         }
       }
@@ -200,8 +200,7 @@ export async function PUT(request: NextRequest) {
       instructor: {
         ...instructor,
         hourlyRate: instructor.hourlyRate / 100,
-        monthlyRate: instructor.monthlyRate / 100,
-        totalClasses: instructor._count.classes,
+        totalClasses: instructor._count.Classes,
         upcomingClasses: 0
       }
     })
@@ -237,7 +236,7 @@ export async function DELETE(request: NextRequest) {
     }
     
     // Check if instructor exists and belongs to the user's club
-    const instructor = await prisma.classInstructor.findFirst({
+    const instructor = await prisma.instructor.findFirst({
       where: { 
         id,
         clubId: session.clubId 
@@ -245,7 +244,7 @@ export async function DELETE(request: NextRequest) {
       include: {
         _count: {
           select: {
-            classes: true
+            Classes: true
           }
         }
       }
@@ -259,14 +258,14 @@ export async function DELETE(request: NextRequest) {
     }
     
     // Don't delete if instructor has classes
-    if (instructor._count.classes > 0) {
+    if (instructor._count.Classes > 0) {
       return NextResponse.json(
         { success: false, error: 'No se puede eliminar un instructor con clases asignadas' },
         { status: 400 }
       )
     }
     
-    await prisma.classInstructor.delete({
+    await prisma.instructor.delete({
       where: { id }
     })
     

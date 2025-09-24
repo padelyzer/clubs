@@ -144,7 +144,7 @@ export async function POST(request: NextRequest) {
     const clubId = session.clubId
     
     // Verify instructor exists and belongs to the club
-    const instructor = await prisma.classInstructor.findFirst({
+    const instructor = await prisma.instructor.findFirst({
       where: {
         id: body.instructorId,
         clubId: clubId,
@@ -202,13 +202,59 @@ export async function POST(request: NextRequest) {
       }
     }
     
-    // Convert price from pesos to cents
-    const priceInCents = Math.round((body.price || 0) * 100)
+    // Get club settings for default pricing and costs
+    const clubSettings = await prisma.clubSettings.findFirst({
+      where: { clubId }
+    })
+    
+    // Convert price from pesos to cents (use default if not provided)
+    let priceInCents = 0
+    if (body.price !== undefined) {
+      priceInCents = Math.round(body.price * 100)
+    } else if (clubSettings) {
+      // Use default price based on class type
+      switch (body.type || 'GROUP') {
+        case 'GROUP':
+          priceInCents = clubSettings.groupClassPrice
+          break
+        case 'PRIVATE':
+          priceInCents = clubSettings.privateClassPrice
+          break
+        case 'SEMI_PRIVATE':
+          priceInCents = clubSettings.semiPrivateClassPrice
+          break
+      }
+    }
     
     // Calculate duration in minutes
     const [startHour, startMin] = body.startTime.split(':').map(Number)
     const [endHour, endMin] = body.endTime.split(':').map(Number)
     const duration = (endHour * 60 + endMin) - (startHour * 60 + startMin)
+    
+    // Calculate court cost
+    const courtCostPerHour = clubSettings?.defaultCourtCostPerHour || 30000 // Default 300 pesos
+    const courtCost = Math.round((courtCostPerHour * duration) / 60)
+    
+    // Calculate instructor cost based on payment type
+    let instructorCost = 0
+    const durationInHours = duration / 60
+    
+    switch (instructor.paymentType) {
+      case 'HOURLY':
+        instructorCost = Math.round(instructor.hourlyRate * durationInHours)
+        break
+      case 'COMMISSION':
+        instructorCost = Math.round((priceInCents * instructor.commissionPercent) / 100)
+        break
+      case 'MIXED':
+        // For mixed, we'll calculate the commission part only (fixed salary is handled separately)
+        instructorCost = Math.round((priceInCents * instructor.commissionPercent) / 100)
+        break
+      case 'FIXED':
+        // Fixed salary doesn't add per-class cost
+        instructorCost = 0
+        break
+    }
     
     // Function to check availability for a specific date
     const checkAvailability = async (date: Date, courtId: string) => {
@@ -280,6 +326,7 @@ export async function POST(request: NextRequest) {
     const baseClassData = {
       clubId,
       instructorId: body.instructorId,
+      instructorName: instructor.name,
       name: body.name,
       description: body.description || null,
       type: body.type || 'GROUP',
@@ -291,6 +338,8 @@ export async function POST(request: NextRequest) {
       maxStudents: body.maxStudents || 8,
       currentStudents: 0,
       price: priceInCents,
+      courtCost,
+      instructorCost,
       currency: 'MXN',
       status: 'SCHEDULED',
       notes: body.notes || null,
@@ -459,9 +508,40 @@ export async function PUT(request: NextRequest) {
       )
     }
     
+    // Get club settings and instructor if needed
+    let instructor = null
+    let clubSettings = null
+    
+    if (body.instructorId !== undefined || body.price !== undefined || body.type !== undefined || 
+        body.startTime !== undefined || body.endTime !== undefined) {
+      clubSettings = await prisma.clubSettings.findFirst({
+        where: { clubId: session.clubId }
+      })
+    }
+    
     const updateData: any = {}
     
-    if (body.instructorId !== undefined) updateData.instructorId = body.instructorId
+    // Handle instructor change
+    if (body.instructorId !== undefined) {
+      instructor = await prisma.instructor.findFirst({
+        where: {
+          id: body.instructorId,
+          clubId: session.clubId,
+          active: true
+        }
+      })
+      
+      if (!instructor) {
+        return NextResponse.json(
+          { success: false, error: 'Instructor no encontrado' },
+          { status: 404 }
+        )
+      }
+      
+      updateData.instructorId = body.instructorId
+      updateData.instructorName = instructor.name
+    }
+    
     if (body.name !== undefined) updateData.name = body.name
     if (body.description !== undefined) updateData.description = body.description || null
     if (body.type !== undefined) updateData.type = body.type
@@ -472,9 +552,80 @@ export async function PUT(request: NextRequest) {
     if (body.endTime !== undefined) updateData.endTime = body.endTime
     if (body.courtId !== undefined) updateData.courtId = body.courtId || null
     if (body.maxStudents !== undefined) updateData.maxStudents = body.maxStudents
-    if (body.price !== undefined) {
-      updateData.price = Math.round(body.price * 100)
+    
+    // Handle price update and cost calculations
+    if (body.price !== undefined || body.type !== undefined || 
+        body.instructorId !== undefined || body.startTime !== undefined || body.endTime !== undefined) {
+      
+      // Determine price
+      let priceInCents = 0
+      if (body.price !== undefined) {
+        priceInCents = Math.round(body.price * 100)
+      } else if (body.type !== undefined && clubSettings) {
+        // Use new type's default price
+        switch (body.type) {
+          case 'GROUP':
+            priceInCents = clubSettings.groupClassPrice
+            break
+          case 'PRIVATE':
+            priceInCents = clubSettings.privateClassPrice
+            break
+          case 'SEMI_PRIVATE':
+            priceInCents = clubSettings.semiPrivateClassPrice
+            break
+        }
+      } else {
+        // Keep existing price
+        priceInCents = existingClass.price
+      }
+      
+      updateData.price = priceInCents
+      
+      // Calculate duration
+      const startTime = body.startTime || existingClass.startTime
+      const endTime = body.endTime || existingClass.endTime
+      const [startHour, startMin] = startTime.split(':').map(Number)
+      const [endHour, endMin] = endTime.split(':').map(Number)
+      const duration = (endHour * 60 + endMin) - (startHour * 60 + startMin)
+      updateData.duration = duration
+      
+      // Calculate court cost
+      const courtCostPerHour = clubSettings?.defaultCourtCostPerHour || 30000
+      updateData.courtCost = Math.round((courtCostPerHour * duration) / 60)
+      
+      // Calculate instructor cost if instructor changed
+      if (instructor || body.startTime !== undefined || body.endTime !== undefined) {
+        // Get instructor info if not already fetched
+        if (!instructor && existingClass.instructorId) {
+          instructor = await prisma.instructor.findFirst({
+            where: { id: existingClass.instructorId }
+          })
+        }
+        
+        if (instructor) {
+          let instructorCost = 0
+          const durationInHours = duration / 60
+          
+          switch (instructor.paymentType) {
+            case 'HOURLY':
+              instructorCost = Math.round(instructor.hourlyRate * durationInHours)
+              break
+            case 'COMMISSION':
+              instructorCost = Math.round((priceInCents * instructor.commissionPercent) / 100)
+              break
+            case 'MIXED':
+              instructorCost = Math.round((priceInCents * instructor.commissionPercent) / 100)
+              break
+            case 'FIXED':
+              instructorCost = 0
+              break
+          }
+          
+          updateData.instructorCost = instructorCost
+        }
+      }
     }
+    
     if (body.notes !== undefined) updateData.notes = body.notes || null
     if (body.requirements !== undefined) updateData.requirements = body.requirements || null
     if (body.materials !== undefined) updateData.materials = body.materials || null
