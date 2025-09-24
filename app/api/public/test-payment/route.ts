@@ -1,0 +1,68 @@
+import { NextRequest, NextResponse } from 'next/server'
+import { prisma } from '@/lib/config/prisma'
+
+export async function GET(request: NextRequest) {
+  try {
+    const { searchParams } = new URL(request.url)
+    const bookingId = searchParams.get('bookingId') || '9b799d4a-b6b4-499b-a879-f1f686091425'
+    
+    // Test database connection
+    const dbTest = await prisma.$queryRaw`SELECT NOW()`
+    
+    // Try to find the booking
+    const booking = await prisma.booking.findUnique({
+      where: { id: bookingId },
+      include: {
+        Club: true,
+        Court: true
+      }
+    })
+    
+    // Check payment providers
+    let paymentProvider = null
+    if (booking) {
+      paymentProvider = await prisma.paymentProvider.findFirst({
+        where: {
+          clubId: booking.clubId,
+          providerId: 'stripe',
+          enabled: true
+        }
+      })
+    }
+    
+    return NextResponse.json({
+      success: true,
+      timestamp: new Date().toISOString(),
+      environment: process.env.NODE_ENV,
+      database: {
+        connected: true,
+        test: dbTest
+      },
+      booking: booking ? {
+        found: true,
+        id: booking.id,
+        playerName: booking.playerName,
+        clubId: booking.clubId,
+        clubName: booking.Club?.name,
+        price: booking.price,
+        paymentStatus: booking.paymentStatus
+      } : {
+        found: false,
+        bookingId
+      },
+      stripeConfig: {
+        hasProvider: !!paymentProvider,
+        enabled: paymentProvider?.enabled,
+        hasConfig: !!paymentProvider?.config
+      }
+    })
+    
+  } catch (error: any) {
+    return NextResponse.json({
+      success: false,
+      error: error.message,
+      stack: process.env.NODE_ENV === 'development' ? error.stack : undefined,
+      timestamp: new Date().toISOString()
+    }, { status: 500 })
+  }
+}

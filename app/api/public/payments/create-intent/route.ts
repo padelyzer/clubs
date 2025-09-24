@@ -5,9 +5,13 @@ import { withRateLimit } from '@/lib/rate-limit'
 
 export async function POST(request: NextRequest) {
   try {
+    console.log('[PUBLIC PAYMENT] Request received')
+    console.log('[PUBLIC PAYMENT] Headers:', Object.fromEntries(request.headers.entries()))
+    
     // Apply rate limiting for payment operations
     const rateLimitResponse = await withRateLimit(request, 'api')
     if (rateLimitResponse) {
+      console.log('[PUBLIC PAYMENT] Rate limited')
       return rateLimitResponse
     }
 
