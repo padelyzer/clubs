@@ -563,13 +563,60 @@ function InstructorsContent() {
               </div>
               
               <div className="flex gap-4">
-                <ButtonModern
+                <button
                   type="submit"
-                  variant="primary"
-                  className="flex-1"
+                  style={{
+                    flex: 1,
+                    padding: '12px 24px',
+                    background: 'linear-gradient(135deg, #A4DF4E, #66E7AA)',
+                    border: 'none',
+                    borderRadius: '12px',
+                    color: '#182A01',
+                    fontSize: '15px',
+                    fontWeight: 600,
+                    cursor: 'pointer',
+                    transition: 'all 0.2s ease',
+                    position: 'relative',
+                    overflow: 'hidden'
+                  }}
+                  onMouseEnter={(e) => {
+                    const btn = e.currentTarget;
+                    btn.style.transform = 'translateY(-1px)';
+                    btn.style.boxShadow = '0 4px 12px rgba(164, 223, 78, 0.3)';
+                    // Crear overlay sutil
+                    const overlay = btn.querySelector('.hover-overlay') as HTMLElement;
+                    if (overlay) {
+                      overlay.style.opacity = '0.1';
+                    }
+                  }}
+                  onMouseLeave={(e) => {
+                    const btn = e.currentTarget;
+                    btn.style.transform = 'translateY(0)';
+                    btn.style.boxShadow = 'none';
+                    const overlay = btn.querySelector('.hover-overlay') as HTMLElement;
+                    if (overlay) {
+                      overlay.style.opacity = '0';
+                    }
+                  }}
                 >
-                  {editingInstructor ? 'Actualizar' : 'Crear'} Instructor
-                </ButtonModern>
+                  <div 
+                    className="hover-overlay"
+                    style={{
+                      position: 'absolute',
+                      top: 0,
+                      left: 0,
+                      right: 0,
+                      bottom: 0,
+                      background: 'rgba(0, 0, 0, 0.1)',
+                      opacity: 0,
+                      transition: 'opacity 0.2s ease',
+                      pointerEvents: 'none'
+                    }}
+                  />
+                  <span style={{ position: 'relative', zIndex: 1 }}>
+                    {editingInstructor ? 'Actualizar' : 'Crear'} Instructor
+                  </span>
+                </button>
                 <ButtonModern
                   type="button"
                   variant="secondary"
