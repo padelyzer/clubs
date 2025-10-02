@@ -299,18 +299,20 @@ function InstructorsContent() {
             <Users className="h-5 w-5" />
             Gestión de Instructores
           </CardModernTitle>
-          <ButtonModern
-            variant="primary"
-            size="sm"
-            onClick={() => {
-              setEditingInstructor(null)
-              resetForm()
-              setShowForm(true)
-            }}
-          >
-            <Plus className="h-4 w-4" />
-            Agregar Instructor
-          </ButtonModern>
+          {instructors.length > 0 && (
+            <ButtonModern
+              variant="primary"
+              size="sm"
+              onClick={() => {
+                setEditingInstructor(null)
+                resetForm()
+                setShowForm(true)
+              }}
+            >
+              <Plus className="h-4 w-4" />
+              Agregar Instructor
+            </ButtonModern>
+          )}
         </CardModernHeader>
         
         <CardModernContent>
@@ -612,6 +614,20 @@ function InstructorsContent() {
                   </div>
                 </div>
 
+                {/* CTA Button */}
+                <ButtonModern
+                  variant="primary"
+                  size="md"
+                  onClick={() => {
+                    setEditingInstructor(null)
+                    resetForm()
+                    setShowForm(true)
+                  }}
+                  style={{ marginTop: '12px' }}
+                >
+                  <Plus size={18} />
+                  Agregar mi primer instructor
+                </ButtonModern>
               </div>
             )}
           </div>
