@@ -419,10 +419,40 @@ function InstructorsContent() {
 
       {/* Form Modal */}
       {showForm && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-          <div className="bg-white rounded-lg p-6 max-w-2xl w-full max-h-[90vh] overflow-y-auto">
-            <div className="flex justify-between items-center mb-4">
-              <h2 className="text-xl font-semibold">
+        <div style={{
+          position: 'fixed',
+          inset: 0,
+          background: 'rgba(0, 0, 0, 0.5)',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          zIndex: 50,
+          backdropFilter: 'blur(4px)'
+        }}>
+          <div style={{
+            background: 'rgba(255, 255, 255, 0.98)',
+            borderRadius: '20px',
+            padding: '32px',
+            maxWidth: '600px',
+            width: '90%',
+            maxHeight: '90vh',
+            overflowY: 'auto',
+            boxShadow: '0 20px 60px rgba(0, 0, 0, 0.15), 0 0 0 1px rgba(0, 0, 0, 0.05)',
+            border: '1px solid rgba(164, 223, 78, 0.1)'
+          }}>
+            <div style={{
+              display: 'flex',
+              justifyContent: 'space-between',
+              alignItems: 'center',
+              marginBottom: '24px'
+            }}>
+              <h2 style={{
+                fontSize: '24px',
+                fontWeight: 700,
+                color: '#182A01',
+                margin: 0,
+                letterSpacing: '-0.02em'
+              }}>
                 {editingInstructor ? 'Editar Instructor' : 'Nuevo Instructor'}
               </h2>
               <button
@@ -430,14 +460,31 @@ function InstructorsContent() {
                   setShowForm(false)
                   setEditingInstructor(null)
                 }}
-                className="text-gray-400 hover:text-gray-600"
+                style={{
+                  background: 'rgba(0, 0, 0, 0.05)',
+                  border: 'none',
+                  borderRadius: '12px',
+                  width: '36px',
+                  height: '36px',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  cursor: 'pointer',
+                  transition: 'all 0.2s'
+                }}
+                onMouseEnter={(e) => {
+                  e.currentTarget.style.background = 'rgba(0, 0, 0, 0.1)'
+                }}
+                onMouseLeave={(e) => {
+                  e.currentTarget.style.background = 'rgba(0, 0, 0, 0.05)'
+                }}
               >
-                <X className="h-6 w-6" />
+                <X size={20} style={{ color: '#516640' }} />
               </button>
             </div>
             
-            <form onSubmit={handleSubmit} className="space-y-4">
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: '16px' }}>
                 <InputModern
                   label="Nombre"
                   value={formData.name}
@@ -459,14 +506,40 @@ function InstructorsContent() {
                   onChange={(e) => setFormData({ ...formData, email: e.target.value })}
                 />
                 
-                <div className="space-y-2">
-                  <label className="block text-sm font-medium text-gray-700">
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                  <label style={{
+                    fontSize: '12px',
+                    fontWeight: 600,
+                    color: '#516640',
+                    textTransform: 'uppercase',
+                    letterSpacing: '0.05em'
+                  }}>
                     Tipo de pago
                   </label>
                   <select
-                    className="w-full px-3 py-2 border rounded-md"
+                    style={{
+                      width: '100%',
+                      padding: '12px 16px',
+                      borderRadius: '12px',
+                      border: '1px solid rgba(164, 223, 78, 0.3)',
+                      background: 'white',
+                      fontSize: '14px',
+                      color: '#182A01',
+                      fontWeight: 500,
+                      outline: 'none',
+                      transition: 'all 0.2s',
+                      cursor: 'pointer'
+                    }}
                     value={formData.paymentType}
                     onChange={(e) => setFormData({ ...formData, paymentType: e.target.value as any })}
+                    onFocus={(e) => {
+                      e.currentTarget.style.borderColor = '#A4DF4E'
+                      e.currentTarget.style.boxShadow = '0 0 0 3px rgba(164, 223, 78, 0.1)'
+                    }}
+                    onBlur={(e) => {
+                      e.currentTarget.style.borderColor = 'rgba(164, 223, 78, 0.3)'
+                      e.currentTarget.style.boxShadow = 'none'
+                    }}
                   >
                     {Object.entries(paymentTypes).map(([value, label]) => (
                       <option key={value} value={value}>{label}</option>
@@ -509,23 +582,56 @@ function InstructorsContent() {
                 )}
               </div>
               
-              <div className="space-y-2">
-                <label className="block text-sm font-medium text-gray-700">
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                <label style={{
+                  fontSize: '12px',
+                  fontWeight: 600,
+                  color: '#516640',
+                  textTransform: 'uppercase',
+                  letterSpacing: '0.05em'
+                }}>
                   Biografía
                 </label>
                 <textarea
-                  className="w-full px-3 py-2 border rounded-md"
+                  style={{
+                    width: '100%',
+                    padding: '12px 16px',
+                    borderRadius: '12px',
+                    border: '1px solid rgba(164, 223, 78, 0.3)',
+                    background: 'white',
+                    fontSize: '14px',
+                    color: '#182A01',
+                    fontWeight: 400,
+                    outline: 'none',
+                    transition: 'all 0.2s',
+                    resize: 'vertical',
+                    minHeight: '80px'
+                  }}
                   rows={3}
                   value={formData.bio}
                   onChange={(e) => setFormData({ ...formData, bio: e.target.value })}
+                  onFocus={(e) => {
+                    e.currentTarget.style.borderColor = '#A4DF4E'
+                    e.currentTarget.style.boxShadow = '0 0 0 3px rgba(164, 223, 78, 0.1)'
+                  }}
+                  onBlur={(e) => {
+                    e.currentTarget.style.borderColor = 'rgba(164, 223, 78, 0.3)'
+                    e.currentTarget.style.boxShadow = 'none'
+                  }}
                 />
               </div>
               
-              <div className="space-y-2">
-                <label className="block text-sm font-medium text-gray-700">
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                <label style={{
+                  fontSize: '12px',
+                  fontWeight: 600,
+                  color: '#516640',
+                  textTransform: 'uppercase',
+                  letterSpacing: '0.05em'
+                }}>
                   Especialidades
                 </label>
-                <div className="flex gap-2">
+                <div style={{ display: 'flex', gap: '8px' }}>
                   <InputModern
                     value={newSpecialty}
                     onChange={(e) => setNewSpecialty(e.target.value)}
@@ -546,23 +652,50 @@ function InstructorsContent() {
                     <Plus className="h-4 w-4" />
                   </ButtonModern>
                 </div>
-                <div className="flex flex-wrap gap-2">
+                <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px', marginTop: '8px' }}>
                   {formData.specialties.map((specialty, index) => (
-                    <span key={index} className="px-2 py-1 bg-blue-100 text-blue-800 rounded-full text-sm flex items-center gap-1">
+                    <span key={index} style={{
+                      padding: '6px 12px',
+                      background: 'linear-gradient(135deg, #A4DF4E, #66E7AA)',
+                      borderRadius: '20px',
+                      fontSize: '13px',
+                      fontWeight: 600,
+                      color: '#182A01',
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: '6px'
+                    }}>
                       {specialty}
                       <button
                         type="button"
                         onClick={() => removeSpecialty(index)}
-                        className="hover:text-blue-900"
+                        style={{
+                          background: 'rgba(0, 0, 0, 0.1)',
+                          border: 'none',
+                          borderRadius: '50%',
+                          width: '16px',
+                          height: '16px',
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                          cursor: 'pointer',
+                          transition: 'all 0.2s'
+                        }}
+                        onMouseEnter={(e) => {
+                          e.currentTarget.style.background = 'rgba(0, 0, 0, 0.2)'
+                        }}
+                        onMouseLeave={(e) => {
+                          e.currentTarget.style.background = 'rgba(0, 0, 0, 0.1)'
+                        }}
                       >
-                        <X className="h-3 w-3" />
+                        <X size={10} style={{ color: '#182A01' }} />
                       </button>
                     </span>
                   ))}
                 </div>
               </div>
               
-              <div className="flex gap-4">
+              <div style={{ display: 'flex', gap: '12px', marginTop: '24px' }}>
                 <button
                   type="submit"
                   style={{

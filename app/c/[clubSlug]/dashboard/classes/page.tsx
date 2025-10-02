@@ -391,10 +391,22 @@ function ClassesContent() {
           }
         }
       } else {
-        notify.error({
-          title: 'Error',
-          message: data.error || 'Error al crear clase'
-        })
+        // Check if it's a configuration error
+        if (data.requiresConfiguration && data.configurationType === 'courts') {
+          notify.error({
+            title: 'Configuración requerida',
+            message: data.error,
+            action: {
+              label: 'Configurar canchas',
+              onClick: () => router.push(`/c/${clubSlug}/dashboard/settings/courts`)
+            }
+          })
+        } else {
+          notify.error({
+            title: 'Error',
+            message: data.error || 'Error al crear clase'
+          })
+        }
       }
     } catch (error) {
       console.error('Error creating class:', error)
@@ -871,6 +883,37 @@ function ClassesContent() {
             </div>
           </div>
         </div>
+
+        {/* Alert if no courts configured */}
+        {courts.length === 0 && (
+          <div style={{
+            padding: '16px 20px',
+            background: 'rgba(251, 191, 36, 0.1)',
+            border: '1px solid rgba(251, 191, 36, 0.3)',
+            borderRadius: '12px',
+            marginBottom: '24px',
+            display: 'flex',
+            alignItems: 'center',
+            gap: '12px'
+          }}>
+            <AlertCircle size={20} style={{ color: '#f59e0b' }} />
+            <div style={{ flex: 1 }}>
+              <div style={{ fontSize: '14px', fontWeight: 600, color: '#92400e', marginBottom: '4px' }}>
+                No hay canchas configuradas
+              </div>
+              <div style={{ fontSize: '13px', color: '#78350f' }}>
+                Debes configurar las canchas antes de poder crear clases.
+              </div>
+            </div>
+            <ButtonModern
+              variant="secondary"
+              onClick={() => router.push(`/c/${clubSlug}/dashboard/settings/courts`)}
+              style={{ flexShrink: 0 }}
+            >
+              Configurar canchas
+            </ButtonModern>
+          </div>
+        )}
 
         {/* Stats Cards */}
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '20px', marginBottom: '24px' }}>

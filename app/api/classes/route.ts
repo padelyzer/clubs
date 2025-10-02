@@ -166,29 +166,21 @@ export async function POST(request: NextRequest) {
     
     // Verify court exists if provided
     if (body.courtId) {
-      // First check if any courts exist, if not create defaults
-      const courtCount = await prisma.court.count()
+      // Check if any courts exist for this club
+      const courtCount = await prisma.court.count({
+        where: { clubId: clubId }
+      })
       
       if (courtCount === 0) {
-        // Create default courts
-        const defaultCourts = [
-          { id: 'court-1', name: 'Cancha 1', type: 'PADEL' },
-          { id: 'court-2', name: 'Cancha 2', type: 'PADEL' },
-          { id: 'court-3', name: 'Cancha 3', type: 'PADEL' }
-        ]
-        
-        for (const courtData of defaultCourts) {
-          await prisma.court.create({
-            data: {
-              id: courtData.id,
-              clubId,
-              name: courtData.name,
-              type: courtData.type,
-              active: true,
-              settings: {}
-            }
-          })
-        }
+        return NextResponse.json(
+          { 
+            success: false, 
+            error: 'No hay canchas configuradas en el sistema. Por favor, configure las canchas en la sección de Configuración antes de crear clases.',
+            requiresConfiguration: true,
+            configurationType: 'courts'
+          },
+          { status: 400 }
+        )
       }
       
       const court = await prisma.court.findFirst({
@@ -201,7 +193,7 @@ export async function POST(request: NextRequest) {
       
       if (!court) {
         return NextResponse.json(
-          { success: false, error: 'Cancha no encontrada' },
+          { success: false, error: 'Cancha no encontrada o no está activa' },
           { status: 404 }
         )
       }
@@ -237,7 +229,7 @@ export async function POST(request: NextRequest) {
     const duration = (endHour * 60 + endMin) - (startHour * 60 + startMin)
     
     // Calculate court cost
-    const courtCostPerHour = clubSettings?.defaultCourtCostPerHour || 30000 // Default 300 pesos
+    const courtCostPerHour = clubSettings?.defaultCourtCostPerHour || 0
     const courtCost = Math.round((courtCostPerHour * duration) / 60)
     
     // Calculate instructor cost based on payment type
@@ -340,7 +332,7 @@ export async function POST(request: NextRequest) {
       endTime: body.endTime,
       duration,
       courtId: body.courtId || null,
-      maxStudents: body.maxStudents || 8,
+      maxStudents: body.maxStudents || clubSettings?.defaultMaxStudents || 8,
       currentStudents: 0,
       price: priceInCents,
       courtCost,
@@ -366,7 +358,7 @@ export async function POST(request: NextRequest) {
         const [y, m, d] = pattern.endDate.split('-').map(Number)
         return new Date(y, m - 1, d)
       })() : null
-      const occurrences = pattern.occurrences || 12 // Default 12 occurrences
+      const occurrences = pattern.occurrences || clubSettings?.defaultClassRecurrences || 12
       
       let currentDate = startDate
       let count = 0
@@ -595,7 +587,7 @@ export async function PUT(request: NextRequest) {
       updateData.duration = duration
       
       // Calculate court cost
-      const courtCostPerHour = clubSettings?.defaultCourtCostPerHour || 30000
+      const courtCostPerHour = clubSettings?.defaultCourtCostPerHour || 0
       updateData.courtCost = Math.round((courtCostPerHour * duration) / 60)
       
       // Calculate instructor cost if instructor changed

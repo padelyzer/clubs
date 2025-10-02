@@ -204,6 +204,7 @@ model ClubSettings {
   requirePaymentUpfront    Boolean  @default(false)
   classBookingAdvanceDays  Int      @default(30)
   classCancellationHours   Int      @default(24) // Horas antes para cancelar
+  defaultClassRecurrences  Int      @default(12) // Número de ocurrencias por defecto para clases recurrentes
   
   Club                Club     @relation(fields: [clubId], references: [id], onDelete: Cascade)
 
