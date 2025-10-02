@@ -409,8 +409,209 @@ function InstructorsContent() {
             ))}
             
             {instructors.length === 0 && (
-              <div className="text-center py-8 text-gray-500">
-                No hay instructores registrados
+              <div style={{
+                padding: '60px 40px',
+                textAlign: 'center',
+                display: 'flex',
+                flexDirection: 'column',
+                alignItems: 'center',
+                gap: '24px'
+              }}>
+                {/* Icon */}
+                <div style={{
+                  width: '80px',
+                  height: '80px',
+                  background: 'linear-gradient(135deg, rgba(164, 223, 78, 0.1), rgba(102, 231, 170, 0.1))',
+                  borderRadius: '24px',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  marginBottom: '8px'
+                }}>
+                  <Users size={40} style={{ color: '#A4DF4E' }} />
+                </div>
+
+                {/* Welcome Message */}
+                <div>
+                  <h3 style={{
+                    fontSize: '24px',
+                    fontWeight: 700,
+                    color: '#182A01',
+                    marginBottom: '12px',
+                    letterSpacing: '-0.02em'
+                  }}>
+                    Bienvenido al módulo de Instructores
+                  </h3>
+                  <p style={{
+                    fontSize: '16px',
+                    color: '#516640',
+                    maxWidth: '500px',
+                    lineHeight: '1.6',
+                    margin: '0 auto'
+                  }}>
+                    Aquí podrás gestionar a todos los instructores de tu club, configurar sus tarifas y especialidades.
+                  </p>
+                </div>
+
+                {/* Quick Guide */}
+                <div style={{
+                  background: 'rgba(164, 223, 78, 0.05)',
+                  borderRadius: '16px',
+                  padding: '24px',
+                  maxWidth: '600px',
+                  width: '100%',
+                  textAlign: 'left'
+                }}>
+                  <h4 style={{
+                    fontSize: '14px',
+                    fontWeight: 600,
+                    color: '#182A01',
+                    marginBottom: '16px',
+                    textTransform: 'uppercase',
+                    letterSpacing: '0.05em'
+                  }}>
+                    ¿Cómo empezar?
+                  </h4>
+                  
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+                    <div style={{ display: 'flex', gap: '12px', alignItems: 'flex-start' }}>
+                      <div style={{
+                        width: '24px',
+                        height: '24px',
+                        borderRadius: '50%',
+                        background: 'linear-gradient(135deg, #A4DF4E, #66E7AA)',
+                        color: '#182A01',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        fontSize: '12px',
+                        fontWeight: 700,
+                        flexShrink: 0
+                      }}>
+                        1
+                      </div>
+                      <div>
+                        <div style={{ fontSize: '14px', fontWeight: 600, color: '#182A01', marginBottom: '4px' }}>
+                          Agrega tu primer instructor
+                        </div>
+                        <div style={{ fontSize: '13px', color: '#516640' }}>
+                          Haz clic en el botón "Agregar Instructor" para registrar los datos básicos
+                        </div>
+                      </div>
+                    </div>
+
+                    <div style={{ display: 'flex', gap: '12px', alignItems: 'flex-start' }}>
+                      <div style={{
+                        width: '24px',
+                        height: '24px',
+                        borderRadius: '50%',
+                        background: 'linear-gradient(135deg, #A4DF4E, #66E7AA)',
+                        color: '#182A01',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        fontSize: '12px',
+                        fontWeight: 700,
+                        flexShrink: 0
+                      }}>
+                        2
+                      </div>
+                      <div>
+                        <div style={{ fontSize: '14px', fontWeight: 600, color: '#182A01', marginBottom: '4px' }}>
+                          Configura el método de pago
+                        </div>
+                        <div style={{ fontSize: '13px', color: '#516640' }}>
+                          Define si el instructor cobra por hora, salario fijo, comisión o mixto
+                        </div>
+                      </div>
+                    </div>
+
+                    <div style={{ display: 'flex', gap: '12px', alignItems: 'flex-start' }}>
+                      <div style={{
+                        width: '24px',
+                        height: '24px',
+                        borderRadius: '50%',
+                        background: 'linear-gradient(135deg, #A4DF4E, #66E7AA)',
+                        color: '#182A01',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        fontSize: '12px',
+                        fontWeight: 700,
+                        flexShrink: 0
+                      }}>
+                        3
+                      </div>
+                      <div>
+                        <div style={{ fontSize: '14px', fontWeight: 600, color: '#182A01', marginBottom: '4px' }}>
+                          Asigna clases
+                        </div>
+                        <div style={{ fontSize: '13px', color: '#516640' }}>
+                          Una vez creado, podrás asignar al instructor a las clases desde el módulo de Clases
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Benefits */}
+                <div style={{
+                  display: 'grid',
+                  gridTemplateColumns: 'repeat(3, 1fr)',
+                  gap: '20px',
+                  maxWidth: '600px',
+                  width: '100%',
+                  marginTop: '12px'
+                }}>
+                  <div style={{
+                    textAlign: 'center',
+                    padding: '16px',
+                    background: 'white',
+                    borderRadius: '12px',
+                    border: '1px solid rgba(164, 223, 78, 0.2)'
+                  }}>
+                    <DollarSign size={24} style={{ color: '#A4DF4E', marginBottom: '8px' }} />
+                    <div style={{ fontSize: '13px', fontWeight: 600, color: '#182A01' }}>
+                      Control de pagos
+                    </div>
+                    <div style={{ fontSize: '12px', color: '#516640', marginTop: '4px' }}>
+                      Gestiona tarifas y comisiones
+                    </div>
+                  </div>
+
+                  <div style={{
+                    textAlign: 'center',
+                    padding: '16px',
+                    background: 'white',
+                    borderRadius: '12px',
+                    border: '1px solid rgba(164, 223, 78, 0.2)'
+                  }}>
+                    <Award size={24} style={{ color: '#A4DF4E', marginBottom: '8px' }} />
+                    <div style={{ fontSize: '13px', fontWeight: 600, color: '#182A01' }}>
+                      Especialidades
+                    </div>
+                    <div style={{ fontSize: '12px', color: '#516640', marginTop: '4px' }}>
+                      Define áreas de expertise
+                    </div>
+                  </div>
+
+                  <div style={{
+                    textAlign: 'center',
+                    padding: '16px',
+                    background: 'white',
+                    borderRadius: '12px',
+                    border: '1px solid rgba(164, 223, 78, 0.2)'
+                  }}>
+                    <UserCheck size={24} style={{ color: '#A4DF4E', marginBottom: '8px' }} />
+                    <div style={{ fontSize: '13px', fontWeight: 600, color: '#182A01' }}>
+                      Gestión fácil
+                    </div>
+                    <div style={{ fontSize: '12px', color: '#516640', marginTop: '4px' }}>
+                      Activa o desactiva según necesites
+                    </div>
+                  </div>
+                </div>
+
               </div>
             )}
           </div>
