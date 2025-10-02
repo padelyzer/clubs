@@ -1,0 +1,138 @@
+/* Instructor Card Styles */
+.instructorCard {
+  background: white;
+  border-radius: 16px;
+  padding: 24px;
+  border: 1px solid rgba(164, 223, 78, 0.15);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.04);
+  transition: all 0.3s ease;
+  cursor: pointer;
+}
+
+.instructorCard:hover {
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.08);
+  transform: translateY(-2px);
+}
+
+.cardContent {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+}
+
+.mainContent {
+  flex: 1;
+}
+
+.header {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 16px;
+}
+
+.instructorName {
+  font-size: 20px;
+  font-weight: 700;
+  color: #182A01;
+  margin: 0;
+  letter-spacing: -0.02em;
+}
+
+.statusBadge {
+  padding: 4px 12px;
+  border-radius: 20px;
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.activeStatus {
+  background: linear-gradient(135deg, rgba(164, 223, 78, 0.2), rgba(102, 231, 170, 0.2));
+  color: #16a34a;
+}
+
+.inactiveStatus {
+  background: rgba(239, 68, 68, 0.1);
+  color: #dc2626;
+}
+
+.infoGrid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 12px;
+  margin-bottom: 16px;
+}
+
+.infoItem {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.infoIcon {
+  color: #516640;
+  flex-shrink: 0;
+}
+
+.infoText {
+  font-size: 14px;
+  color: #516640;
+}
+
+.bio {
+  font-size: 14px;
+  color: #516640;
+  line-height: 1.6;
+  margin: 0 0 12px 0;
+}
+
+.specialtiesContainer {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 12px;
+}
+
+.specialtyBadge {
+  padding: 4px 12px;
+  background: linear-gradient(135deg, rgba(164, 223, 78, 0.15), rgba(102, 231, 170, 0.15));
+  border-radius: 20px;
+  font-size: 12px;
+  font-weight: 600;
+  color: #182A01;
+}
+
+.actions {
+  display: flex;
+  gap: 8px;
+  margin-left: 20px;
+}
+
+.actionButton {
+  width: 36px;
+  height: 36px;
+  border-radius: 10px;
+  border: none;
+  background: rgba(0, 0, 0, 0.05);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.actionButton:hover {
+  background: rgba(0, 0, 0, 0.1);
+}
+
+.actionButton:nth-child(1):hover {
+  background: rgba(164, 223, 78, 0.1);
+}
+
+.actionButton:nth-child(2):hover {
+  background: rgba(164, 223, 78, 0.1);
+}
+
+.deleteButton:hover {
+  background: rgba(239, 68, 68, 0.1) !important;
+}

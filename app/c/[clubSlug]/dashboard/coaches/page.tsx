@@ -8,9 +8,10 @@ import { ButtonModern } from '@/components/design-system/ButtonModern'
 import { InputModern } from '@/components/design-system/InputModern'
 import { 
   Users, Plus, Edit, Trash2, Phone, Mail, DollarSign, 
-  Award, CheckCircle, XCircle, Loader2, X, UserCheck
+  Award, CheckCircle, XCircle, Loader2, X, UserCheck, ToggleLeft, ToggleRight, Edit3
 } from 'lucide-react'
 import { formatCurrency } from '@/lib/design-system/localization'
+import InstructorCard from './InstructorCard'
 
 type Instructor = {
   id: string
@@ -318,207 +319,15 @@ function InstructorsContent() {
         <CardModernContent>
           <div style={{ display: 'grid', gap: '20px' }}>
             {instructors.map((instructor) => (
-              <div 
+              <InstructorCard
                 key={instructor.id}
-                style={{
-                  background: 'white',
-                  borderRadius: '16px',
-                  padding: '24px',
-                  border: '1px solid rgba(164, 223, 78, 0.15)',
-                  boxShadow: '0 2px 8px rgba(0, 0, 0, 0.04)',
-                  transition: 'all 0.3s ease',
-                  cursor: 'pointer'
-                }}
-                onMouseEnter={(e) => {
-                  e.currentTarget.style.boxShadow = '0 8px 24px rgba(0, 0, 0, 0.08)'
-                  e.currentTarget.style.transform = 'translateY(-2px)'
-                }}
-                onMouseLeave={(e) => {
-                  e.currentTarget.style.boxShadow = '0 2px 8px rgba(0, 0, 0, 0.04)'
-                  e.currentTarget.style.transform = 'translateY(0)'
-                }}
-              >
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
-                  <div style={{ flex: 1 }}>
-                    {/* Header */}
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '16px' }}>
-                      <h3 style={{
-                        fontSize: '20px',
-                        fontWeight: 700,
-                        color: '#182A01',
-                        margin: 0,
-                        letterSpacing: '-0.02em'
-                      }}>
-                        {instructor.name}
-                      </h3>
-                      <span style={{
-                        padding: '4px 12px',
-                        borderRadius: '20px',
-                        fontSize: '12px',
-                        fontWeight: 600,
-                        background: instructor.active 
-                          ? 'linear-gradient(135deg, rgba(164, 223, 78, 0.2), rgba(102, 231, 170, 0.2))'
-                          : 'rgba(239, 68, 68, 0.1)',
-                        color: instructor.active ? '#16a34a' : '#dc2626'
-                      }}>
-                        {instructor.active ? 'Activo' : 'Inactivo'}
-                      </span>
-                    </div>
-                    
-                    {/* Contact & Payment Info */}
-                    <div style={{ 
-                      display: 'grid', 
-                      gridTemplateColumns: 'repeat(2, 1fr)', 
-                      gap: '12px',
-                      marginBottom: instructor.bio || instructor.specialties.length > 0 ? '16px' : '0'
-                    }}>
-                      <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                        <Phone size={16} style={{ color: '#516640' }} />
-                        <span style={{ fontSize: '14px', color: '#516640' }}>{instructor.phone}</span>
-                      </div>
-                      
-                      {instructor.email && (
-                        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                          <Mail size={16} style={{ color: '#516640' }} />
-                          <span style={{ fontSize: '14px', color: '#516640' }}>{instructor.email}</span>
-                        </div>
-                      )}
-                      
-                      <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                        <DollarSign size={16} style={{ color: '#516640' }} />
-                        <span style={{ fontSize: '14px', color: '#516640' }}>
-                          {paymentTypes[instructor.paymentType]}
-                          {instructor.paymentType === 'HOURLY' && ` - ${formatCurrency(instructor.hourlyRate / 100)}/hr`}
-                          {instructor.paymentType === 'FIXED' && ` - ${formatCurrency(instructor.fixedSalary / 100)}/mes`}
-                          {instructor.paymentType === 'COMMISSION' && ` - ${instructor.commissionPercent}%`}
-                          {instructor.paymentType === 'MIXED' && ` - ${formatCurrency(instructor.fixedSalary / 100)}/mes + ${instructor.commissionPercent}%`}
-                        </span>
-                      </div>
-                      
-                      <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                        <Award size={16} style={{ color: '#516640' }} />
-                        <span style={{ fontSize: '14px', color: '#516640' }}>
-                          {instructor.totalClasses || 0} clases impartidas
-                        </span>
-                      </div>
-                    </div>
-                    
-                    {/* Bio */}
-                    {instructor.bio && (
-                      <p style={{
-                        fontSize: '14px',
-                        color: '#516640',
-                        lineHeight: '1.6',
-                        marginBottom: instructor.specialties.length > 0 ? '12px' : '0',
-                        margin: 0
-                      }}>
-                        {instructor.bio}
-                      </p>
-                    )}
-                    
-                    {/* Specialties */}
-                    {instructor.specialties.length > 0 && (
-                      <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px', marginTop: '12px' }}>
-                        {instructor.specialties.map((specialty, index) => (
-                          <span key={index} style={{
-                            padding: '4px 12px',
-                            background: 'linear-gradient(135deg, rgba(164, 223, 78, 0.15), rgba(102, 231, 170, 0.15))',
-                            borderRadius: '20px',
-                            fontSize: '12px',
-                            fontWeight: 600,
-                            color: '#182A01'
-                          }}>
-                            {specialty}
-                          </span>
-                        ))}
-                      </div>
-                    )}
-                  </div>
-                  
-                  {/* Actions */}
-                  <div style={{ display: 'flex', gap: '8px', marginLeft: '20px' }}>
-                    <button
-                      onClick={() => handleToggleActive(instructor)}
-                      style={{
-                        width: '36px',
-                        height: '36px',
-                        borderRadius: '10px',
-                        border: 'none',
-                        background: 'rgba(0, 0, 0, 0.05)',
-                        display: 'flex',
-                        alignItems: 'center',
-                        justifyContent: 'center',
-                        cursor: 'pointer',
-                        transition: 'all 0.2s'
-                      }}
-                      onMouseEnter={(e) => {
-                        e.currentTarget.style.background = instructor.active 
-                          ? 'rgba(239, 68, 68, 0.1)' 
-                          : 'rgba(164, 223, 78, 0.1)'
-                      }}
-                      onMouseLeave={(e) => {
-                        e.currentTarget.style.background = 'rgba(0, 0, 0, 0.05)'
-                      }}
-                    >
-                      {instructor.active ? (
-                        <XCircle size={18} style={{ color: '#ef4444' }} />
-                      ) : (
-                        <CheckCircle size={18} style={{ color: '#16a34a' }} />
-                      )}
-                    </button>
-                    
-                    <button
-                      onClick={() => handleEdit(instructor)}
-                      style={{
-                        width: '36px',
-                        height: '36px',
-                        borderRadius: '10px',
-                        border: 'none',
-                        background: 'rgba(0, 0, 0, 0.05)',
-                        display: 'flex',
-                        alignItems: 'center',
-                        justifyContent: 'center',
-                        cursor: 'pointer',
-                        transition: 'all 0.2s'
-                      }}
-                      onMouseEnter={(e) => {
-                        e.currentTarget.style.background = 'rgba(164, 223, 78, 0.1)'
-                      }}
-                      onMouseLeave={(e) => {
-                        e.currentTarget.style.background = 'rgba(0, 0, 0, 0.05)'
-                      }}
-                    >
-                      <Edit size={18} style={{ color: '#516640' }} />
-                    </button>
-                    
-                    {instructor.totalClasses === 0 && (
-                      <button
-                        onClick={() => handleDelete(instructor.id)}
-                        style={{
-                          width: '36px',
-                          height: '36px',
-                          borderRadius: '10px',
-                          border: 'none',
-                          background: 'rgba(0, 0, 0, 0.05)',
-                          display: 'flex',
-                          alignItems: 'center',
-                          justifyContent: 'center',
-                          cursor: 'pointer',
-                          transition: 'all 0.2s'
-                        }}
-                        onMouseEnter={(e) => {
-                          e.currentTarget.style.background = 'rgba(239, 68, 68, 0.1)'
-                        }}
-                        onMouseLeave={(e) => {
-                          e.currentTarget.style.background = 'rgba(0, 0, 0, 0.05)'
-                        }}
-                      >
-                        <Trash2 size={18} style={{ color: '#ef4444' }} />
-                      </button>
-                    )}
-                  </div>
-                </div>
-              </div>
+                instructor={instructor}
+                paymentTypes={paymentTypes}
+                formatCurrency={formatCurrency}
+                handleToggleActive={handleToggleActive}
+                handleEdit={handleEdit}
+                handleDelete={(id) => handleDelete(id)}
+              />
             ))}
             
             {instructors.length === 0 && (
