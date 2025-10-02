@@ -316,60 +316,118 @@ function InstructorsContent() {
         </CardModernHeader>
         
         <CardModernContent>
-          <div className="grid gap-4">
+          <div style={{ display: 'grid', gap: '20px' }}>
             {instructors.map((instructor) => (
               <div 
                 key={instructor.id}
-                className="p-4 bg-white border rounded-lg hover:shadow-md transition-shadow"
+                style={{
+                  background: 'white',
+                  borderRadius: '16px',
+                  padding: '24px',
+                  border: '1px solid rgba(164, 223, 78, 0.15)',
+                  boxShadow: '0 2px 8px rgba(0, 0, 0, 0.04)',
+                  transition: 'all 0.3s ease',
+                  cursor: 'pointer'
+                }}
+                onMouseEnter={(e) => {
+                  e.currentTarget.style.boxShadow = '0 8px 24px rgba(0, 0, 0, 0.08)'
+                  e.currentTarget.style.transform = 'translateY(-2px)'
+                }}
+                onMouseLeave={(e) => {
+                  e.currentTarget.style.boxShadow = '0 2px 8px rgba(0, 0, 0, 0.04)'
+                  e.currentTarget.style.transform = 'translateY(0)'
+                }}
               >
-                <div className="flex items-start justify-between">
-                  <div className="flex-1">
-                    <div className="flex items-center gap-2 mb-2">
-                      <h3 className="font-semibold text-lg">{instructor.name}</h3>
-                      <span className={`px-2 py-1 text-xs rounded-full ${
-                        instructor.active 
-                          ? 'bg-green-100 text-green-800'
-                          : 'bg-red-100 text-red-800'
-                      }`}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+                  <div style={{ flex: 1 }}>
+                    {/* Header */}
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '16px' }}>
+                      <h3 style={{
+                        fontSize: '20px',
+                        fontWeight: 700,
+                        color: '#182A01',
+                        margin: 0,
+                        letterSpacing: '-0.02em'
+                      }}>
+                        {instructor.name}
+                      </h3>
+                      <span style={{
+                        padding: '4px 12px',
+                        borderRadius: '20px',
+                        fontSize: '12px',
+                        fontWeight: 600,
+                        background: instructor.active 
+                          ? 'linear-gradient(135deg, rgba(164, 223, 78, 0.2), rgba(102, 231, 170, 0.2))'
+                          : 'rgba(239, 68, 68, 0.1)',
+                        color: instructor.active ? '#16a34a' : '#dc2626'
+                      }}>
                         {instructor.active ? 'Activo' : 'Inactivo'}
                       </span>
                     </div>
                     
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-2 text-sm text-gray-600">
-                      <div className="flex items-center gap-2">
-                        <Phone className="h-4 w-4" />
-                        {instructor.phone}
+                    {/* Contact & Payment Info */}
+                    <div style={{ 
+                      display: 'grid', 
+                      gridTemplateColumns: 'repeat(2, 1fr)', 
+                      gap: '12px',
+                      marginBottom: instructor.bio || instructor.specialties.length > 0 ? '16px' : '0'
+                    }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                        <Phone size={16} style={{ color: '#516640' }} />
+                        <span style={{ fontSize: '14px', color: '#516640' }}>{instructor.phone}</span>
                       </div>
+                      
                       {instructor.email && (
-                        <div className="flex items-center gap-2">
-                          <Mail className="h-4 w-4" />
-                          {instructor.email}
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                          <Mail size={16} style={{ color: '#516640' }} />
+                          <span style={{ fontSize: '14px', color: '#516640' }}>{instructor.email}</span>
                         </div>
                       )}
-                      <div className="flex items-center gap-2">
-                        <DollarSign className="h-4 w-4" />
-                        <span>
+                      
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                        <DollarSign size={16} style={{ color: '#516640' }} />
+                        <span style={{ fontSize: '14px', color: '#516640' }}>
                           {paymentTypes[instructor.paymentType]}
-                          {instructor.paymentType === 'HOURLY' && ` - ${formatCurrency(instructor.hourlyRate)}/hr`}
-                          {instructor.paymentType === 'FIXED' && ` - ${formatCurrency(instructor.fixedSalary)}/mes`}
+                          {instructor.paymentType === 'HOURLY' && ` - ${formatCurrency(instructor.hourlyRate / 100)}/hr`}
+                          {instructor.paymentType === 'FIXED' && ` - ${formatCurrency(instructor.fixedSalary / 100)}/mes`}
                           {instructor.paymentType === 'COMMISSION' && ` - ${instructor.commissionPercent}%`}
-                          {instructor.paymentType === 'MIXED' && ` - ${formatCurrency(instructor.fixedSalary)}/mes + ${instructor.commissionPercent}%`}
+                          {instructor.paymentType === 'MIXED' && ` - ${formatCurrency(instructor.fixedSalary / 100)}/mes + ${instructor.commissionPercent}%`}
                         </span>
                       </div>
-                      <div className="flex items-center gap-2">
-                        <Award className="h-4 w-4" />
-                        {instructor.totalClasses || 0} clases impartidas
+                      
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                        <Award size={16} style={{ color: '#516640' }} />
+                        <span style={{ fontSize: '14px', color: '#516640' }}>
+                          {instructor.totalClasses || 0} clases impartidas
+                        </span>
                       </div>
                     </div>
                     
+                    {/* Bio */}
                     {instructor.bio && (
-                      <p className="mt-2 text-sm text-gray-600">{instructor.bio}</p>
+                      <p style={{
+                        fontSize: '14px',
+                        color: '#516640',
+                        lineHeight: '1.6',
+                        marginBottom: instructor.specialties.length > 0 ? '12px' : '0',
+                        margin: 0
+                      }}>
+                        {instructor.bio}
+                      </p>
                     )}
                     
+                    {/* Specialties */}
                     {instructor.specialties.length > 0 && (
-                      <div className="mt-2 flex flex-wrap gap-1">
+                      <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px', marginTop: '12px' }}>
                         {instructor.specialties.map((specialty, index) => (
-                          <span key={index} className="px-2 py-1 text-xs bg-blue-100 text-blue-800 rounded-full">
+                          <span key={index} style={{
+                            padding: '4px 12px',
+                            background: 'linear-gradient(135deg, rgba(164, 223, 78, 0.15), rgba(102, 231, 170, 0.15))',
+                            borderRadius: '20px',
+                            fontSize: '12px',
+                            fontWeight: 600,
+                            color: '#182A01'
+                          }}>
                             {specialty}
                           </span>
                         ))}
@@ -377,33 +435,86 @@ function InstructorsContent() {
                     )}
                   </div>
                   
-                  <div className="flex gap-2">
-                    <ButtonModern
-                      variant="ghost"
-                      size="sm"
+                  {/* Actions */}
+                  <div style={{ display: 'flex', gap: '8px', marginLeft: '20px' }}>
+                    <button
                       onClick={() => handleToggleActive(instructor)}
+                      style={{
+                        width: '36px',
+                        height: '36px',
+                        borderRadius: '10px',
+                        border: 'none',
+                        background: 'rgba(0, 0, 0, 0.05)',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        cursor: 'pointer',
+                        transition: 'all 0.2s'
+                      }}
+                      onMouseEnter={(e) => {
+                        e.currentTarget.style.background = instructor.active 
+                          ? 'rgba(239, 68, 68, 0.1)' 
+                          : 'rgba(164, 223, 78, 0.1)'
+                      }}
+                      onMouseLeave={(e) => {
+                        e.currentTarget.style.background = 'rgba(0, 0, 0, 0.05)'
+                      }}
                     >
                       {instructor.active ? (
-                        <XCircle className="h-4 w-4 text-red-600" />
+                        <XCircle size={18} style={{ color: '#ef4444' }} />
                       ) : (
-                        <CheckCircle className="h-4 w-4 text-green-600" />
+                        <CheckCircle size={18} style={{ color: '#16a34a' }} />
                       )}
-                    </ButtonModern>
-                    <ButtonModern
-                      variant="ghost"
-                      size="sm"
+                    </button>
+                    
+                    <button
                       onClick={() => handleEdit(instructor)}
+                      style={{
+                        width: '36px',
+                        height: '36px',
+                        borderRadius: '10px',
+                        border: 'none',
+                        background: 'rgba(0, 0, 0, 0.05)',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        cursor: 'pointer',
+                        transition: 'all 0.2s'
+                      }}
+                      onMouseEnter={(e) => {
+                        e.currentTarget.style.background = 'rgba(164, 223, 78, 0.1)'
+                      }}
+                      onMouseLeave={(e) => {
+                        e.currentTarget.style.background = 'rgba(0, 0, 0, 0.05)'
+                      }}
                     >
-                      <Edit className="h-4 w-4" />
-                    </ButtonModern>
+                      <Edit size={18} style={{ color: '#516640' }} />
+                    </button>
+                    
                     {instructor.totalClasses === 0 && (
-                      <ButtonModern
-                        variant="ghost"
-                        size="sm"
+                      <button
                         onClick={() => handleDelete(instructor.id)}
+                        style={{
+                          width: '36px',
+                          height: '36px',
+                          borderRadius: '10px',
+                          border: 'none',
+                          background: 'rgba(0, 0, 0, 0.05)',
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                          cursor: 'pointer',
+                          transition: 'all 0.2s'
+                        }}
+                        onMouseEnter={(e) => {
+                          e.currentTarget.style.background = 'rgba(239, 68, 68, 0.1)'
+                        }}
+                        onMouseLeave={(e) => {
+                          e.currentTarget.style.background = 'rgba(0, 0, 0, 0.05)'
+                        }}
                       >
-                        <Trash2 className="h-4 w-4 text-red-600" />
-                      </ButtonModern>
+                        <Trash2 size={18} style={{ color: '#ef4444' }} />
+                      </button>
                     )}
                   </div>
                 </div>
