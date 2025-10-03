@@ -1,203 +1,280 @@
 import { NextRequest, NextResponse } from 'next/server'
+import { requireAuthAPI } from '@/lib/auth/actions'
 import { prisma } from '@/lib/config/prisma'
-import { z } from 'zod'
 
-const updateTournamentSchema = z.object({
-  name: z.string().min(1).optional(),
-  description: z.string().optional(),
-  type: z.enum(['ELIMINATION', 'ROUND_ROBIN', 'SWISS']).optional(),
-  startDate: z.string().optional(),
-  endDate: z.string().optional(),
-  registrationEnd: z.string().optional(),
-  maxPlayers: z.number().min(2).max(128).optional(),
-  registrationFee: z.number().min(0).optional(),
-  currency: z.string().optional(),
-  status: z.enum(['DRAFT', 'REGISTRATION_OPEN', 'REGISTRATION_CLOSED', 'IN_PROGRESS', 'COMPLETED']).optional()
-})
-
-// GET - Get tournament by ID
 export async function GET(
-  request: NextRequest,
+  req: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    const { id: tournamentId } = await params
+    const paramData = await params
     
-    const tournament = await prisma.tournament.findUnique({
-      where: { id: tournamentId },
-      include: {
-        Club: true,
-        _count: {
-          select: {
-            TournamentRegistration: {
-              where: { confirmed: true }
-            }
-          }
-        }
-      }
-    })
+    const session = await requireAuthAPI()
     
-    if (!tournament) {
+    if (!session) {
       return NextResponse.json(
-        { success: false, error: 'Torneo no encontrado' },
-        { status: 404 }
+        { success: false, error: 'No autorizado' },
+        { status: 401 }
       )
     }
-    
-    return NextResponse.json({
-      success: true,
-      tournament
-    })
-    
-  } catch (error) {
-    console.error('Error fetching tournament:', error)
-    return NextResponse.json(
-      { success: false, error: 'Error al cargar torneo' },
-      { status: 500 }
-    )
-  }
-}
+    if (!session?.clubId) {
+      return NextResponse.json({ error: 'No autorizado' }, { status: 401 })
+    }
 
-// PUT - Update tournament
-export async function PUT(
-  request: NextRequest,
-  { params }: { params: Promise<{ id: string }> }
-) {
-  try {
     const { id: tournamentId } = await params
-    const body = await request.json()
-    
-    const validatedData = updateTournamentSchema.parse(body)
-    
-    // Get current tournament to check status
-    const currentTournament = await prisma.tournament.findUnique({
-      where: { id: tournamentId }
-    })
-    
-    if (!currentTournament) {
-      return NextResponse.json(
-        { success: false, error: 'Torneo no encontrado' },
-        { status: 404 }
-      )
-    }
-    
-    // Prevent certain changes if tournament is not in draft
-    if (currentTournament.status !== 'DRAFT' && validatedData.type) {
-      return NextResponse.json(
-        { success: false, error: 'No se puede cambiar el tipo de torneo una vez publicado' },
-        { status: 400 }
-      )
-    }
-    
-    // Convert date strings to Date objects if provided
-    const updateData: any = { ...validatedData }
-    if (validatedData.startDate) {
-      updateData.startDate = new Date(validatedData.startDate)
-    }
-    if (validatedData.endDate) {
-      updateData.endDate = new Date(validatedData.endDate)
-    }
-    if (validatedData.registrationEnd) {
-      updateData.registrationEnd = new Date(validatedData.registrationEnd)
-    }
-    
-    const updatedTournament = await prisma.tournament.update({
-      where: { id: tournamentId },
-      data: updateData,
-      include: {
-        club: {
-          include: {
-            settings: true
-          }
+
+
+    // Obtener datos del torneo con toda la información necesaria
+    const [tournament, registrations, matches, rounds] = await Promise.all([
+      // Información básica del torneo
+      prisma.tournament.findUnique({
+        where: { id: tournamentId }
+      }),
+      
+      // Registros de equipos
+      prisma.tournamentRegistration.findMany({
+        where: { 
+          tournamentId,
+          confirmed: true 
         },
-        _count: {
-          select: {
-            registrations: {
-              where: { confirmed: true }
-            }
-          }
+        select: {
+          id: true,
+          teamName: true,
+          player1Name: true,
+          player2Name: true,
+          category: true,
+          modality: true,
+          teamLevel: true,
+          paymentStatus: true,
+          checkedIn: true
         }
-      }
-    })
-    
-    return NextResponse.json({
-      success: true,
-      tournament: updatedTournament,
-      message: 'Torneo actualizado exitosamente'
-    })
-    
-  } catch (error) {
-    console.error('Error updating tournament:', error)
-    
-    if (error instanceof z.ZodError) {
+      }),
+      
+      // Partidos del torneo
+      prisma.tournamentMatch.findMany({
+        where: { tournamentId },
+        orderBy: [
+          { scheduledAt: 'asc' },
+          { courtNumber: 'asc' }
+        ]
+      }),
+      
+      // Rondas del torneo
+      prisma.tournamentRound.findMany({
+        where: { tournamentId },
+        orderBy: { createdAt: 'asc' }
+      })
+    ])
+
+    if (!tournament) {
       return NextResponse.json(
-        { success: false, error: 'Datos inválidos', details: error.issues },
-        { status: 400 }
+        { error: 'Torneo no encontrado' },
+        { status: 404 }
       )
     }
-    
+
+    // Obtener información del club
+    const club = await prisma.club.findUnique({
+      where: { id: tournament.clubId },
+      select: {
+        id: true,
+        name: true,
+        logo: true
+      }
+    })
+
+    // Procesar estadísticas
+    const stats = {
+      totalTeams: registrations.length,
+      totalMatches: matches.length,
+      completedMatches: matches.filter(m => m.status === 'completed' || m.status === 'COMPLETED').length,
+      pendingMatches: matches.filter(m => m.status === 'pending' || m.status === 'SCHEDULED').length,
+      inProgressMatches: matches.filter(m => m.status === 'in_progress' || m.status === 'IN_PROGRESS').length,
+      todayMatches: matches.filter(m => {
+        if (!m.scheduledAt) return false
+        const today = new Date()
+        const matchDate = new Date(m.scheduledAt)
+        return matchDate.toDateString() === today.toDateString()
+      }).length
+    }
+
+    // Agrupar equipos por categoría y modalidad
+    const categoriesMap = new Map()
+    registrations.forEach(reg => {
+      const key = `${reg.category}-${reg.modality}`
+      if (!categoriesMap.has(key)) {
+        categoriesMap.set(key, {
+          code: reg.category,
+          modality: reg.modality,
+          teams: [],
+          matches: []
+        })
+      }
+      categoriesMap.get(key).teams.push(reg)
+    })
+
+    // Agregar partidos a cada categoría
+    matches.forEach(match => {
+      const category = match.round?.split('-')[0] || ''
+      const modality = match.round?.includes('FEM') ? 'F' : 'M'
+      const key = `${category}-${modality}`
+      if (categoriesMap.has(key)) {
+        categoriesMap.get(key).matches.push(match)
+      }
+    })
+
+    // Convertir a array y calcular estado
+    const categories = Array.from(categoriesMap.values()).map(cat => {
+      const categoryMatches = cat.matches
+      const completed = categoryMatches.filter((m: any) => m.status === 'completed').length
+      const total = categoryMatches.length
+      
+      let status = 'pending'
+      if (completed === total && total > 0) {
+        status = 'completed'
+      } else if (completed > 0) {
+        status = 'active'
+      }
+
+      return {
+        code: cat.code,
+        modality: cat.modality,
+        name: getCategoryName(cat.code),
+        teams: cat.teams.length,
+        totalMatches: total,
+        completedMatches: completed,
+        status
+      }
+    })
+
+    // Obtener partidos actuales y próximos
+    const now = new Date()
+    const upcomingMatches = matches
+      .filter(m => (m.status === 'pending' || m.status === 'SCHEDULED') && m.scheduledAt)
+      .sort((a, b) => {
+        const dateA = new Date(a.scheduledAt!)
+        const dateB = new Date(b.scheduledAt!)
+        return dateA.getTime() - dateB.getTime()
+      })
+      .slice(0, 10)
+
+    const inProgressMatches = matches.filter(m => m.status === 'in_progress')
+
+    // Obtener disponibilidad de canchas
+    const courts = await prisma.court.findMany({
+      where: { clubId: tournament.clubId },
+      orderBy: { order: 'asc' }
+    })
+
+    const courtsStatus = await Promise.all(courts.map(async court => {
+      const currentMatch = matches.find(m => 
+        m.courtId === court.id && 
+        m.status === 'in_progress'
+      )
+      
+      const nextMatch = matches.find(m => 
+        m.courtId === court.id && 
+        m.status === 'pending' &&
+        m.scheduledAt
+      )
+
+      return {
+        id: court.id,
+        name: court.name,
+        number: court.order,
+        status: currentMatch ? 'busy' : nextMatch ? 'reserved' : 'available',
+        currentMatch,
+        nextMatch
+      }
+    }))
+
+    return NextResponse.json({
+      tournament: {
+        id: tournament.id,
+        name: tournament.name,
+        description: tournament.description,
+        status: tournament.status,
+        startDate: tournament.startDate,
+        endDate: tournament.endDate,
+        club: club
+      },
+      stats,
+      categories,
+      matches: {
+        inProgress: inProgressMatches,
+        upcoming: matches.filter(m => (m.status === 'pending' || m.status === 'SCHEDULED') && m.scheduledAt),
+        total: matches.length
+      },
+      courts: courtsStatus,
+      rounds
+    })
+
+  } catch (error) {
+    console.error('Error fetching tournament data:', error)
     return NextResponse.json(
-      { success: false, error: 'Error al actualizar torneo' },
+      { error: 'Error al obtener datos del torneo' },
       { status: 500 }
     )
   }
 }
 
-// DELETE - Delete tournament (only if in draft and no registrations)
-export async function DELETE(
-  request: NextRequest,
+// Función auxiliar para obtener el nombre de la categoría
+function getCategoryName(code: string): string {
+  const categories: Record<string, string> = {
+    '1F': 'Primera Fuerza',
+    '2F': 'Segunda Fuerza', 
+    '3F': 'Tercera Fuerza',
+    '4F': 'Cuarta Fuerza',
+    '5F': 'Quinta Fuerza',
+    '6F': 'Sexta Fuerza',
+    'OPEN': 'Open',
+    'A': 'Categoría A',
+    'B': 'Categoría B',
+    'C': 'Categoría C'
+  }
+  return categories[code] || code
+}
+
+// Endpoint para actualizar resultado de partido
+export async function PATCH(
+  req: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    const { id: tournamentId } = await params
+    const paramData = await params
     
-    // Get tournament with registration count
-    const tournament = await prisma.tournament.findUnique({
-      where: { id: tournamentId },
-      include: {
-        _count: {
-          select: {
-            TournamentRegistration: true
-          }
-        }
+    const session = await requireAuthAPI()
+    
+    if (!session) {
+      return NextResponse.json(
+        { success: false, error: 'No autorizado' },
+        { status: 401 }
+      )
+    }
+    if (!session?.clubId) {
+      return NextResponse.json({ error: 'No autorizado' }, { status: 401 })
+    }
+
+    const { id: tournamentId } = await params
+    const { matchId, team1Score, team2Score, winner, status } = await req.json()
+
+    const updatedMatch = await prisma.tournamentMatch.update({
+      where: { id: matchId },
+      data: {
+        team1Score,
+        team2Score,
+        winner,
+        status,
+        endTime: status === 'completed' ? new Date() : null
       }
     })
-    
-    if (!tournament) {
-      return NextResponse.json(
-        { success: false, error: 'Torneo no encontrado' },
-        { status: 404 }
-      )
-    }
-    
-    // Only allow deletion if tournament is in draft and has no registrations
-    if (tournament.status !== 'DRAFT') {
-      return NextResponse.json(
-        { success: false, error: 'Solo se pueden eliminar torneos en borrador' },
-        { status: 400 }
-      )
-    }
-    
-    if (tournament._count.TournamentRegistration > 0) {
-      return NextResponse.json(
-        { success: false, error: 'No se puede eliminar un torneo con inscripciones' },
-        { status: 400 }
-      )
-    }
-    
-    await prisma.tournament.delete({
-      where: { id: tournamentId }
-    })
-    
-    return NextResponse.json({
-      success: true,
-      message: 'Torneo eliminado exitosamente'
-    })
-    
+
+    return NextResponse.json({ success: true, match: updatedMatch })
+
   } catch (error) {
-    console.error('Error deleting tournament:', error)
+    console.error('Error updating match:', error)
     return NextResponse.json(
-      { success: false, error: 'Error al eliminar torneo' },
+      { error: 'Error al actualizar partido' },
       { status: 500 }
     )
   }

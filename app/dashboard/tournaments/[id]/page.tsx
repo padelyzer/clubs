@@ -131,8 +131,8 @@ export default function TournamentDetailPage() {
     try {
       setLoading(true)
       const [tournamentRes, conflictsRes] = await Promise.all([
-        fetch(`/api/tournaments-v2/${tournamentId}`),
-        fetch(`/api/tournaments-v2/${tournamentId}/conflicts`)
+        fetch(`/api/tournaments/${tournamentId}`),
+        fetch(`/api/tournaments/${tournamentId}/conflicts`)
       ])
 
       if (tournamentRes.ok) {

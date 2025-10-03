@@ -57,7 +57,7 @@ export default function CaptureResultPage() {
   const fetchCurrentMatch = async () => {
     try {
       setLoading(true)
-      const response = await fetch(`/api/tournaments-v2/${tournamentId}/current-match?courtNumber=${courtNumber}`)
+      const response = await fetch(`/api/tournaments/${tournamentId}/current-match?courtNumber=${courtNumber}`)
       const data = await response.json()
       
       if (data.match) {
@@ -90,7 +90,7 @@ export default function CaptureResultPage() {
     setError(null)
     
     try {
-      const response = await fetch(`/api/tournaments-v2/${tournamentId}/qr`, {
+      const response = await fetch(`/api/tournaments/${tournamentId}/qr`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({

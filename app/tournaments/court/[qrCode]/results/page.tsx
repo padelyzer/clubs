@@ -48,7 +48,7 @@ export default function CourtResultsPage() {
 
   const fetchCurrentMatch = async () => {
     try {
-      const res = await fetch(`/api/tournaments-v2/courts/${qrCode}/current-match`)
+      const res = await fetch(`/api/tournaments/courts/${qrCode}/current-match`)
       if (!res.ok) throw new Error('Error al obtener partido')
       
       const data = await res.json()
@@ -88,7 +88,7 @@ export default function CourtResultsPage() {
     const setsToSubmit = sets.slice(0, actualSetsPlayed)
 
     try {
-      const res = await fetch(`/api/tournaments-v2/courts/${qrCode}/submit-result`, {
+      const res = await fetch(`/api/tournaments/courts/${qrCode}/submit-result`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({

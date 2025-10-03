@@ -68,9 +68,9 @@ export default function CreateTournamentPage() {
       if (response.ok) {
         // The API returns an array of tournaments (one per category)
         if (data.tournaments && data.tournaments.length > 0) {
-          router.push(`/dashboard/tournaments-v2/${data.tournaments[0].id}`)
+          router.push(`/dashboard/tournaments/${data.tournaments[0].id}`)
         } else {
-          router.push('/dashboard/tournaments-v2')
+          router.push('/dashboard/tournaments')
         }
       } else {
         console.error('Error response:', data)

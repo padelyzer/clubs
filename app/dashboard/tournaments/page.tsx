@@ -194,7 +194,7 @@ export default function TournamentsV2ListPage() {
         </div>
 
         <button
-          onClick={() => router.push('/dashboard/tournaments-v2/create')}
+          onClick={() => router.push('/dashboard/tournaments/create')}
           style={{
             padding: '10px 20px',
             borderRadius: '12px',
@@ -264,7 +264,7 @@ export default function TournamentsV2ListPage() {
                 variant="glass" 
                 padding="lg"
                 interactive
-                onClick={() => router.push(`/dashboard/tournaments-v2/${tournament.id}`)}
+                onClick={() => router.push(`/dashboard/tournaments/${tournament.id}`)}
                 style={{ cursor: 'pointer' }}
               >
                 <div style={{ 
@@ -387,7 +387,7 @@ export default function TournamentsV2ListPage() {
                   <button
                     onClick={(e) => {
                       e.stopPropagation()
-                      router.push(`/dashboard/tournaments-v2/${tournament.id}`)
+                      router.push(`/dashboard/tournaments/${tournament.id}`)
                     }}
                     style={{
                       padding: '8px 16px',
