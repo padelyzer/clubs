@@ -1,6 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { getServerSession } from 'next-auth'
-import { authOptions } from '@/lib/auth/config'
+import { requireAuthAPI } from '@/lib/auth/actions'
 import { hasModuleAccess, ModuleCode } from './modules'
 
 export interface ModuleMiddlewareOptions {
@@ -17,16 +16,16 @@ export async function requireModuleAccess(
   options: ModuleMiddlewareOptions
 ): Promise<NextResponse | null> {
   try {
-    const session = await getServerSession(authOptions)
+    const session = await requireAuthAPI()
     
-    if (!session?.user?.clubId) {
+    if (!session?.clubId) {
       return NextResponse.json(
         { error: 'No club associated with user' },
         { status: 403 }
       )
     }
 
-    const access = await hasModuleAccess(session.user.clubId, options.requiredModule)
+    const access = await hasModuleAccess(session.clubId, options.requiredModule)
     
     if (!access.hasAccess) {
       const errorMessage = access.needsPayment 
