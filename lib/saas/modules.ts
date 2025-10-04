@@ -31,7 +31,11 @@ export async function hasModuleAccess(
     const clubModule = await prisma.clubModule.findFirst({
       where: {
         clubId,
-        module: { code: moduleCode }
+        module: { 
+          code: {
+            in: [moduleCode, moduleCode.toUpperCase()]
+          }
+        }
       },
       include: {
         module: true
