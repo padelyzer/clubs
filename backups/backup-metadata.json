@@ -23,6 +23,29 @@
         "classes": 0
       },
       "totalRecords": 1144
+    },
+    {
+      "filename": "backup-2025-10-03T16-14-41.json",
+      "timestamp": "2025-10-03T16:14:41.258Z",
+      "size": "0.01 MB",
+      "counts": {
+        "clubs": 5,
+        "users": 2,
+        "players": 0,
+        "courts": 0,
+        "bookings": 0,
+        "bookingGroups": 0,
+        "tournaments": 0,
+        "tournamentRegistrations": 0,
+        "tournamentMatches": 0,
+        "transactions": 7,
+        "budget": 0,
+        "budgetCategory": 0,
+        "notifications": 0,
+        "splitPayments": 0,
+        "classes": 0
+      },
+      "totalRecords": 14
     }
   ]
 }
