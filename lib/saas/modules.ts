@@ -62,6 +62,15 @@ export async function hasModuleAccess(
       }
     }
 
+    // Para entorno de desarrollo o clubs demo, permitir acceso directo
+    if (process.env.NODE_ENV === 'development' || clubId.includes('demo')) {
+      return {
+        hasAccess: true,
+        isInGracePeriod: false,
+        needsPayment: false
+      }
+    }
+
     // Verificar si está al día con pagos
     const currentMonth = new Date(now.getFullYear(), now.getMonth(), 1)
     const billing = await prisma.clubModuleBilling.findFirst({
