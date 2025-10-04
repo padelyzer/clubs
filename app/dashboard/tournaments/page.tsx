@@ -39,16 +39,37 @@ export default function TournamentsV2ListPage() {
 
   const fetchTournaments = async () => {
     try {
-      // Temporalmente usar el endpoint de debug hasta resolver el problema de auth
-      const response = await fetch('/api/tournaments/debug')
+      const response = await fetch('/api/tournaments')
+      
       if (!response.ok) {
-        throw new Error('Error al cargar torneos')
+        const errorData = await response.json().catch(() => ({}))
+        
+        // Errores descriptivos basados en el status code
+        if (response.status === 401) {
+          throw new Error(errorData.details || 'Sesión expirada. Por favor inicia sesión nuevamente.')
+        } else if (response.status === 402) {
+          throw new Error(errorData.error || 'El módulo de torneos no está disponible en tu plan actual.')
+        } else if (response.status === 400) {
+          throw new Error(errorData.details || 'Configuración de club inválida.')
+        } else if (response.status === 500) {
+          throw new Error(errorData.details || 'Error del servidor. Intenta de nuevo en unos momentos.')
+        } else {
+          throw new Error(errorData.error || `Error ${response.status}: ${response.statusText}`)
+        }
       }
+      
       const data = await response.json()
+      
+      if (!data.success) {
+        throw new Error(data.details || data.error || 'Error al procesar la respuesta del servidor')
+      }
+      
       setTournaments(data.tournaments || [])
       setError(null)
+      
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Error desconocido')
+      console.error('Error fetching tournaments:', err)
+      setError(err instanceof Error ? err.message : 'Error desconocido al cargar torneos')
     } finally {
       setLoading(false)
     }
