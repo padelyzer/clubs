@@ -28,6 +28,7 @@ export async function hasModuleAccess(
   moduleCode: ModuleCode
 ): Promise<ModuleAccess> {
   try {
+    // 1. Verificar que el módulo esté habilitado para el club
     const clubModule = await prisma.clubModule.findFirst({
       where: {
         clubId,
@@ -46,13 +47,13 @@ export async function hasModuleAccess(
       return {
         hasAccess: false,
         isInGracePeriod: false,
-        needsPayment: false
+        needsPayment: true
       }
     }
 
     const now = new Date()
     
-    // Verificar período de gracia
+    // 2. Verificar período de gracia del módulo
     if (clubModule.gracePeriodEnd && now <= clubModule.gracePeriodEnd) {
       return {
         hasAccess: true,
@@ -62,7 +63,26 @@ export async function hasModuleAccess(
       }
     }
 
-    // Para entorno de desarrollo o clubs demo, permitir acceso directo
+    // 3. Verificar paquete activo del club (NUEVO SISTEMA)
+    const clubPackage = await prisma.clubPackage.findFirst({
+      where: {
+        clubId,
+        isActive: true
+      },
+      include: {
+        package: true
+      }
+    })
+
+    if (clubPackage && clubPackage.package.isActive) {
+      return {
+        hasAccess: true,
+        isInGracePeriod: false,
+        needsPayment: false
+      }
+    }
+
+    // 4. Para entorno de desarrollo o clubs demo, permitir acceso directo
     if (process.env.NODE_ENV === 'development' || clubId.includes('demo')) {
       return {
         hasAccess: true,
@@ -71,7 +91,7 @@ export async function hasModuleAccess(
       }
     }
 
-    // Verificar si está al día con pagos
+    // 5. Fallback: sistema antiguo de facturación por módulo
     const currentMonth = new Date(now.getFullYear(), now.getMonth(), 1)
     const billing = await prisma.clubModuleBilling.findFirst({
       where: {
