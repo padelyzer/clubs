@@ -1,4 +1,4 @@
-import { requireClubStaff } from '@/lib/auth/actions'
+import { requireAuth } from '@/lib/auth/actions'
 import { prisma } from '@/lib/config/prisma'
 import { notFound } from 'next/navigation'
 import Link from 'next/link'
@@ -14,8 +14,8 @@ interface TournamentPageProps {
 export default async function TournamentPage({ params }: TournamentPageProps) {
   const { clubSlug, tournamentId } = await params
   
-  // Require club staff access
-  const session = await requireClubStaff()
+  // Require authentication
+  const session = await requireAuth()
   
   // Get club by slug
   const club = await prisma.club.findUnique({
@@ -27,13 +27,14 @@ export default async function TournamentPage({ params }: TournamentPageProps) {
   }
   
   // Verify user has access to this club (super admin or club member)
-  if (session.role !== 'SUPER_ADMIN' && session.role !== 'super_admin') {
-    // For club staff, verify they belong to this club
-    const user = await prisma.user.findUnique({
-      where: { id: session.userId }
-    })
+  if (session.role !== 'SUPER_ADMIN') {
+    // For club staff/owner, verify they belong to this club
+    if (!session.clubId || session.clubId !== club.id) {
+      notFound()
+    }
     
-    if (!user || user.clubId !== club.id) {
+    // Also check they have appropriate role
+    if (!['CLUB_OWNER', 'CLUB_STAFF'].includes(session.role)) {
       notFound()
     }
   }
