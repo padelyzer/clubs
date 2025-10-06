@@ -28,7 +28,7 @@ export async function GET(
     const paramData = await params
     
     const session = await requireStaffAuth()
-    const { id } = params
+    const { id } = paramData
 
     const booking = await prisma.booking.findFirst({
       where: {
@@ -97,7 +97,7 @@ export async function PUT(
     const paramData = await params
     
     const session = await requireStaffAuth()
-    const { id } = params
+    const { id } = paramData
     const body = await request.json()
     
     const validatedData = updateBookingSchema.parse(body)
@@ -229,7 +229,7 @@ export async function DELETE(
     const paramData = await params
     
     const session = await requireStaffAuth()
-    const { id } = params
+    const { id } = paramData
 
     // Check if booking exists and belongs to club
     const existingBooking = await prisma.booking.findFirst({
