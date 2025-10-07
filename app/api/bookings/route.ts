@@ -455,7 +455,7 @@ export async function POST(request: NextRequest) {
         startTime: validatedData.startTime,
         endTime,
         duration: validatedData.duration,
-        // playerId: player.id, // Temporarily commented out until migration runs
+        playerId: player.id,
         playerName: validatedData.playerName,
         playerEmail: validatedData.playerEmail || null,
         playerPhone: validatedData.playerPhone,
