@@ -2,44 +2,33 @@ import { NextRequest, NextResponse } from 'next/server'
 import { requireAuthAPI } from '@/lib/auth/actions'
 import { prisma } from '@/lib/config/prisma'
 
-// GET - Get player's booking history (SIMPLIFIED VERSION)
+// GET - Get player's booking history (ULTRA-SIMPLIFIED VERSION)
 export async function GET(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    console.log('[GET Player Bookings] Starting...')
+    console.log('[GET Player Bookings] Starting ultra-simple version...')
     
     const session = await requireAuthAPI()
     
     if (!session) {
+      console.log('[GET Player Bookings] No session')
       return NextResponse.json(
         { success: false, error: 'No autorizado' },
         { status: 401 }
       )
     }
     
+    console.log('[GET Player Bookings] Session OK:', session.clubId)
+    
     const paramData = await params
     const { id: playerId } = paramData
     
     console.log('[GET Player Bookings] Player ID:', playerId)
     
-    // Simplified URL parsing to avoid Next.js 15 issues
-    let limit = 20
-    let offset = 0
-    let status = null
-    
-    try {
-      const { searchParams } = new URL(request.url)
-      limit = parseInt(searchParams.get('limit') || '20')
-      offset = parseInt(searchParams.get('offset') || '0')
-      status = searchParams.get('status')
-      console.log('[GET Player Bookings] URL params parsed successfully')
-    } catch (urlError) {
-      console.log('[GET Player Bookings] URL parsing error, using defaults:', urlError)
-    }
-
-    // Get player to verify it exists
+    // Step 1: Get player first
+    console.log('[GET Player Bookings] Step 1: Getting player...')
     const player = await prisma.player.findFirst({
       where: {
         id: playerId,
@@ -48,108 +37,68 @@ export async function GET(
     })
 
     if (!player) {
+      console.log('[GET Player Bookings] Player not found')
       return NextResponse.json(
         { success: false, error: 'Jugador no encontrado' },
         { status: 404 }
       )
     }
+    
+    console.log('[GET Player Bookings] Player found:', player.name, player.phone)
 
-    // Build OR conditions for matching bookings
-    const orConditions: any[] = []
-    
-    if (player.name) {
-      orConditions.push({ playerName: player.name })
-    }
-    
-    if (player.email) {
-      orConditions.push({ playerEmail: player.email })
-    }
-    
-    if (player.phone) {
-      orConditions.push({ playerPhone: player.phone })
-    }
-    
-    console.log('Searching bookings for player:', {
-      playerId: player.id,
-      name: player.name,
-      email: player.email,
-      phone: player.phone,
-      orConditions
-    })
-
-    console.log('[GET Player Bookings] OR conditions:', orConditions)
-    
-    // Simplified booking query (no complex includes for now)
-    console.log('[GET Player Bookings] Fetching bookings...')
+    // Step 2: Try basic booking query (no includes at all)
+    console.log('[GET Player Bookings] Step 2: Getting basic bookings...')
     const bookings = await prisma.booking.findMany({
       where: {
         clubId: session.clubId,
-        ...(orConditions.length > 0 ? { OR: orConditions } : {}),
-        ...(status ? { status } : {})
-      },
-      include: {
-        Court: {
-          select: {
-            id: true,
-            name: true,
-            type: true
-          }
-        }
+        playerPhone: player.phone
       },
       orderBy: {
         date: 'desc'
       },
-      take: limit,
-      skip: offset
+      take: 10 // Very limited for safety
     })
     
-    console.log('[GET Player Bookings] Found bookings:', bookings.length)
+    console.log('[GET Player Bookings] Basic bookings found:', bookings.length)
 
-    // Count total bookings for pagination
-    const total = await prisma.booking.count({
-      where: {
-        clubId: session.clubId,
-        ...(orConditions.length > 0 ? { OR: orConditions } : {}),
-        ...(status ? { status } : {})
-      }
-    })
-
-    // Simplified formatting (no complex group logic for now)
-    console.log('[GET Player Bookings] Formatting bookings...')
+    // Step 3: Ultra-simple formatting (no court lookup)
+    console.log('[GET Player Bookings] Step 3: Simple formatting...')
     const formattedBookings = bookings.map(booking => ({
       id: booking.id,
-      type: booking.bookingGroupId ? 'group' : 'individual',
       date: booking.date,
       startTime: booking.startTime,
       endTime: booking.endTime,
-      court: booking.Court?.name || 'Sin cancha',
-      courtType: booking.Court?.type || 'PADEL',
+      courtId: booking.courtId,
       status: booking.status,
-      paymentStatus: booking.paymentStatus,
-      totalPrice: booking.price,
-      splitPaymentEnabled: booking.splitPaymentEnabled || false,
-      totalPlayers: booking.totalPlayers,
-      checkedIn: booking.checkedIn,
-      checkedInAt: booking.checkedInAt
+      price: booking.price
     }))
     
-    console.log('[GET Player Bookings] Formatted bookings:', formattedBookings.length)
+    console.log('[GET Player Bookings] Formatted count:', formattedBookings.length)
+    console.log('[GET Player Bookings] SUCCESS - returning data')
 
     return NextResponse.json({
       success: true,
       bookings: formattedBookings,
-      pagination: {
-        total,
-        limit,
-        offset,
-        hasMore: offset + limit < total
+      debug: {
+        playerId,
+        playerName: player.name,
+        playerPhone: player.phone,
+        clubId: session.clubId,
+        totalFound: bookings.length
       }
     })
 
   } catch (error) {
-    console.error('Error fetching player bookings:', error)
+    console.error('[GET Player Bookings] ULTRA-SIMPLE ERROR:', error)
     return NextResponse.json(
-      { success: false, error: 'Error al obtener historial de reservas' },
+      { 
+        success: false, 
+        error: 'Error al obtener historial de reservas',
+        debug: {
+          errorMessage: error instanceof Error ? error.message : 'Unknown error',
+          errorStack: error instanceof Error ? error.stack : 'No stack'
+        }
+      },
       { status: 500 }
     )
   }
