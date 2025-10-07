@@ -16,7 +16,8 @@ export async function GET(
       )
     }
 
-    const { id } = await params
+    const paramData = await params
+    const { id } = paramData
     
     console.log('[Check Payment] Checking payment for booking:', id)
 
@@ -110,7 +111,7 @@ export async function GET(
   } catch (error) {
     console.error('Error checking payment:', {
       error,
-      bookingId: (await params).id,
+      bookingId: id,
       errorMessage: error instanceof Error ? error.message : 'Unknown error'
     })
     return NextResponse.json(

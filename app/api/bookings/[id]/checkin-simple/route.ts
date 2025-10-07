@@ -15,7 +15,8 @@ export async function POST(
         { status: 401 }
       )
     }
-    const { id: bookingId } = await params
+    const paramData = await params
+    const { id: bookingId } = paramData
 
     // Try to get as a regular booking first
     let booking = await prisma.booking.findUnique({

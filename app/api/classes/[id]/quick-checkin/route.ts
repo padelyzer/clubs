@@ -21,7 +21,8 @@ export async function POST(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    const { id: classId } = await params
+    const paramData = await params
+    const { id: classId } = paramData
     const body = await request.json()
     const { students } = quickCheckInSchema.parse(body)
 
@@ -281,7 +282,8 @@ export async function GET(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    const { id: classId } = await params
+    const paramData = await params
+    const { id: classId } = paramData
     
     // Obtener clase con todas las inscripciones
     const classItem = await prisma.class.findUnique({

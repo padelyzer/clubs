@@ -13,7 +13,7 @@ export async function GET(
   try {
     const paramData = await params
     
-    const { paymentIntentId } = await params
+    const { paymentIntentId } = paramData
 
     if (!paymentIntentId) {
       return NextResponse.json(

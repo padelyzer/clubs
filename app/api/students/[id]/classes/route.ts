@@ -16,7 +16,8 @@ export async function GET(
         { status: 401 }
       )
     }
-    const { id: studentId } = await params
+    const paramData = await params
+    const { id: studentId } = paramData
     const { searchParams } = new URL(request.url)
     const phone = searchParams.get('phone')
     const email = searchParams.get('email')
@@ -225,7 +226,8 @@ export async function POST(
         { status: 401 }
       )
     }
-    const { id: studentId } = await params
+    const paramData = await params
+    const { id: studentId } = paramData
     const body = await request.json()
     const { type = 'attendance', format = 'pdf', classIds } = body
     

@@ -10,7 +10,8 @@ interface Params {
 export async function GET(request: NextRequest, { params }: Params) {
   try {
     await requireStaffAuth()
-    const { id: bookingId } = await params
+    const paramData = await params
+    const { id: bookingId } = paramData
 
     const qrCode = await QRCodeService.generateBookingQR(bookingId)
 
@@ -33,7 +34,8 @@ export async function GET(request: NextRequest, { params }: Params) {
 export async function POST(request: NextRequest, { params }: Params) {
   try {
     await requireStaffAuth()
-    const { id: bookingId } = await params
+    const paramData = await params
+    const { id: bookingId } = paramData
     const body = await request.json()
     const { type = 'booking' } = body
 

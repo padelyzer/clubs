@@ -7,7 +7,8 @@ export async function PATCH(
   { params }: { params: Promise<{ id: string, registrationId: string }> }
 ) {
   try {
-    const { id, registrationId } = await params
+    const paramData = await params
+    const { id, registrationId } = paramData
     const { checkedIn } = await request.json()
     
     // Verificar que el torneo existe
@@ -67,7 +68,8 @@ export async function GET(
   { params }: { params: Promise<{ id: string, registrationId: string }> }
 ) {
   try {
-    const { id, registrationId } = await params
+    const paramData = await params
+    const { id, registrationId } = paramData
     const registration = await prisma.tournamentRegistration.findUnique({
       where: { 
         id: registrationId,

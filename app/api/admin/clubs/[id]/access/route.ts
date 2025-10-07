@@ -11,7 +11,8 @@ export async function GET(
 ) {
   try {
     // Await params in Next.js 15
-    const { id } = await params
+    const paramData = await params
+    const { id } = paramData
     
     console.log('Accessing club with ID:', id)
     

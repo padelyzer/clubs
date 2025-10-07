@@ -1,0 +1,86 @@
+import { NextRequest, NextResponse } from 'next/server'
+import { PrismaClient } from '@prisma/client'
+import bcrypt from 'bcryptjs'
+
+const prisma = new PrismaClient()
+
+export async function POST(request: NextRequest) {
+  try {
+    console.log('🔐 Test login endpoint called')
+    
+    const { email, password } = await request.json()
+    
+    if (!email || !password) {
+      return NextResponse.json(
+        { error: 'Email y password son requeridos' },
+        { status: 400 }
+      )
+    }
+
+    console.log('🔍 Buscando usuario:', email)
+
+    // Buscar usuario
+    const user = await prisma.user.findUnique({
+      where: { email }
+    })
+
+    if (!user) {
+      console.log('❌ Usuario no encontrado')
+      return NextResponse.json(
+        { error: 'Usuario no encontrado' },
+        { status: 404 }
+      )
+    }
+
+    console.log('✅ Usuario encontrado:', user.email, 'Club:', user.clubId)
+
+    // Verificar password
+    const isValidPassword = await bcrypt.compare(password, user.password)
+    if (!isValidPassword) {
+      console.log('❌ Password incorrecto')
+      return NextResponse.json(
+        { error: 'Password incorrecto' },
+        { status: 401 }
+      )
+    }
+
+    if (!user.active) {
+      console.log('❌ Usuario inactivo')
+      return NextResponse.json(
+        { error: 'Usuario inactivo' },
+        { status: 403 }
+      )
+    }
+
+    console.log('✅ Login exitoso')
+
+    // Buscar club si tiene clubId
+    let club = null
+    if (user.clubId) {
+      club = await prisma.club.findUnique({
+        where: { id: user.clubId }
+      })
+    }
+
+    // Retornar información del usuario (sin token por ahora)
+    return NextResponse.json({
+      success: true,
+      user: {
+        id: user.id,
+        email: user.email,
+        name: user.name,
+        role: user.role,
+        clubId: user.clubId,
+        club: club
+      },
+      message: 'Login exitoso. Ahora puedes probar la interfaz.'
+    })
+
+  } catch (error) {
+    console.error('❌ Error en test-login:', error)
+    return NextResponse.json(
+      { error: `Error interno del servidor: ${error.message}` },
+      { status: 500 }
+    )
+  }
+}

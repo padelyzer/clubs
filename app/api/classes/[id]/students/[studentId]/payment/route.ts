@@ -17,7 +17,8 @@ export async function POST(
   try {
     const user = await requireAuthAPI()
 
-    const { id: classId, studentId: classBookingId } = await params
+    const paramData = await params
+    const { id: classId, studentId: classBookingId } = paramData
     const body = await request.json()
     const { paymentMethod, paymentAmount, paymentReference } = paymentSchema.parse(body)
 
@@ -121,7 +122,8 @@ export async function DELETE(
   try {
     const user = await requireAuthAPI()
 
-    const { id: classId, studentId: classBookingId } = await params
+    const paramData = await params
+    const { id: classId, studentId: classBookingId } = paramData
 
     // Verify the class booking exists
     const classBooking = await prisma.classBooking.findUnique({

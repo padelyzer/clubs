@@ -7,7 +7,8 @@ export async function GET(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    const { id: tournamentId } = await params
+    const paramData = await params
+    const { id: tournamentId } = paramData
     
     // Get tournament with public information only
     const tournament = await prisma.tournament.findUnique({

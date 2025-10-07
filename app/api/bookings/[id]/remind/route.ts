@@ -13,7 +13,8 @@ export async function POST(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    const { id } = await params
+    const paramData = await params
+    const { id } = paramData
     
     const bookingId = id
     const body = await request.json()
@@ -164,7 +165,8 @@ export async function GET(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    const { id } = await params
+    const paramData = await params
+    const { id } = paramData
     
     const bookingId = id
 

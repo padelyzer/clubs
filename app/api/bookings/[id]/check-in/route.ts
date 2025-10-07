@@ -25,7 +25,8 @@ export async function POST(
         { status: 401 }
       )
     }
-    const { id } = await params
+    const paramData = await params
+    const { id } = paramData
     const body = await request.json().catch(() => ({}))
 
     // Validate request body
@@ -163,7 +164,8 @@ export async function DELETE(
         { status: 401 }
       )
     }
-    const { id } = await params
+    const paramData = await params
+    const { id } = paramData
 
     // Check if booking exists and belongs to club
     const existingBooking = await prisma.booking.findFirst({

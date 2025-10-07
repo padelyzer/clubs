@@ -16,7 +16,8 @@ export async function GET(
       )
     }
 
-    const { id } = await params
+    const paramData = await params
+    const { id } = paramData
 
     // First try to find as a regular booking
     let booking = await prisma.booking.findUnique({
@@ -147,7 +148,8 @@ export async function POST(
       )
     }
 
-    const { id } = await params
+    const paramData = await params
+    const { id } = paramData
 
     // Try to find regular booking first
     let booking = await prisma.booking.findUnique({

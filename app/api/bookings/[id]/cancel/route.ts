@@ -14,7 +14,8 @@ export async function POST(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    const { id } = await params
+    const paramData = await params
+    const { id } = paramData
     
     const session = await requireAuthAPI()
     

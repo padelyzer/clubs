@@ -9,7 +9,8 @@ export async function POST(
   try {
     const session = await requireSuperAdmin()
     const { reason } = await request.json()
-    const { id } = await params
+    const paramData = await params
+    const { id } = paramData
 
     const booking = await prisma.booking.findUnique({
       where: { id },

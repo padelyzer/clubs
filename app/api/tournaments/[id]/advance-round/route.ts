@@ -10,7 +10,8 @@ export async function POST(
 ) {
   try {
     const session = await AuthService.requireClubStaff()
-    const { id } = await params
+    const paramData = await params
+    const { id } = paramData
     const body = await req.json()
     const { roundName } = body
 
@@ -42,7 +43,8 @@ export async function GET(
 ) {
   try {
     const session = await AuthService.requireClubStaff()
-    const { id } = await params
+    const paramData = await params
+    const { id } = paramData
     
     // Get tournament rounds and their completion status
     const advancement = new TournamentRoundAdvancement(id)

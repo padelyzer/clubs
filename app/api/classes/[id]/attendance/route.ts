@@ -23,7 +23,8 @@ export async function POST(
         { status: 401 }
       )
     }
-    const { id: classId } = await params
+    const paramData = await params
+    const { id: classId } = paramData
     const body = await request.json()
     const { studentId, status, notes } = checkInSchema.parse(body)
     
@@ -200,7 +201,8 @@ export async function GET(
         { status: 401 }
       )
     }
-    const { id: classId } = await params
+    const paramData = await params
+    const { id: classId } = paramData
     
     const classItem = await prisma.class.findFirst({
       where: { 
@@ -291,7 +293,8 @@ export async function PUT(
         { status: 401 }
       )
     }
-    const { id: classId } = await params
+    const paramData = await params
+    const { id: classId } = paramData
     const body = await request.json()
     
     // Verify class exists and belongs to the user's club

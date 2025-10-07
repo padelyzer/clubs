@@ -7,7 +7,8 @@ export async function PUT(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    const { id } = await params
+    const paramData = await params
+    const { id } = paramData
     const session = await getSession()
     
     if (!session || session.role !== 'SUPER_ADMIN') {
@@ -70,7 +71,8 @@ export async function GET(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    const { id } = await params
+    const paramData = await params
+    const { id } = paramData
     const session = await getSession()
     
     if (!session || session.role !== 'SUPER_ADMIN') {

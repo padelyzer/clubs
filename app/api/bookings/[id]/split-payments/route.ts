@@ -20,7 +20,8 @@ export async function GET(
         { status: 401 }
       )
     }
-    const { id: bookingId } = await params
+    const paramData = await params
+    const { id: bookingId } = paramData
 
     const status = await getSplitPaymentStatus(bookingId)
 
@@ -52,7 +53,8 @@ export async function POST(
         { status: 401 }
       )
     }
-    const { id: bookingId } = await params
+    const paramData = await params
+    const { id: bookingId } = paramData
 
     const paymentLinks = await generateSplitPaymentLinks(bookingId)
 
@@ -85,7 +87,8 @@ export async function PUT(
         { status: 401 }
       )
     }
-    const { id: bookingId } = await params
+    const paramData = await params
+    const { id: bookingId } = paramData
     const body = await request.json()
     const { splitPaymentId, action, paymentMethod, transactionId, referenceNumber } = body
 

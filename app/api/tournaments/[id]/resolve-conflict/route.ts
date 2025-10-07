@@ -11,7 +11,8 @@ export async function POST(
 ) {
   try {
     const session = await AuthService.requireClubStaff()
-    const { id } = await params
+    const paramData = await params
+    const { id } = paramData
     const body = await req.json()
     const { matchId, result } = body
 

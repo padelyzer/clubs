@@ -17,7 +17,8 @@ export async function POST(
       )
     }
     
-    const { id: bookingId } = await params
+    const paramData = await params
+    const { id: bookingId } = paramData
     console.log('📋 Booking ID from params:', bookingId)
     console.log('   ID type:', typeof bookingId)
     console.log('   ID length:', bookingId?.length)
@@ -467,7 +468,8 @@ export async function GET(
         { status: 401 }
       )
     }
-    const { id: bookingId } = await params
+    const paramData = await params
+    const { id: bookingId } = paramData
 
     let booking = await prisma.booking.findFirst({
       where: { 

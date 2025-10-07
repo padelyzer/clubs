@@ -8,7 +8,8 @@ export async function GET(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    const { id } = await params
+    const paramData = await params
+    const { id } = paramData
 
     const classBooking = await prisma.classBooking.findUnique({
       where: { id },
@@ -50,7 +51,8 @@ export async function DELETE(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    const { id } = await params
+    const paramData = await params
+    const { id } = paramData
 
     // Find the class booking
     const classBooking = await prisma.classBooking.findUnique({
@@ -145,7 +147,8 @@ export async function PUT(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    const { id } = await params
+    const paramData = await params
+    const { id } = paramData
     const body = await request.json()
 
     const updatedBooking = await prisma.classBooking.update({

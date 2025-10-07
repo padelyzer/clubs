@@ -21,7 +21,8 @@ export async function GET(
       return NextResponse.json({ error: 'No autorizado' }, { status: 401 })
     }
 
-    const { id: tournamentId } = await params
+    const paramData = await params
+    const { id: tournamentId } = paramData
 
 
     // Obtener datos del torneo con toda la información necesaria
@@ -200,7 +201,8 @@ export async function GET(
       },
       stats,
       categories,
-      matches: {
+      matches: matches, // Retornar todos los matches como array para compatibilidad
+      matchesSummary: {
         inProgress: inProgressMatches,
         upcoming: matches.filter(m => (m.status === 'pending' || m.status === 'SCHEDULED') && m.scheduledAt),
         total: matches.length
@@ -255,7 +257,8 @@ export async function PATCH(
       return NextResponse.json({ error: 'No autorizado' }, { status: 401 })
     }
 
-    const { id: tournamentId } = await params
+    const paramData = await params
+    const { id: tournamentId } = paramData
     const { matchId, team1Score, team2Score, winner, status } = await req.json()
 
     const updatedMatch = await prisma.tournamentMatch.update({

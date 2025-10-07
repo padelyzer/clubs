@@ -16,7 +16,8 @@ export async function GET(
         { status: 401 }
       )
     }
-    const { id: bookingGroupId } = await params
+    const paramData = await params
+    const { id: bookingGroupId } = paramData
 
     // Get booking group with split payments
     const bookingGroup = await prisma.bookingGroup.findUnique({
@@ -99,7 +100,8 @@ export async function PUT(
         { status: 401 }
       )
     }
-    const { id: bookingGroupId } = await params
+    const paramData = await params
+    const { id: bookingGroupId } = paramData
     const body = await request.json()
     const { splitPaymentId, action, paymentMethod, transactionId, referenceNumber } = body
 
@@ -260,7 +262,8 @@ export async function POST(
         { status: 401 }
       )
     }
-    const { id: bookingGroupId } = await params
+    const paramData = await params
+    const { id: bookingGroupId } = paramData
 
     // Get booking group
     const bookingGroup = await prisma.bookingGroup.findUnique({

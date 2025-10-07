@@ -12,7 +12,8 @@ export async function POST(
   { params }: { params: Promise<{ qrCode: string }> }
 ) {
   try {
-    const { qrCode } = await params
+    const paramData = await params
+    const { qrCode } = paramData
     const body = await req.json()
     const { 
       matchId, 

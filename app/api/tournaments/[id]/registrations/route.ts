@@ -21,7 +21,7 @@ export async function GET(
       return NextResponse.json({ error: 'No autorizado' }, { status: 401 })
     }
 
-    const { id: tournamentId } = await params
+    const { id: tournamentId } = paramData
 
     // Obtener registros de equipos del torneo
     const registrations = await prisma.tournamentRegistration.findMany({

@@ -22,7 +22,7 @@ export async function GET(
       return NextResponse.json({ error: 'No autorizado' }, { status: 401 })
     }
 
-    const { id: tournamentId } = await params
+    const { id: tournamentId } = paramData
     const { searchParams } = new URL(req.url)
     const courtNumber = searchParams.get('courtNumber')
     
@@ -89,7 +89,7 @@ export async function POST(
   try {
     const paramData = await params
     
-    const { id: tournamentId } = await params
+    const { id: tournamentId } = paramData
     const body = await req.json()
     const { courtNumber, team1Score, team2Score, matchId } = body
 

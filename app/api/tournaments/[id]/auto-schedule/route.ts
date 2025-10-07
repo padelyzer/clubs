@@ -21,7 +21,7 @@ export async function POST(
       return NextResponse.json({ error: 'No autorizado' }, { status: 401 })
     }
 
-    const { id: tournamentId } = await params
+    const { id: tournamentId } = paramData
     const { date, scheduleConfigs, courts } = await req.json()
 
     let totalScheduledMatches = 0

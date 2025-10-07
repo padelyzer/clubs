@@ -11,7 +11,8 @@ export async function GET(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    const { id } = await params
+    const paramData = await params
+    const { id } = paramData
     
     // 1. Authentication
     const session = await requireSuperAdmin()
@@ -62,7 +63,8 @@ export async function PUT(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    const { id } = await params
+    const paramData = await params
+    const { id } = paramData
     
     // 1. Authentication
     const session = await requireSuperAdmin()

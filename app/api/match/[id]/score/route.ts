@@ -16,7 +16,8 @@ export async function GET(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    const { id: matchId } = await params
+    const paramData = await params
+    const { id: matchId } = paramData
     const { searchParams } = new URL(request.url)
     const fromQr = searchParams.get('qr') === 'true'
 
@@ -126,7 +127,8 @@ export async function POST(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    const { id: matchId } = await params
+    const paramData = await params
+    const { id: matchId } = paramData
     const body = await request.json()
     
     const validatedData = scoreSchema.parse(body)
@@ -233,7 +235,8 @@ export async function PUT(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    const { id: matchId } = await params
+    const paramData = await params
+    const { id: matchId } = paramData
     const body = await request.json()
     const { verified, dispute, disputeNotes } = body
 

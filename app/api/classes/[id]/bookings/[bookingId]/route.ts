@@ -15,7 +15,8 @@ export async function DELETE(
         { status: 404 }
       )
     }
-    const { id: classId, bookingId } = await params
+    const paramData = await params
+    const { id: classId, bookingId } = paramData
     
     // Verify the booking exists and belongs to this class
     const classBooking = await prisma.classBooking.findUnique({
@@ -101,7 +102,8 @@ export async function GET(
   { params }: { params: Promise<{ id: string; bookingId: string }> }
 ) {
   try {
-    const { id: classId, bookingId } = await params
+    const paramData = await params
+    const { id: classId, bookingId } = paramData
     
     const classBooking = await prisma.classBooking.findUnique({
       where: { 

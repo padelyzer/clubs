@@ -9,7 +9,7 @@ export async function GET(
   try {
     const paramData = await params
     
-    const { qrCode } = await params
+    const { qrCode } = paramData
 
     // Buscar la cancha por QR code
     const courtQR = await prisma.courtQRCode.findUnique({

@@ -16,7 +16,8 @@ export async function GET(
         { status: 401 }
       )
     }
-    const { id: bookingGroupId } = await params
+    const paramData = await params
+    const { id: bookingGroupId } = paramData
 
     const bookingGroup = await prisma.bookingGroup.findUnique({
       where: {
@@ -118,7 +119,8 @@ export async function PUT(
         { status: 401 }
       )
     }
-    const { id: bookingGroupId } = await params
+    const paramData = await params
+    const { id: bookingGroupId } = paramData
     const body = await request.json()
 
     // For now, we'll support basic updates like notes, player info
@@ -198,7 +200,8 @@ export async function DELETE(
         { status: 401 }
       )
     }
-    const { id: bookingGroupId } = await params
+    const paramData = await params
+    const { id: bookingGroupId } = paramData
 
     // Get booking group with related data
     const bookingGroup = await prisma.bookingGroup.findUnique({

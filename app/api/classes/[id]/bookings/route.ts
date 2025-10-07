@@ -7,7 +7,8 @@ export async function GET(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    const { id } = await params
+    const paramData = await params
+    const { id } = paramData
     const classItem = await prisma.class.findUnique({
       where: { id },
       include: {
@@ -45,7 +46,8 @@ export async function POST(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    const { id } = await params
+    const paramData = await params
+    const { id } = paramData
     const body = await request.json()
 
     // Validate required fields
@@ -171,7 +173,8 @@ export async function PUT(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    const { id } = await params
+    const paramData = await params
+    const { id } = paramData
     const body = await request.json()
     
     if (!body.bookingId) {
@@ -238,7 +241,8 @@ export async function DELETE(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
-  const { id } = await params
+  const paramData = await params
+  const { id } = paramData
   try {
     const { searchParams } = new URL(request.url)
     const bookingId = searchParams.get('bookingId')

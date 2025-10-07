@@ -1,7 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/config/prisma'
-import { AuthService } from '@/lib/modules/shared/auth'
-import { ResponseBuilder } from '@/lib/modules/shared/response'
+import { requireAuthAPI } from '@/lib/auth/actions'
 
 // GET: Obtener conflictos del torneo
 export async function GET(
@@ -9,8 +8,17 @@ export async function GET(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    const session = await AuthService.requireAuth()
-    const { id } = await params
+    const session = await requireAuthAPI()
+    
+    if (!session) {
+      return NextResponse.json(
+        { success: false, error: 'No autorizado' },
+        { status: 401 }
+      )
+    }
+    
+    const paramData = await params
+    const { id } = paramData
 
     // Para SUPER_ADMIN, permitir acceso a cualquier torneo
     const whereClause = session.role === 'SUPER_ADMIN' 
@@ -23,7 +31,10 @@ export async function GET(
     })
 
     if (!tournament) {
-      return ResponseBuilder.notFound('Torneo no encontrado')
+      return NextResponse.json(
+        { error: 'Torneo no encontrado' },
+        { status: 404 }
+      )
     }
 
     // Obtener todos los partidos con conflictos pendientes
@@ -115,16 +126,20 @@ export async function GET(
       }
     })
 
-    return ResponseBuilder.success({
-      conflicts,
-      pendingConfirmation,
-      conflictsCount: conflicts.length,
-      pendingCount: pendingConfirmation.length
+    return NextResponse.json({
+      success: true,
+      data: {
+        conflicts,
+        pendingConfirmation,
+        conflictsCount: conflicts.length,
+        pendingCount: pendingConfirmation.length
+      }
     })
   } catch (error) {
-    if (error instanceof Response) {
-      return error
-    }
-    return ResponseBuilder.serverError(error)
+    console.error('Error fetching tournament conflicts:', error)
+    return NextResponse.json(
+      { error: 'Error al obtener conflictos del torneo' },
+      { status: 500 }
+    )
   }
 }

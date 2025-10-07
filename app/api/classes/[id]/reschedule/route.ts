@@ -33,7 +33,8 @@ export async function POST(
         { status: 401 }
       )
     }
-    const { id: classId } = await params
+    const paramData = await params
+    const { id: classId } = paramData
     const body = await request.json()
     const validatedData = rescheduleSchema.parse(body)
     
@@ -251,7 +252,8 @@ export async function DELETE(
         { status: 401 }
       )
     }
-    const { id: classId } = await params
+    const paramData = await params
+    const { id: classId } = paramData
     const body = await request.json()
     const validatedData = cancelSchema.parse(body)
     

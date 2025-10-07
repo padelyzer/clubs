@@ -24,7 +24,8 @@ export async function PUT(
         { status: 401 }
       )
     }
-    const { id } = await params
+    const paramData = await params
+    const { id } = paramData
     const body = await request.json()
     
     const validatedData = pricingSchema.parse(body)
@@ -135,7 +136,8 @@ export async function DELETE(
         { status: 401 }
       )
     }
-    const { id } = await params
+    const paramData = await params
+    const { id } = paramData
     
     // Check if pricing exists and belongs to club
     const pricing = await prisma.pricing.findFirst({

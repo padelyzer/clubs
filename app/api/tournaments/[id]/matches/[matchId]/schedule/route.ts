@@ -21,7 +21,7 @@ export async function PATCH(
       return NextResponse.json({ error: 'No autorizado' }, { status: 401 })
     }
 
-    const { id: tournamentId, matchId } = await params
+    const { id: tournamentId, matchId } = paramData
     const { scheduledAt, courtId, status } = await req.json()
 
     // Verificar que el partido pertenece al torneo

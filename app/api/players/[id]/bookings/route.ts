@@ -16,7 +16,8 @@ export async function GET(
         { status: 401 }
       )
     }
-    const { id: playerId } = await params
+    const paramData = await params
+    const { id: playerId } = paramData
     const { searchParams } = new URL(request.url)
     
     const limit = parseInt(searchParams.get('limit') || '20')

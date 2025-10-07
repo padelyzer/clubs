@@ -8,7 +8,7 @@ export async function GET(
   try {
     const paramData = await params
     
-    const { id: tournamentId } = await params
+    const { id: tournamentId } = paramData
     const { searchParams } = new URL(req.url)
     const courtNumber = searchParams.get('courtNumber')
     

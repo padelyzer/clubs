@@ -17,7 +17,8 @@ export async function POST(
         { status: 401 }
       )
     }
-    const { id: bookingGroupId } = await params
+    const paramData = await params
+    const { id: bookingGroupId } = paramData
     const body = await request.json()
     
     const { playerContacts } = body // Array of { name, phone, email? }
