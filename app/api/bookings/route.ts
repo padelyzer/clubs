@@ -109,9 +109,11 @@ const updateBookingSchema = baseBookingSchema.partial().extend({
   id: z.string().min(1)
 })
 
-// GET - Retrieve bookings with filters
+// GET - Retrieve bookings with filters (SIMPLIFIED VERSION)
 export async function GET(request: NextRequest) {
   try {
+    console.log('[GET Bookings] Starting...')
+    
     const session = await requireAuthAPI()
     
     if (!session) {
@@ -120,25 +122,28 @@ export async function GET(request: NextRequest) {
         { status: 401 }
       )
     }
-    const { searchParams } = new URL(request.url)
     
+    console.log('[GET Bookings] Auth OK, clubId:', session.clubId)
+    
+    const { searchParams } = new URL(request.url)
     const date = searchParams.get('date')
     const courtId = searchParams.get('courtId')
     const status = searchParams.get('status')
-    const startDate = searchParams.get('startDate')
-    const endDate = searchParams.get('endDate')
     
-    // Add pagination parameters
-    const page = parseInt(searchParams.get('page') || '0')
-    const pageSize = Math.min(parseInt(searchParams.get('limit') || '30'), 100) // Max 100 per page
-    const offset = page * pageSize
+    console.log('[GET Bookings] Params:', { date, courtId, status })
 
     // Get club timezone settings
-    const clubSettings = await prisma.clubSettings.findUnique({
-      where: { clubId: session.clubId },
-      select: { timezone: true }
-    })
-    const clubTimezone = clubSettings?.timezone || 'America/Mexico_City'
+    let clubTimezone = 'America/Mexico_City'
+    try {
+      const clubSettings = await prisma.clubSettings.findUnique({
+        where: { clubId: session.clubId },
+        select: { timezone: true }
+      })
+      clubTimezone = clubSettings?.timezone || 'America/Mexico_City'
+      console.log('[GET Bookings] Timezone:', clubTimezone)
+    } catch (err) {
+      console.log('[GET Bookings] Club settings error:', err)
+    }
     
     const where: any = {
       clubId: session.clubId
@@ -146,16 +151,15 @@ export async function GET(request: NextRequest) {
 
     // Date filtering
     if (date) {
-      const { start, end } = getDayBoundariesInTimezone(date, clubTimezone)
-      
-      where.date = {
-        gte: start,
-        lt: end
-      }
-    } else if (startDate && endDate) {
-      where.date = {
-        gte: parseISO(startDate),
-        lte: parseISO(endDate)
+      try {
+        const { start, end } = getDayBoundariesInTimezone(date, clubTimezone)
+        where.date = {
+          gte: start,
+          lt: end
+        }
+        console.log('[GET Bookings] Date filter applied')
+      } catch (err) {
+        console.log('[GET Bookings] Date filter error:', err)
       }
     }
 
@@ -168,176 +172,66 @@ export async function GET(request: NextRequest) {
     if (status) {
       where.status = status
     } else {
-      // Exclude cancelled bookings by default
       where.status = { not: 'CANCELLED' }
     }
 
-    // Get booking groups first (for the selected date)
-    const bookingGroups = await prisma.bookingGroup.findMany({
-      where: {
-        clubId: session.clubId,
-        date: where.date,
-        status: where.status || { not: 'CANCELLED' }
-      },
-      include: {
-        bookings: {
-          include: {
-            Court: true
-          }
-        },
-        splitPayments: true, // Remove invalid _count from include
-        _count: {
-          select: {
-            splitPayments: true,
-            payments: true,
-            bookings: true
-          }
-        }
-      },
-      orderBy: [
-        { date: 'asc' },
-        { startTime: 'asc' }
-      ]
-    })
+    console.log('[GET Bookings] Where clause:', where)
 
-    // Get individual bookings (excluding those that are part of a group)
+    // Get ONLY individual bookings for now (simplified)
+    console.log('[GET Bookings] Fetching individual bookings...')
     const individualBookings = await prisma.booking.findMany({
       where: {
         ...where,
         bookingGroupId: null // Only individual bookings
       },
       include: {
-        Court: true,
-        SplitPayment: true, // Remove invalid _count from include
-        _count: {
+        Court: {
           select: {
-            SplitPayment: true,
-            Payment: true
+            id: true,
+            name: true
           }
         }
       },
       orderBy: [
         { date: 'asc' },
         { startTime: 'asc' }
-      ]
+      ],
+      take: 100 // Limit for safety
     })
 
-    // Add computed fields for booking groups
-    const bookingGroupsWithStatus = bookingGroups.map(group => {
-      const splitPaymentProgress = group.splitPaymentEnabled 
-        ? (group.splitPayments?.filter(sp => sp.status === 'completed').length || 0)
-        : 0
+    console.log('[GET Bookings] Found individual bookings:', individualBookings.length)
 
-      // Determine payment status for group bookings
-      const isPaymentComplete = group.splitPaymentEnabled 
-        ? splitPaymentProgress === group.splitPaymentCount
-        : group.status === 'IN_PROGRESS' || group.status === 'COMPLETED' // If checked in, consider paid
+    // Add computed fields for individual bookings (simplified)
+    const bookingsWithStatus = individualBookings.map(booking => ({
+      ...booking,
+      isGroup: false,
+      splitPaymentEnabled: booking.splitPaymentEnabled || false,
+      splitPaymentProgress: 0,
+      splitPaymentComplete: true,
+      splitPayments: [] // Empty array for compatibility
+    }))
 
-      return {
-        ...group,
-        splitPayments: group.splitPayments, // Map Prisma's splitPayments to frontend's splitPayments
-        isGroup: true, // Flag to identify this as a group
-        courtNames: group.bookings.map((b: any) => b.Court.name).join(', '),
-        splitPaymentProgress,
-        splitPaymentComplete: isPaymentComplete,
-        paymentStatus: isPaymentComplete ? 'completed' : 'pending' // Add explicit payment status
-      }
-    })
-
-    // Add computed fields for individual bookings
-    const bookingsWithStatus = individualBookings.map(booking => {
-      const splitPaymentProgress = booking.splitPaymentEnabled 
-        ? (booking.SplitPayment?.filter(sp => sp.status === 'completed').length || 0)
-        : 0
-
-      return {
-        ...booking,
-        splitPayments: booking.SplitPayment, // Map Prisma's SplitPayment to frontend's splitPayments
-        isGroup: false, // Flag to identify this as individual
-        splitPaymentProgress,
-        splitPaymentComplete: booking.splitPaymentEnabled 
-          ? splitPaymentProgress === booking.splitPaymentCount
-          : true
-      }
-    })
-
-    // Get class enrollments for this club and date (if specified)
-    let classBookings: any[] = []
-    
-    // Only fetch classes if we're filtering by date (to avoid fetching all classes)
-    if (date) {
-      const { start: startOfDay, end: endOfDay } = getDayBoundariesInTimezone(date, clubTimezone)
-      
-      const classes = await prisma.class.findMany({
-        where: {
-          clubId: session.clubId,
-          date: {
-            gte: startOfDay,
-            lt: endOfDay
-          },
-          status: { not: 'CANCELLED' }
-        },
-        include: {
-          Court: true,
-          ClassEnrollment: true,
-          _count: {
-            select: {
-              ClassEnrollment: true
-            }
-          }
-        },
-        orderBy: [
-          { date: 'asc' },
-          { startTime: 'asc' }
-        ]
-      })
-      
-      // Transform classes to booking-like format for the UI
-      classBookings = classes.map(cls => ({
-        id: cls.id,
-        type: 'class',
-        clubId: cls.clubId,
-        courtId: cls.courtId,
-        courtName: cls.Court?.name || 'Clase grupal',
-        date: cls.date,
-        startTime: cls.startTime,
-        endTime: cls.endTime,
-        duration: cls.duration,
-        className: cls.name,
-        description: cls.description,
-        level: cls.level,
-        classType: cls.type,
-        instructor: cls.instructorName,
-        maxStudents: cls.maxStudents,
-        enrolledCount: cls._count.ClassEnrollment,
-        price: cls.price,
-        currency: cls.currency,
-        status: cls.status,
-        enrollments: cls.ClassEnrollment,
-        availableSpots: cls.maxStudents - cls._count.ClassEnrollment,
-        isGroup: false,
-        splitPaymentEnabled: false,
-        splitPaymentProgress: 0,
-        splitPaymentComplete: true
-      }))
-    }
-
-    // Combine and sort by time
-    const allBookings = [...bookingGroupsWithStatus, ...bookingsWithStatus, ...classBookings].sort((a, b) => {
-      const dateCompare = new Date(a.date).getTime() - new Date(b.date).getTime()
-      if (dateCompare !== 0) return dateCompare
-      return a.startTime.localeCompare(b.startTime)
-    })
+    console.log('[GET Bookings] Processed bookings:', bookingsWithStatus.length)
 
     return NextResponse.json({ 
       success: true, 
-      bookings: allBookings 
+      bookings: bookingsWithStatus,
+      debug: {
+        clubId: session.clubId,
+        count: bookingsWithStatus.length,
+        where
+      }
     })
 
   } catch (error) {
-    console.error('Error fetching bookings:', error)
+    console.error('[GET Bookings] Error:', error)
     return NextResponse.json(
-      { success: false, error: 'Error al obtener reservas' },
+      { 
+        success: false, 
+        error: 'Error al obtener reservas',
+        details: error instanceof Error ? error.message : 'Unknown error',
+        stack: error instanceof Error ? error.stack : undefined
+      },
       { status: 500 }
     )
   }
