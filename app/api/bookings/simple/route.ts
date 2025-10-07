@@ -33,7 +33,7 @@ export async function GET(request: NextRequest) {
     
     console.log('[Bookings Simple] Booking count:', bookingCount)
     
-    // Step 3: Test simple booking query
+    // Step 3: Test simple booking query (without playerId references)
     console.log('[Bookings Simple] Testing simple booking query...')
     const bookings = await prisma.booking.findMany({
       where: { 
@@ -41,8 +41,17 @@ export async function GET(request: NextRequest) {
         status: { not: 'CANCELLED' }
       },
       take: 5, // Only get 5 records to avoid large response
-      include: {
-        Court: true
+      select: {
+        id: true,
+        date: true,
+        startTime: true,
+        playerName: true,
+        status: true,
+        Court: {
+          select: {
+            name: true
+          }
+        }
       },
       orderBy: {
         date: 'desc'

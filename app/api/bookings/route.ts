@@ -438,7 +438,7 @@ export async function POST(request: NextRequest) {
       updatedAt: new Date()
     })
     
-    // Find or create player
+    // Find or create player (temporarily skip playerId assignment)
     const player = await findOrCreatePlayer({
       name: validatedData.playerName,
       email: validatedData.playerEmail,
@@ -455,7 +455,7 @@ export async function POST(request: NextRequest) {
         startTime: validatedData.startTime,
         endTime,
         duration: validatedData.duration,
-        playerId: player.id,
+        // playerId: player.id, // Temporarily commented out until migration runs
         playerName: validatedData.playerName,
         playerEmail: validatedData.playerEmail || null,
         playerPhone: validatedData.playerPhone,
