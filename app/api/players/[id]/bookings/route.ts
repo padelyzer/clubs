@@ -46,34 +46,96 @@ export async function GET(
     
     console.log('[GET Player Bookings] Player found:', player.name, player.phone)
 
-    // Step 2: Try basic booking query (no includes at all)
-    console.log('[GET Player Bookings] Step 2: Getting basic bookings...')
-    const bookings = await prisma.booking.findMany({
-      where: {
-        clubId: session.clubId,
-        playerPhone: player.phone
-      },
-      orderBy: {
-        date: 'desc'
-      },
-      take: 10 // Very limited for safety
-    })
-    
-    console.log('[GET Player Bookings] Basic bookings found:', bookings.length)
+    // Step 2: Test database connectivity first
+    console.log('[GET Player Bookings] Step 2: Testing DB connection...')
+    try {
+      const dbTest = await prisma.$queryRaw`SELECT 1 as test`
+      console.log('[GET Player Bookings] DB test successful:', dbTest)
+    } catch (dbError) {
+      console.log('[GET Player Bookings] DB test failed:', dbError)
+      return NextResponse.json({
+        success: false,
+        error: 'Database connection error',
+        debug: {
+          step: 'database_test',
+          playerId,
+          playerName: player.name,
+          playerPhone: player.phone,
+          clubId: session.clubId,
+          dbError: dbError instanceof Error ? dbError.message : 'Unknown DB error'
+        }
+      }, { status: 500 })
+    }
 
-    // Step 3: Ultra-simple formatting (no court lookup)
-    console.log('[GET Player Bookings] Step 3: Simple formatting...')
+    // Step 3: Try to count bookings first (safer than findMany)
+    console.log('[GET Player Bookings] Step 3: Counting bookings...')
+    let bookingCount = 0
+    try {
+      bookingCount = await prisma.booking.count({
+        where: {
+          clubId: session.clubId,
+          playerPhone: player.phone
+        }
+      })
+      console.log('[GET Player Bookings] Booking count:', bookingCount)
+    } catch (countError) {
+      console.log('[GET Player Bookings] Count failed:', countError)
+      return NextResponse.json({
+        success: false,
+        error: 'Error counting bookings',
+        debug: {
+          step: 'booking_count',
+          playerId,
+          playerName: player.name,
+          playerPhone: player.phone,
+          clubId: session.clubId,
+          countError: countError instanceof Error ? countError.message : 'Unknown count error'
+        }
+      }, { status: 500 })
+    }
+
+    // Step 4: If count works, try simple findMany
+    console.log('[GET Player Bookings] Step 4: Getting bookings (limit 3)...')
+    let bookings = []
+    try {
+      bookings = await prisma.booking.findMany({
+        where: {
+          clubId: session.clubId,
+          playerPhone: player.phone
+        },
+        orderBy: {
+          date: 'desc'
+        },
+        take: 3 // Very small limit
+      })
+      console.log('[GET Player Bookings] Bookings retrieved:', bookings.length)
+    } catch (findError) {
+      console.log('[GET Player Bookings] Find failed:', findError)
+      return NextResponse.json({
+        success: false,
+        error: 'Error fetching bookings',
+        debug: {
+          step: 'booking_find',
+          playerId,
+          playerName: player.name,
+          playerPhone: player.phone,
+          clubId: session.clubId,
+          bookingCount,
+          findError: findError instanceof Error ? findError.message : 'Unknown find error'
+        }
+      }, { status: 500 })
+    }
+
+    // Step 5: Simple formatting
+    console.log('[GET Player Bookings] Step 5: Formatting...')
     const formattedBookings = bookings.map(booking => ({
       id: booking.id,
-      date: booking.date,
+      date: booking.date?.toISOString(),
       startTime: booking.startTime,
-      endTime: booking.endTime,
-      courtId: booking.courtId,
       status: booking.status,
       price: booking.price
     }))
     
-    console.log('[GET Player Bookings] Formatted count:', formattedBookings.length)
     console.log('[GET Player Bookings] SUCCESS - returning data')
 
     return NextResponse.json({
@@ -84,7 +146,8 @@ export async function GET(
         playerName: player.name,
         playerPhone: player.phone,
         clubId: session.clubId,
-        totalFound: bookings.length
+        bookingCount,
+        returnedCount: formattedBookings.length
       }
     })
 
