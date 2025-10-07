@@ -7,7 +7,7 @@ import { z } from 'zod'
 const createPlayerSchema = z.object({
   name: z.string().min(1).max(100),
   email: z.string().email().optional().or(z.literal("")),
-  phone: z.string().min(10).max(20),
+  phone: z.string().min(7).max(20),
   birthDate: z.string().optional(),
   level: z.enum(['Open', 'Primera Fuerza', 'Segunda Fuerza', 'Tercera Fuerza', 'Cuarta Fuerza', 'Quinta Fuerza', 'Sexta Fuerza']).optional(),
   gender: z.enum(['male', 'female']).optional(),
