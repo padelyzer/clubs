@@ -204,6 +204,7 @@ export async function GET(request: NextRequest) {
     // Add computed fields for individual bookings (simplified)
     const bookingsWithStatus = individualBookings.map(booking => ({
       ...booking,
+      price: booking.price ? Number(booking.price) : 0,
       isGroup: false,
       splitPaymentEnabled: booking.splitPaymentEnabled || false,
       splitPaymentProgress: 0,

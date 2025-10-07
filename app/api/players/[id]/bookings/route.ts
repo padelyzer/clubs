@@ -144,7 +144,7 @@ export async function GET(
       date: booking.date?.toISOString(),
       startTime: booking.startTime,
       status: booking.status,
-      price: booking.price
+      price: booking.price ? Number(booking.price) : 0
     }))
     
     console.log('[GET Player Bookings] SUCCESS - returning data')
