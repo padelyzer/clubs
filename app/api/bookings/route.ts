@@ -185,15 +185,7 @@ export async function GET(request: NextRequest) {
             Court: true
           }
         },
-        splitPayments: {
-          include: {
-            _count: {
-              select: {
-                Notification: true
-              }
-            }
-          }
-        },
+        splitPayments: true, // Remove invalid _count from include
         _count: {
           select: {
             splitPayments: true,
@@ -216,15 +208,7 @@ export async function GET(request: NextRequest) {
       },
       include: {
         Court: true,
-        SplitPayment: {
-          include: {
-            _count: {
-              select: {
-                Notification: true
-              }
-            }
-          }
-        },
+        SplitPayment: true, // Remove invalid _count from include
         _count: {
           select: {
             SplitPayment: true,
