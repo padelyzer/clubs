@@ -17,9 +17,11 @@ const createPlayerSchema = z.object({
 
 const updatePlayerSchema = createPlayerSchema.partial()
 
-// GET - Retrieve all players for the club
+// GET - Retrieve all players for the club (SIMPLIFIED VERSION)
 export async function GET(request: NextRequest) {
   try {
+    console.log('[GET Players] Starting...')
+    
     const session = await requireAuthAPI()
     
     if (!session) {
@@ -28,14 +30,29 @@ export async function GET(request: NextRequest) {
         { status: 401 }
       )
     }
-    const { searchParams } = new URL(request.url)
     
-    const search = searchParams.get('search')
-    const active = searchParams.get('active')
-    const level = searchParams.get('level')
-    const page = parseInt(searchParams.get('page') || '0')
-    const pageSize = Math.min(parseInt(searchParams.get('limit') || '20'), 50) // Max 50 per page
-    const offset = page * pageSize
+    console.log('[GET Players] Auth OK, clubId:', session.clubId)
+    
+    // Simplified URL parsing to avoid Next.js 15 issues
+    let search = null
+    let active = null
+    let level = null
+    let page = 0
+    let pageSize = 20
+    let offset = 0
+    
+    try {
+      const { searchParams } = new URL(request.url)
+      search = searchParams.get('search')
+      active = searchParams.get('active')
+      level = searchParams.get('level')
+      page = parseInt(searchParams.get('page') || '0')
+      pageSize = Math.min(parseInt(searchParams.get('limit') || '20'), 50) // Max 50 per page
+      offset = page * pageSize
+      console.log('[GET Players] URL params parsed successfully')
+    } catch (urlError) {
+      console.log('[GET Players] URL parsing error, using defaults:', urlError)
+    }
 
     const where: any = {
       clubId: session.clubId
@@ -61,14 +78,17 @@ export async function GET(request: NextRequest) {
       ]
     }
 
-    // Get players with basic pagination - much faster
+    console.log('[GET Players] Where clause:', where)
+    
+    // Get players with basic pagination - simplified
+    console.log('[GET Players] Fetching players...')
     const [players, total] = await Promise.all([
       prisma.player.findMany({
         where,
         take: pageSize,
         skip: offset,
         orderBy: [{ name: 'asc' }],
-        // Only select fields we need for the list view
+        // Only select essential fields
         select: {
           id: true,
           name: true,
@@ -80,7 +100,6 @@ export async function GET(request: NextRequest) {
           active: true,
           createdAt: true,
           lastBookingAt: true,
-          // Use the cached totals from the player record
           totalBookings: true,
           totalSpent: true
         }
@@ -88,17 +107,9 @@ export async function GET(request: NextRequest) {
       prisma.player.count({ where })
     ])
 
-    // Log raw players data to debug
-    console.log('Raw players from DB:', players.map(p => ({
-      name: p.name,
-      memberNumber: p.memberNumber,
-      phone: p.phone,
-      cachedBookings: p.totalBookings,
-      cachedSpent: p.totalSpent
-    })))
+    console.log('[GET Players] Found players:', players.length, 'Total:', total)
 
-    // For performance, return the cached stats instead of calculating in real-time
-    // The cached stats are updated when bookings are created/modified
+    // Use the cached stats from the player record (simplified)
     const playersWithStats = players
 
     return NextResponse.json({
