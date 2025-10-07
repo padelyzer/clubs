@@ -2,14 +2,18 @@ import { NextRequest, NextResponse } from 'next/server'
 import { requireAuthAPI } from '@/lib/auth/actions'
 import { prisma } from '@/lib/config/prisma'
 
-// GET - Get single player details
+// GET - Get single player details (SIMPLIFIED VERSION)  
 export async function GET(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    console.log('[GET Player Details] Starting...')
+    
     const paramData = await params
     const { id } = paramData
+    
+    console.log('[GET Player Details] Player ID:', id)
     
     const session = await requireAuthAPI()
     
@@ -19,6 +23,9 @@ export async function GET(
         { status: 401 }
       )
     }
+    
+    console.log('[GET Player Details] Auth OK, clubId:', session.clubId)
+    
     const playerId = id
 
     const player = await prisma.player.findFirst({
@@ -35,75 +42,29 @@ export async function GET(
       )
     }
 
-    // Get player statistics
-    const [bookingsCount, totalSpent, lastBooking] = await Promise.all([
-      // Count total bookings
-      prisma.booking.count({
-        where: {
-          clubId: session.clubId,
-          playerPhone: player.phone,
-          status: { not: 'CANCELLED' }
-        }
-      }),
-      // Calculate total spent
-      prisma.booking.aggregate({
-        where: {
-          clubId: session.clubId,
-          playerPhone: player.phone,
-          paymentStatus: 'completed'
-        },
-        _sum: {
-          price: true
-        }
-      }),
-      // Get last booking
-      prisma.booking.findFirst({
-        where: {
-          clubId: session.clubId,
-          playerPhone: player.phone
-        },
-        orderBy: {
-          date: 'desc'
-        },
-        select: {
-          date: true,
-          court: {
-            select: {
-              name: true
-            }
-          }
-        }
-      })
-    ])
+    console.log('[GET Player Details] Player found:', player.name)
+    
+    // Use cached statistics from player record (simplified)
+    console.log('[GET Player Details] Using cached stats...')
+    const bookingsCount = player.totalBookings || 0
+    const totalSpent = player.totalSpent || 0
+    const lastBooking = player.lastBookingAt ? {
+      date: player.lastBookingAt,
+      court: { name: 'Cancha' } // Simplified
+    } : null
+    
+    console.log('[GET Player Details] Stats:', { bookingsCount, totalSpent, lastBooking })
 
-    // Update player statistics if changed
-    const updatedStats: any = {}
-    if (bookingsCount !== player.totalBookings) {
-      updatedStats.totalBookings = bookingsCount
-    }
-    if (totalSpent._sum.price !== player.totalSpent) {
-      updatedStats.totalSpent = totalSpent._sum.price || 0
-    }
-    if (lastBooking && lastBooking.date !== player.lastBookingAt) {
-      updatedStats.lastBookingAt = lastBooking.date
-    }
-
-    // Update if there are changes
-    if (Object.keys(updatedStats).length > 0) {
-      await prisma.player.update({
-        where: { id: playerId },
-        data: updatedStats
-      })
-    }
-
+    // Skip stats update for now (simplified)
+    console.log('[GET Player Details] Returning player data...')
+    
     return NextResponse.json({
       success: true,
       player: {
         ...player,
-        ...updatedStats,
         statistics: {
           totalBookings: bookingsCount,
-          totalSpent: totalSpent._sum.price || 0,
+          totalSpent: totalSpent,
           lastBooking: lastBooking ? {
             date: lastBooking.date,
             court: lastBooking.court.name
