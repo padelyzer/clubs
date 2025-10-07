@@ -438,13 +438,20 @@ export async function POST(request: NextRequest) {
       updatedAt: new Date()
     })
     
-    // Find or create player (temporarily skip playerId assignment)
-    const player = await findOrCreatePlayer({
-      name: validatedData.playerName,
-      email: validatedData.playerEmail,
-      phone: validatedData.playerPhone,
-      clubId: session.clubId
-    })
+    // Find or create player (with error handling)
+    let playerId = null
+    try {
+      const player = await findOrCreatePlayer({
+        name: validatedData.playerName,
+        email: validatedData.playerEmail,
+        phone: validatedData.playerPhone,
+        clubId: session.clubId
+      })
+      playerId = player.id
+    } catch (error) {
+      console.error('Error creating/finding player:', error)
+      // Continue without playerId - booking will work without it
+    }
     
     const booking = await prisma.booking.create({
       data: {
@@ -455,7 +462,7 @@ export async function POST(request: NextRequest) {
         startTime: validatedData.startTime,
         endTime,
         duration: validatedData.duration,
-        playerId: player.id,
+        playerId: playerId,
         playerName: validatedData.playerName,
         playerEmail: validatedData.playerEmail || null,
         playerPhone: validatedData.playerPhone,
