@@ -80,7 +80,32 @@ const createBookingSchema = z.object({
   return cleanedData
 })
 
-const updateBookingSchema = createBookingSchema.partial().extend({
+// Create base schema without transform for partial usage
+const baseBookingSchema = z.object({
+  courtId: z.string().min(1),
+  date: z.string(),
+  startTime: z.string().regex(/^\d{2}:\d{2}$/),
+  duration: z.number().min(30).max(240),
+  playerName: z.string().min(1),
+  playerEmail: z.string().email().or(z.literal("")).optional().nullable(),
+  playerPhone: z.string().min(10),
+  totalPlayers: z.number().min(1).max(8).default(4),
+  splitPaymentEnabled: z.boolean().default(false),
+  splitPaymentCount: z.number().min(2).max(50).default(4),
+  notes: z.string().optional().nullable(),
+  paymentMethod: z.enum(['stripe', 'onsite']).optional(),
+  paymentType: z.enum(['terminal', 'transfer', 'cash']).optional(),
+  referenceNumber: z.string().optional(),
+  // Additional fields that frontend might send
+  courtIds: z.array(z.string()).optional(),
+  isMultiCourt: z.boolean().optional(),
+  multiCourtCount: z.number().optional(),
+  name: z.string().optional(),
+  price: z.number().optional(),
+  type: z.string().optional()
+})
+
+const updateBookingSchema = baseBookingSchema.partial().extend({
   id: z.string().min(1)
 })
 
