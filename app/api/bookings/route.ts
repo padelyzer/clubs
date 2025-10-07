@@ -37,7 +37,29 @@ const createBookingSchema = z.object({
   type: z.string().optional()
 }).transform((data) => {
   // Clean and normalize data
-  return {
+  console.log('[Booking Schema] Original data:', data)
+  
+  // Detect if this is really a multi-court booking or frontend confusion
+  const isReallyMultiCourt = data.courtIds && data.courtIds.length > 1
+  const hasValidCourtId = data.courtId && data.courtId.length > 0
+  
+  // If marked as MULTI_COURT but only has one courtId and no courtIds array, treat as simple
+  const isActuallySimple = (
+    data.type === "MULTI_COURT" && 
+    hasValidCourtId && 
+    (!data.courtIds || data.courtIds.length === 0)
+  )
+  
+  console.log('[Booking Schema] Detection:', {
+    originalType: data.type,
+    isReallyMultiCourt,
+    hasValidCourtId,
+    isActuallySimple,
+    courtId: data.courtId,
+    courtIds: data.courtIds
+  })
+  
+  const cleanedData = {
     courtId: data.courtId,
     date: data.date,
     startTime: data.startTime,
@@ -53,6 +75,9 @@ const createBookingSchema = z.object({
     paymentType: data.paymentType,
     referenceNumber: data.referenceNumber
   }
+  
+  console.log('[Booking Schema] Cleaned data:', cleanedData)
+  return cleanedData
 })
 
 const updateBookingSchema = createBookingSchema.partial().extend({
