@@ -4,7 +4,7 @@ import { prisma } from '@/lib/config/prisma'
 export async function GET() {
   try {
     // Test basic database connection
-    console.log('Testing database connection...')
+    console.log('Testing database connection... (v2025-10-07)')
     
     // Simple query to test connection
     const result = await prisma.$queryRaw`SELECT 1 as test`
@@ -18,7 +18,8 @@ export async function GET() {
       success: true, 
       message: 'Database connection working',
       clubCount,
-      testResult: result
+      testResult: result,
+      version: 'v2025-10-07-fixes'
     })
   } catch (error) {
     console.error('Database test error:', error)
