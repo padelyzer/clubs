@@ -27,12 +27,23 @@ export async function GET(
     
     console.log('[GET Player Bookings] Player ID:', playerId)
     
-    // Step 1: Get player first
+    // Step 1: Get player first (with specific select to avoid missing columns)
     console.log('[GET Player Bookings] Step 1: Getting player...')
     const player = await prisma.player.findFirst({
       where: {
         id: playerId,
         clubId: session.clubId
+      },
+      select: {
+        id: true,
+        name: true,
+        phone: true,
+        email: true,
+        clubId: true,
+        totalBookings: true,
+        totalSpent: true,
+        lastBookingAt: true
+        // Explicitly exclude totalClasses and other potentially missing columns
       }
     })
 

@@ -32,6 +32,24 @@ export async function GET(
       where: {
         id: playerId,
         clubId: session.clubId
+      },
+      select: {
+        id: true,
+        name: true,
+        phone: true,
+        email: true,
+        clubId: true,
+        memberNumber: true,
+        level: true,
+        gender: true,
+        active: true,
+        birthDate: true,
+        notes: true,
+        createdAt: true,
+        totalBookings: true,
+        totalSpent: true,
+        lastBookingAt: true
+        // Explicitly exclude totalClasses and other potentially missing columns
       }
     })
 
