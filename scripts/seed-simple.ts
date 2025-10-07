@@ -30,7 +30,8 @@ async function main() {
         city: 'Ciudad de México',
         address: 'Av. Insurgentes Sur 1234',
         phone: '555-123-4567',
-        email: 'info@padelpremium.mx'
+        email: 'info@padelpremium.mx',
+        updatedAt: new Date()
       }
     })
 
@@ -44,7 +45,8 @@ async function main() {
         role: 'CLUB_OWNER',
         clubId: club.id,
         emailVerified: new Date(),
-        active: true
+        active: true,
+        updatedAt: new Date()
       }
     })
 
@@ -57,7 +59,8 @@ async function main() {
           name: 'Cancha 1',
           indoor: false,
           order: 1,
-          active: true
+          active: true,
+          updatedAt: new Date()
         }
       }),
       prisma.court.create({
@@ -66,7 +69,8 @@ async function main() {
           name: 'Cancha 2',
           indoor: false,
           order: 2,
-          active: true
+          active: true,
+          updatedAt: new Date()
         }
       }),
       prisma.court.create({
@@ -75,7 +79,8 @@ async function main() {
           name: 'Cancha 3 - Indoor',
           indoor: true,
           order: 3,
-          active: true
+          active: true,
+          updatedAt: new Date()
         }
       }),
       prisma.court.create({
@@ -84,7 +89,8 @@ async function main() {
           name: 'Cancha 4',
           indoor: false,
           order: 4,
-          active: true
+          active: true,
+          updatedAt: new Date()
         }
       })
     ])
@@ -100,7 +106,8 @@ async function main() {
           phone: '555-111-1111',
           specialties: ['Pádel Avanzado'],
           hourlyRate: 50000,
-          active: true
+          active: true,
+          updatedAt: new Date()
         }
       }),
       prisma.classInstructor.create({
@@ -111,7 +118,8 @@ async function main() {
           phone: '555-222-2222',
           specialties: ['Pádel Iniciación'],
           hourlyRate: 40000,
-          active: true
+          active: true,
+          updatedAt: new Date()
         }
       })
     ])
@@ -131,7 +139,8 @@ async function main() {
           name: name,
           email: `${name.toLowerCase().replace(' ', '.')}@example.com`,
           phone: `555-${Math.random().toString().slice(2, 9)}`,
-          active: true
+          active: true,
+          updatedAt: new Date()
         }
       })
       players.push(player)
@@ -166,7 +175,8 @@ async function main() {
             totalPlayers: 4,
             price: pricePerHour * 1.5, // 90 minutes
             paymentStatus: 'completed',
-            status: 'CONFIRMED'
+            status: 'CONFIRMED',
+            updatedAt: new Date()
           }
         })
         
@@ -181,7 +191,8 @@ async function main() {
             description: `Reserva ${court.name} - ${player.name}`,
             reference: booking.id,
             date: date,
-            createdBy: adminUser.id
+            createdBy: adminUser.id,
+            updatedAt: new Date()
           }
         })
         
@@ -219,7 +230,8 @@ async function main() {
             maxStudents: 8,
             currentStudents: 6,
             price: pricePerStudent,
-            currency: 'MXN'
+            currency: 'MXN',
+            updatedAt: new Date()
           }
         })
         
@@ -237,7 +249,8 @@ async function main() {
               paidAmount: pricePerStudent,
               dueAmount: 0,
               status: 'ENROLLED',
-              confirmed: true
+              confirmed: true,
+              updatedAt: new Date()
             }
           })
           
@@ -252,7 +265,8 @@ async function main() {
               description: `Clase ${classEntity.name} - ${student.name}`,
               reference: classEntity.id,
               date: date,
-                  createdBy: adminUser.id
+                  createdBy: adminUser.id,
+              updatedAt: new Date()
             }
           })
           
@@ -288,7 +302,8 @@ async function main() {
           amount: expense.amount,
           date: date,
           status: 'paid',
-          createdBy: adminUser.id
+          createdBy: adminUser.id,
+          updatedAt: new Date()
         }
       })
       
@@ -303,7 +318,8 @@ async function main() {
           description: expense.description,
           reference: expenseRecord.id,
           date: date,
-          createdBy: adminUser.id
+          createdBy: adminUser.id,
+          updatedAt: new Date()
         }
       })
       

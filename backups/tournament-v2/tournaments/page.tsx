@@ -11,11 +11,7 @@ import {
   ChevronRight,
   Plus,
   Loader2,
-  AlertCircle,
-  Clock,
-  Target,
-  BarChart3,
-  Filter
+  AlertCircle
 } from 'lucide-react'
 
 interface Tournament {
@@ -31,13 +27,12 @@ interface Tournament {
   }
 }
 
-export default function TournamentsV3ListPage() {
+export default function TournamentsV2ListPage() {
   const router = useRouter()
   const [tournaments, setTournaments] = useState<Tournament[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [clubSlug, setClubSlug] = useState<string | null>(null)
-  const [activeFilter, setActiveFilter] = useState<'all' | 'active' | 'upcoming' | 'completed'>('all')
 
   useEffect(() => {
     fetchTournaments()
@@ -50,6 +45,7 @@ export default function TournamentsV3ListPage() {
       if (response.ok) {
         const sessionData = await response.json()
         if (sessionData.clubId) {
+          // Get club data to fetch slug
           const clubResponse = await fetch(`/api/club/settings`)
           if (clubResponse.ok) {
             const clubData = await clubResponse.json()
@@ -59,40 +55,18 @@ export default function TournamentsV3ListPage() {
       }
     } catch (error) {
       console.error('Error fetching club slug:', error)
-      setClubSlug('club-demo-padelyzer')
+      setClubSlug('club-demo-padelyzer') // fallback
     }
   }
 
   const fetchTournaments = async () => {
     try {
-      // Detectar modo desarrollo de múltiples formas
-      let isDevMode = false
-      
-      if (typeof window !== 'undefined') {
-        // Verificar URL parameter
-        const urlParams = new URLSearchParams(window.location.search)
-        isDevMode = urlParams.get('dev') === 'true'
-        
-        // Verificar localStorage
-        if (!isDevMode) {
-          isDevMode = localStorage.getItem('dev-mode') === 'true'
-        }
-        
-        // Verificar cookie
-        if (!isDevMode) {
-          isDevMode = document.cookie.includes('auth-session=mock-session-token')
-        }
-      }
-      
-      const apiUrl = isDevMode ? '/api/tournaments/dev-bypass' : '/api/tournaments'
-      
-      console.log('🔍 Modo desarrollo:', isDevMode, 'URL:', apiUrl)
-      
-      const response = await fetch(apiUrl)
+      const response = await fetch('/api/tournaments')
       
       if (!response.ok) {
         const errorData = await response.json().catch(() => ({}))
         
+        // Errores descriptivos basados en el status code
         if (response.status === 401) {
           throw new Error(errorData.details || 'Sesión expirada. Por favor inicia sesión nuevamente.')
         } else if (response.status === 402) {
@@ -151,36 +125,6 @@ export default function TournamentsV3ListPage() {
       }
     }
     return styles[status] || styles.draft
-  }
-
-  const filteredTournaments = tournaments.filter(tournament => {
-    if (activeFilter === 'all') return true
-    return tournament.status === activeFilter
-  })
-
-  const getQuickActions = (tournament: Tournament) => {
-    const actions = []
-    
-    if (tournament.status === 'active') {
-      actions.push({
-        icon: Clock,
-        label: 'Ver Partidos de Hoy',
-        action: () => router.push(`/dashboard/tournaments/${tournament.id}?view=today`)
-      })
-      actions.push({
-        icon: Target,
-        label: 'Capturar Resultados',
-        action: () => router.push(`/dashboard/tournaments/${tournament.id}?view=capture`)
-      })
-    }
-    
-    actions.push({
-      icon: BarChart3,
-      label: 'Ver Tablas',
-      action: () => router.push(`/dashboard/tournaments/${tournament.id}?view=standings`)
-    })
-    
-    return actions
   }
 
   if (loading) {
@@ -264,60 +208,57 @@ export default function TournamentsV3ListPage() {
     <div style={{ 
       minHeight: '100vh',
       background: colors.background.secondary,
-      padding: '24px',
+      padding: '32px',
       fontFamily: '-apple-system, BlinkMacSystemFont, "SF Pro Display", "Inter", "Segoe UI", Roboto, sans-serif'
     }}>
-      {/* Header Mejorado */}
+      {/* Header */}
       <div style={{ 
         marginBottom: '32px',
         display: 'flex',
         alignItems: 'center',
-        justifyContent: 'space-between',
-        flexWrap: 'wrap',
-        gap: '16px'
+        justifyContent: 'space-between'
       }}>
         <div>
           <h1 style={{ 
-            fontSize: '28px', 
+            fontSize: '32px', 
             fontWeight: 700,
             color: colors.text.primary,
             letterSpacing: '-0.03em',
-            marginBottom: '4px'
+            marginBottom: '8px'
           }}>
-            🏆 Gestión de Torneos
+            Gestión de Torneos V2
           </h1>
           <p style={{ 
             fontSize: '14px',
             color: colors.text.secondary
           }}>
-            Sistema optimizado para operadores - Máximo 3 clicks para cualquier acción
+            Sistema avanzado de gestión con nueva interfaz mejorada
           </p>
         </div>
 
         <button
           onClick={() => router.push('/dashboard/tournaments/create')}
           style={{
-            padding: '12px 20px',
+            padding: '10px 20px',
             borderRadius: '12px',
             background: `linear-gradient(135deg, ${colors.primary[600]}, ${colors.accent[300]})`,
             color: 'white',
             border: 'none',
             fontSize: '14px',
-            fontWeight: 600,
+            fontWeight: 500,
             cursor: 'pointer',
             display: 'flex',
             alignItems: 'center',
             gap: '8px',
-            transition: 'all 0.2s',
-            boxShadow: '0 4px 12px rgba(0,0,0,0.15)'
+            transition: 'all 0.2s'
           }}
           onMouseEnter={(e) => {
             e.currentTarget.style.transform = 'scale(1.05)'
-            e.currentTarget.style.boxShadow = '0 8px 24px rgba(0,0,0,0.2)'
+            e.currentTarget.style.boxShadow = '0 8px 24px rgba(0,0,0,0.15)'
           }}
           onMouseLeave={(e) => {
             e.currentTarget.style.transform = 'scale(1)'
-            e.currentTarget.style.boxShadow = '0 4px 12px rgba(0,0,0,0.15)'
+            e.currentTarget.style.boxShadow = 'none'
           }}
         >
           <Plus size={18} />
@@ -325,47 +266,8 @@ export default function TournamentsV3ListPage() {
         </button>
       </div>
 
-      {/* Filtros Rápidos */}
-      <div style={{ 
-        marginBottom: '24px',
-        display: 'flex',
-        gap: '8px',
-        flexWrap: 'wrap'
-      }}>
-        {[
-          { key: 'all', label: 'Todos', icon: Filter },
-          { key: 'active', label: 'Activos', icon: Clock },
-          { key: 'upcoming', label: 'Próximos', icon: Calendar },
-          { key: 'completed', label: 'Finalizados', icon: Trophy }
-        ].map(({ key, label, icon: Icon }) => (
-          <button
-            key={key}
-            onClick={() => setActiveFilter(key as any)}
-            style={{
-              padding: '8px 16px',
-              borderRadius: '20px',
-              background: activeFilter === key 
-                ? `linear-gradient(135deg, ${colors.primary[600]}, ${colors.accent[300]})`
-                : colors.neutral[100],
-              color: activeFilter === key ? 'white' : colors.text.secondary,
-              border: 'none',
-              fontSize: '13px',
-              fontWeight: 500,
-              cursor: 'pointer',
-              display: 'flex',
-              alignItems: 'center',
-              gap: '6px',
-              transition: 'all 0.2s'
-            }}
-          >
-            <Icon size={14} />
-            {label}
-          </button>
-        ))}
-      </div>
-
-      {/* Tournaments Grid Mejorado */}
-      {filteredTournaments.length === 0 ? (
+      {/* Tournaments Grid */}
+      {tournaments.length === 0 ? (
         <CardModern variant="glass" padding="xl">
           <div style={{ textAlign: 'center', padding: '48px 0' }}>
             <Trophy 
@@ -381,64 +283,41 @@ export default function TournamentsV3ListPage() {
               color: colors.text.primary,
               marginBottom: '8px'
             }}>
-              {activeFilter === 'all' ? 'No hay torneos disponibles' : `No hay torneos ${activeFilter === 'active' ? 'activos' : activeFilter === 'upcoming' ? 'próximos' : 'finalizados'}`}
+              No hay torneos disponibles
             </h3>
             <p style={{ 
               fontSize: '14px',
-              color: colors.text.secondary,
-              marginBottom: '24px'
+              color: colors.text.secondary
             }}>
-              {activeFilter === 'all' ? 'Crea tu primer torneo para comenzar' : 'Cambia el filtro para ver otros torneos'}
+              Crea tu primer torneo para comenzar
             </p>
-            {activeFilter === 'all' && (
-              <button
-                onClick={() => router.push('/dashboard/tournaments/create')}
-                style={{
-                  padding: '12px 24px',
-                  borderRadius: '12px',
-                  background: `linear-gradient(135deg, ${colors.primary[600]}, ${colors.accent[300]})`,
-                  color: 'white',
-                  border: 'none',
-                  fontSize: '14px',
-                  fontWeight: 600,
-                  cursor: 'pointer',
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: '8px',
-                  margin: '0 auto',
-                  transition: 'all 0.2s'
-                }}
-              >
-                <Plus size={18} />
-                Crear Primer Torneo
-              </button>
-            )}
           </div>
         </CardModern>
       ) : (
         <div style={{ 
           display: 'grid',
-          gridTemplateColumns: 'repeat(auto-fill, minmax(400px, 1fr))',
+          gridTemplateColumns: 'repeat(auto-fill, minmax(360px, 1fr))',
           gap: '24px'
         }}>
-          {filteredTournaments.map((tournament) => {
+          {tournaments.map((tournament) => {
             const statusStyle = getStatusBadge(tournament.status)
-            const quickActions = getQuickActions(tournament)
-            
             return (
               <CardModern 
                 key={tournament.id} 
                 variant="glass" 
                 padding="lg"
                 interactive
+                onClick={() => {
+                  const targetSlug = clubSlug || 'club-demo-padelyzer'
+                  router.push(`/c/${targetSlug}/dashboard/tournaments/${tournament.id}`)
+                }}
                 style={{ cursor: 'pointer' }}
               >
-                {/* Header del Torneo */}
                 <div style={{ 
                   display: 'flex',
                   alignItems: 'flex-start',
                   justifyContent: 'space-between',
-                  marginBottom: '20px'
+                  marginBottom: '16px'
                 }}>
                   <div style={{ flex: 1 }}>
                     <div style={{ 
@@ -448,8 +327,8 @@ export default function TournamentsV3ListPage() {
                       marginBottom: '8px'
                     }}>
                       <div style={{
-                        width: '44px',
-                        height: '44px',
+                        width: '40px',
+                        height: '40px',
                         borderRadius: '12px',
                         background: `linear-gradient(135deg, ${colors.primary[600]}, ${colors.accent[300]})`,
                         display: 'flex',
@@ -458,13 +337,12 @@ export default function TournamentsV3ListPage() {
                       }}>
                         <Trophy size={24} color="white" />
                       </div>
-                      <div style={{ flex: 1 }}>
+                      <div>
                         <h3 style={{ 
                           fontSize: '18px',
                           fontWeight: 600,
                           color: colors.text.primary,
-                          marginBottom: '4px',
-                          lineHeight: 1.3
+                          marginBottom: '2px'
                         }}>
                           {tournament.name}
                         </h3>
@@ -483,26 +361,21 @@ export default function TournamentsV3ListPage() {
                   
                   <div style={{
                     ...statusStyle,
-                    padding: '8px 12px',
+                    padding: '6px 12px',
                     borderRadius: '8px',
                     fontSize: '12px',
-                    fontWeight: 600,
-                    textTransform: 'uppercase',
-                    letterSpacing: '0.5px'
+                    fontWeight: 500
                   }}>
                     {statusStyle.label}
                   </div>
                 </div>
 
-                {/* Estadísticas Rápidas */}
                 <div style={{ 
                   display: 'grid',
                   gridTemplateColumns: '1fr 1fr',
                   gap: '16px',
-                  padding: '16px',
-                  background: colors.neutral[50],
-                  borderRadius: '12px',
-                  marginBottom: '20px'
+                  paddingTop: '16px',
+                  borderTop: `1px solid ${colors.border.light}`
                 }}>
                   <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
                     <Calendar size={16} style={{ color: colors.text.tertiary }} />
@@ -510,20 +383,19 @@ export default function TournamentsV3ListPage() {
                       <p style={{ 
                         fontSize: '11px',
                         color: colors.text.tertiary,
-                        marginBottom: '2px',
-                        textTransform: 'uppercase',
-                        letterSpacing: '0.5px'
+                        marginBottom: '2px'
                       }}>
-                        Inicio
+                        Fecha inicio
                       </p>
                       <p style={{ 
                         fontSize: '13px',
                         color: colors.text.primary,
-                        fontWeight: 600
+                        fontWeight: 500
                       }}>
                         {new Date(tournament.startDate).toLocaleDateString('es-MX', {
                           day: 'numeric',
-                          month: 'short'
+                          month: 'short',
+                          year: 'numeric'
                         })}
                       </p>
                     </div>
@@ -535,73 +407,23 @@ export default function TournamentsV3ListPage() {
                       <p style={{ 
                         fontSize: '11px',
                         color: colors.text.tertiary,
-                        marginBottom: '2px',
-                        textTransform: 'uppercase',
-                        letterSpacing: '0.5px'
+                        marginBottom: '2px'
                       }}>
                         Equipos
                       </p>
                       <p style={{ 
                         fontSize: '13px',
                         color: colors.text.primary,
-                        fontWeight: 600
+                        fontWeight: 500
                       }}>
-                        {tournament._count?.TournamentRegistration || 0}/{tournament.maxPlayers}
+                        {tournament._count?.TournamentRegistration || 0} / {tournament.maxPlayers}
                       </p>
                     </div>
                   </div>
                 </div>
 
-                {/* Acciones Rápidas */}
-                {quickActions.length > 0 && (
-                  <div style={{ 
-                    display: 'flex',
-                    gap: '8px',
-                    flexWrap: 'wrap',
-                    marginBottom: '16px'
-                  }}>
-                    {quickActions.map((action, index) => (
-                      <button
-                        key={index}
-                        onClick={(e) => {
-                          e.stopPropagation()
-                          action.action()
-                        }}
-                        style={{
-                          padding: '8px 12px',
-                          borderRadius: '8px',
-                          background: colors.primary[50],
-                          color: colors.primary[700],
-                          border: `1px solid ${colors.primary[200]}`,
-                          fontSize: '12px',
-                          fontWeight: 500,
-                          cursor: 'pointer',
-                          display: 'flex',
-                          alignItems: 'center',
-                          gap: '6px',
-                          transition: 'all 0.2s',
-                          flex: '1',
-                          minWidth: '120px',
-                          justifyContent: 'center'
-                        }}
-                        onMouseEnter={(e) => {
-                          e.currentTarget.style.background = colors.primary[100]
-                          e.currentTarget.style.borderColor = colors.primary[300]
-                        }}
-                        onMouseLeave={(e) => {
-                          e.currentTarget.style.background = colors.primary[50]
-                          e.currentTarget.style.borderColor = colors.primary[200]
-                        }}
-                      >
-                        <action.icon size={14} />
-                        {action.label}
-                      </button>
-                    ))}
-                  </div>
-                )}
-
-                {/* Acción Principal */}
                 <div style={{ 
+                  marginTop: '16px',
                   paddingTop: '16px',
                   borderTop: `1px solid ${colors.border.light}`,
                   display: 'flex',
@@ -615,32 +437,43 @@ export default function TournamentsV3ListPage() {
                       router.push(`/c/${targetSlug}/dashboard/tournaments/${tournament.id}`)
                     }}
                     style={{
-                      padding: '10px 16px',
-                      borderRadius: '10px',
+                      padding: '8px 16px',
+                      borderRadius: '8px',
                       background: `linear-gradient(135deg, ${colors.primary[600]}, ${colors.accent[300]})`,
                       color: 'white',
                       border: 'none',
                       fontSize: '13px',
-                      fontWeight: 600,
+                      fontWeight: 500,
                       cursor: 'pointer',
                       display: 'flex',
                       alignItems: 'center',
-                      gap: '8px',
-                      transition: 'all 0.2s',
-                      flex: '1',
-                      justifyContent: 'center'
-                    }}
-                    onMouseEnter={(e) => {
-                      e.currentTarget.style.transform = 'translateY(-1px)'
-                      e.currentTarget.style.boxShadow = '0 4px 12px rgba(0,0,0,0.15)'
-                    }}
-                    onMouseLeave={(e) => {
-                      e.currentTarget.style.transform = 'translateY(0)'
-                      e.currentTarget.style.boxShadow = 'none'
+                      gap: '6px',
+                      transition: 'all 0.2s'
                     }}
                   >
-                    Gestionar Torneo
+                    Gestionar
                     <ChevronRight size={16} />
+                  </button>
+                  
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation()
+                      // Volver a versión anterior
+                      router.push(`/dashboard/tournaments/${tournament.id}`)
+                    }}
+                    style={{
+                      padding: '8px 16px',
+                      borderRadius: '8px',
+                      background: 'transparent',
+                      color: colors.text.secondary,
+                      border: `1px solid ${colors.border.default}`,
+                      fontSize: '13px',
+                      fontWeight: 500,
+                      cursor: 'pointer',
+                      transition: 'all 0.2s'
+                    }}
+                  >
+                    Versión anterior
                   </button>
                 </div>
               </CardModern>

@@ -104,7 +104,8 @@ async function createClub() {
       stripePayoutsEnabled: true,
       stripeChargesEnabled: true,
       stripeDetailsSubmitted: true,
-      stripeCommissionRate: 2.9 // 2.9% commission
+      stripeCommissionRate: 2.9, // 2.9% commission
+      updatedAt: new Date()
     }
   })
   
@@ -136,7 +137,8 @@ async function createClubSettings(clubId: string) {
       bankName: 'BBVA México',
       accountNumber: '0123456789',
       clabe: '012180001234567890',
-      accountHolder: 'Club Pádel México S.A. de C.V.'
+      accountHolder: 'Club Pádel México S.A. de C.V.',
+      updatedAt: new Date()
     }
   })
   
@@ -161,7 +163,8 @@ async function createStripeProvider(clubId: string) {
       fees: {
         fixed: 30, // 30 centavos
         percentage: 2.9 // 2.9%
-      }
+      },
+      updatedAt: new Date()
     }
   })
   
@@ -183,11 +186,11 @@ async function createCourts(clubId: string) {
         type: 'PADEL',
         indoor: i < 2, // Primeras 2 canchas techadas
         order: i + 1,
-        active: true
+        active: true,
+        updatedAt: new Date()
       }
     })
     courts.push(court)
-    console.log(`✅ ${court.name} creada (${court.indoor ? 'Techada' : 'Al aire libre'})`)
   }
   
   return courts
@@ -211,7 +214,8 @@ async function createPricing(clubId: string) {
       // Descuentos por volumen
       enableBulkDiscount: true,
       bulkDiscountThreshold: 10,
-      bulkDiscountPercentage: 15.0
+      bulkDiscountPercentage: 15.0,
+      updatedAt: new Date()
     }
   })
   
@@ -243,12 +247,12 @@ async function createUsers(clubId: string) {
         memberSince: new Date(2023, Math.floor(Math.random() * 12), Math.floor(Math.random() * 28) + 1),
         totalBookings: Math.floor(Math.random() * 50),
         totalSpent: Math.floor(Math.random() * 50000) * 100,
-        active: true
+        active: true,
+        updatedAt: new Date()
       }
     })
     
     users.push(player)
-    console.log(`✅ ${player.name} - ${player.level} (${player.clientNumber})`)
   }
   
   console.log(`✅ ${users.length} usuarios creados`)
@@ -308,15 +312,12 @@ async function createInstructors(clubId: string) {
       data: {
         clubId: clubId,
         ...data,
-        active: true
+        active: true,
+        updatedAt: new Date()
       }
     })
     
     instructors.push(instructor)
-    const paymentDisplay = instructor.paymentType === 'HOURLY' 
-      ? `$${instructor.hourlyRate/100}/hora` 
-      : `$${instructor.monthlyRate/100}/mes`
-    console.log(`✅ ${instructor.name} - ${paymentDisplay}`)
   }
   
   return instructors
@@ -344,7 +345,8 @@ async function createSampleTransactions(clubId: string, players: any[]) {
         description: `Pago de ${randomPlayer.name} - ${category === 'CLASS' ? 'Clase de pádel' : category === 'BOOKING' ? 'Reserva de cancha' : 'Membresía'}`,
         date: new Date(currentDate.getTime() - Math.random() * 30 * 24 * 60 * 60 * 1000),
         reference: `TXN-${Date.now()}-${i}`,
-        playerId: randomPlayer.id
+        playerId: randomPlayer.id,
+        updatedAt: new Date()
       }
     })
     
@@ -366,7 +368,8 @@ async function createSampleTransactions(clubId: string, players: any[]) {
         currency: 'MXN',
         description: `Gasto de ${category.toLowerCase()} - ${new Date().toLocaleDateString('es-MX', { month: 'long' })}`,
         date: new Date(currentDate.getTime() - Math.random() * 30 * 24 * 60 * 60 * 1000),
-        reference: `EXP-${Date.now()}-${i}`
+        reference: `EXP-${Date.now()}-${i}`,
+        updatedAt: new Date()
       }
     })
     
@@ -386,7 +389,8 @@ async function createAdminUser(clubId: string) {
       email: 'admin@clubpadel.mx',
       role: 'CLUB_OWNER',
       clubId: clubId,
-      active: true
+      active: true,
+      updatedAt: new Date()
     }
   })
   

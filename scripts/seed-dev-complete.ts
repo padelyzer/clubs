@@ -86,7 +86,8 @@ async function createClub() {
       stripePayoutsEnabled: true,
       stripeChargesEnabled: true,
       stripeDetailsSubmitted: true,
-      stripeCommissionRate: 2.9 // 2.9% commission
+      stripeCommissionRate: 2.9, // 2.9% commission
+      updatedAt: new Date()
     }
   })
   
@@ -113,7 +114,8 @@ async function createClubSettings(clubId: string) {
       // Payment Settings
       acceptCash: true,
       terminalEnabled: true,
-      terminalId: 'TERM_001_PADEL_MX'
+      terminalId: 'TERM_001_PADEL_MX',
+      updatedAt: new Date()
     }
   })
   
@@ -135,7 +137,8 @@ async function createCourts(clubId: string) {
         type: 'PADEL',
         indoor: i < 2, // First 2 courts are indoor
         order: i + 1,
-        active: true
+        active: true,
+        updatedAt: new Date()
       }
     })
     courts.push(court)
@@ -163,7 +166,8 @@ async function createPricing(clubId: string) {
       // Bulk Discounts
       enableBulkDiscount: true,
       bulkDiscountThreshold: 10,   // 10+ classes
-      bulkDiscountPercentage: 15.0 // 15% discount
+      bulkDiscountPercentage: 15.0, // 15% discount
+      updatedAt: new Date()
     }
   })
   
@@ -195,7 +199,8 @@ async function createUsers(clubId: string) {
         memberSince: new Date(2023, Math.floor(Math.random() * 12), Math.floor(Math.random() * 28) + 1),
         totalBookings: Math.floor(Math.random() * 50),
         totalSpent: Math.floor(Math.random() * 50000) * 100, // in cents
-        active: true
+        active: true,
+        updatedAt: new Date()
       }
     })
     
@@ -219,7 +224,8 @@ async function createInstructors(clubId: string) {
       specialties: ['Técnica', 'Táctica', 'Competición'],
       paymentType: 'HOURLY',
       hourlyRate: 60000, // $600/hora
-      monthlyRate: 0
+      monthlyRate: 0,
+      updatedAt: new Date()
     },
     {
       name: 'Patricia Morales',
@@ -229,7 +235,8 @@ async function createInstructors(clubId: string) {
       specialties: ['Principiantes', 'Técnica básica', 'Coordinación'],
       paymentType: 'MONTHLY',
       hourlyRate: 0,
-      monthlyRate: 2500000 // $25,000 mensual
+      monthlyRate: 2500000, // $25,000 mensual
+      updatedAt: new Date()
     },
     {
       name: 'Fernando Castillo',
@@ -239,7 +246,8 @@ async function createInstructors(clubId: string) {
       specialties: ['Preparación física', 'Alto rendimiento', 'Competición'],
       paymentType: 'HOURLY',
       hourlyRate: 55000, // $550/hora
-      monthlyRate: 0
+      monthlyRate: 0,
+      updatedAt: new Date()
     },
     {
       name: 'Andrea Vázquez',
@@ -249,7 +257,8 @@ async function createInstructors(clubId: string) {
       specialties: ['Clínicas', 'Grupos', 'Técnica intermedia'],
       paymentType: 'MONTHLY',
       hourlyRate: 0,
-      monthlyRate: 2000000 // $20,000 mensual
+      monthlyRate: 2000000, // $20,000 mensual
+      updatedAt: new Date()
     }
   ]
   
@@ -267,7 +276,8 @@ async function createInstructors(clubId: string) {
         hourlyRate: instructorData.hourlyRate,
         paymentType: instructorData.paymentType,
         monthlyRate: instructorData.monthlyRate,
-        active: true
+        active: true,
+        updatedAt: new Date()
       }
     })
     
@@ -300,7 +310,8 @@ async function createSampleTransactions(clubId: string, players: any[]) {
         description: `Pago de ${randomPlayer.name} - ${category === 'CLASS' ? 'Clase de pádel' : category === 'BOOKING' ? 'Reserva de cancha' : 'Membresía'}`,
         date: new Date(currentDate.getTime() - Math.random() * 30 * 24 * 60 * 60 * 1000), // Random date within last 30 days
         reference: `TXN-${Date.now()}-${i}`,
-        playerId: randomPlayer.id
+        playerId: randomPlayer.id,
+        updatedAt: new Date()
       }
     })
     
@@ -322,7 +333,8 @@ async function createSampleTransactions(clubId: string, players: any[]) {
         currency: 'MXN',
         description: `Gasto de ${category.toLowerCase()} - ${new Date().toLocaleDateString('es-MX', { month: 'long' })}`,
         date: new Date(currentDate.getTime() - Math.random() * 30 * 24 * 60 * 60 * 1000),
-        reference: `EXP-${Date.now()}-${i}`
+        reference: `EXP-${Date.now()}-${i}`,
+        updatedAt: new Date()
       }
     })
     
@@ -342,7 +354,8 @@ async function createAdminUser(clubId: string) {
       email: 'admin@clubpadel.mx',
       role: 'CLUB_OWNER',
       clubId: clubId,
-      active: true
+      active: true,
+      updatedAt: new Date()
     }
   })
   

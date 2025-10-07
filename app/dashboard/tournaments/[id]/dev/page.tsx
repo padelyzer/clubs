@@ -32,25 +32,9 @@ interface Tournament {
     TournamentRegistration: number
     TournamentMatch: number
   }
-  todayMatches: Array<{
-    id: string
-    courtNumber: number
-    scheduledTime: string
-    status: 'pending' | 'in_progress' | 'completed'
-    team1: { name: string }
-    team2: { name: string }
-    category: string
-  }>
-  recentResults: Array<{
-    id: string
-    team1: { name: string }
-    team2: { name: string }
-    winner: 'team1' | 'team2'
-    completedAt: string
-  }>
 }
 
-export default function TournamentOverviewPage() {
+export default function TournamentOverviewDevPage() {
   const router = useRouter()
   const params = useParams()
   const tournamentId = params.id as string
@@ -66,19 +50,24 @@ export default function TournamentOverviewPage() {
   const fetchTournamentData = async () => {
     try {
       setLoading(true)
-      const response = await fetch(`/api/tournaments/${tournamentId}`)
       
-      if (!response.ok) {
-        throw new Error('Error al cargar los datos del torneo')
+      // Simular datos del torneo para desarrollo
+      const mockTournament: Tournament = {
+        id: tournamentId,
+        name: 'Torneo Demo Activo',
+        description: 'Torneo de demostración para probar la interfaz v3',
+        status: 'ACTIVE',
+        type: 'SINGLE_ELIMINATION',
+        startDate: new Date().toISOString(),
+        endDate: new Date(Date.now() + 2 * 24 * 60 * 60 * 1000).toISOString(),
+        maxPlayers: 16,
+        _count: {
+          TournamentRegistration: 8,
+          TournamentMatch: 12
+        }
       }
       
-      const data = await response.json()
-      
-      if (!data.success) {
-        throw new Error(data.error || 'Error al procesar los datos')
-      }
-      
-      setTournament(data.tournament)
+      setTournament(mockTournament)
       setError(null)
       
     } catch (err) {
@@ -116,25 +105,7 @@ export default function TournamentOverviewPage() {
         label: 'Borrador'
       }
     }
-    return styles[status] || styles.draft
-  }
-
-  const getStatusIcon = (status: string) => {
-    switch (status) {
-      case 'completed':
-        return <CheckCircle size={16} style={{ color: colors.success[600] }} />
-      case 'in_progress':
-        return <PlayCircle size={16} style={{ color: colors.accent[600] }} />
-      default:
-        return <Clock size={16} style={{ color: colors.text.tertiary }} />
-    }
-  }
-
-  const formatTime = (timeString: string) => {
-    return new Date(timeString).toLocaleTimeString('es-MX', {
-      hour: '2-digit',
-      minute: '2-digit'
-    })
+    return styles[status.toLowerCase()] || styles.draft
   }
 
   const formatDate = (dateString: string) => {
@@ -225,9 +196,6 @@ export default function TournamentOverviewPage() {
   if (!tournament) return null
 
   const statusStyle = getStatusBadge(tournament.status)
-  const pendingMatches = tournament.todayMatches.filter(m => m.status === 'pending').length
-  const inProgressMatches = tournament.todayMatches.filter(m => m.status === 'in_progress').length
-  const completedMatches = tournament.todayMatches.filter(m => m.status === 'completed').length
 
   return (
     <div style={{ 
@@ -380,7 +348,7 @@ export default function TournamentOverviewPage() {
                     color: colors.text.primary,
                     margin: 0
                   }}>
-                    {tournament.todayMatches.length}
+                    {tournament._count.TournamentMatch}
                   </p>
                   <p style={{ 
                     fontSize: '12px',
@@ -389,7 +357,7 @@ export default function TournamentOverviewPage() {
                     textTransform: 'uppercase',
                     letterSpacing: '0.5px'
                   }}>
-                    Partidos Hoy
+                    Partidos
                   </p>
                 </div>
               </div>
@@ -415,7 +383,7 @@ export default function TournamentOverviewPage() {
                     color: colors.text.primary,
                     margin: 0
                   }}>
-                    {inProgressMatches}
+                    {Math.floor(tournament._count.TournamentMatch / 2)}
                   </p>
                   <p style={{ 
                     fontSize: '12px',
@@ -436,7 +404,7 @@ export default function TournamentOverviewPage() {
                   width: '40px',
                   height: '40px',
                   borderRadius: '10px',
-                  background: `linear-gradient(135deg, ${colors.success[600]}, ${colors.success[400]})`,
+                  background: `linear-gradient(135deg, ${colors.accent[600]}, ${colors.accent[400]})`,
                   display: 'flex',
                   alignItems: 'center',
                   justifyContent: 'center'
@@ -450,7 +418,7 @@ export default function TournamentOverviewPage() {
                     color: colors.text.primary,
                     margin: 0
                   }}>
-                    {completedMatches}
+                    {Math.floor(tournament._count.TournamentMatch / 3)}
                   </p>
                   <p style={{ 
                     fontSize: '12px',
@@ -460,41 +428,6 @@ export default function TournamentOverviewPage() {
                     letterSpacing: '0.5px'
                   }}>
                     Finalizados
-                  </p>
-                </div>
-              </div>
-            </CardModern>
-
-            <CardModern variant="glass" padding="lg">
-              <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-                <div style={{
-                  width: '40px',
-                  height: '40px',
-                  borderRadius: '10px',
-                  background: `linear-gradient(135deg, ${colors.warning[600]}, ${colors.warning[400]})`,
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center'
-                }}>
-                  <Clock size={20} color="white" />
-                </div>
-                <div>
-                  <p style={{ 
-                    fontSize: '24px',
-                    fontWeight: 700,
-                    color: colors.text.primary,
-                    margin: 0
-                  }}>
-                    {pendingMatches}
-                  </p>
-                  <p style={{ 
-                    fontSize: '12px',
-                    color: colors.text.secondary,
-                    margin: 0,
-                    textTransform: 'uppercase',
-                    letterSpacing: '0.5px'
-                  }}>
-                    Pendientes
                   </p>
                 </div>
               </div>
@@ -549,7 +482,7 @@ export default function TournamentOverviewPage() {
                     Ver Partidos de Hoy
                   </p>
                   <p style={{ margin: 0, fontSize: '12px', opacity: 0.9 }}>
-                    {tournament.todayMatches.length} partidos programados
+                    {tournament._count.TournamentMatch} partidos programados
                   </p>
                 </div>
                 <ChevronRight size={16} style={{ marginLeft: 'auto' }} />
@@ -560,7 +493,7 @@ export default function TournamentOverviewPage() {
                 style={{
                   padding: '16px 20px',
                   borderRadius: '12px',
-                  background: `linear-gradient(135deg, ${colors.success[600]}, ${colors.success[500]})`,
+                  background: `linear-gradient(135deg, ${colors.accent[600]}, ${colors.accent[500]})`,
                   color: 'white',
                   border: 'none',
                   fontSize: '14px',
@@ -592,265 +525,53 @@ export default function TournamentOverviewPage() {
                 </div>
                 <ChevronRight size={16} style={{ marginLeft: 'auto' }} />
               </button>
-              
-              <button
-                onClick={() => router.push(`/dashboard/tournaments/${tournamentId}/standings`)}
-                style={{
-                  padding: '16px 20px',
-                  borderRadius: '12px',
-                  background: `linear-gradient(135deg, ${colors.accent[600]}, ${colors.primary[400]})`,
-                  color: 'white',
-                  border: 'none',
-                  fontSize: '14px',
-                  fontWeight: 600,
-                  cursor: 'pointer',
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: '12px',
-                  transition: 'all 0.2s',
-                  textAlign: 'left'
-                }}
-                onMouseEnter={(e) => {
-                  e.currentTarget.style.transform = 'translateY(-2px)'
-                  e.currentTarget.style.boxShadow = '0 8px 24px rgba(0,0,0,0.15)'
-                }}
-                onMouseLeave={(e) => {
-                  e.currentTarget.style.transform = 'translateY(0)'
-                  e.currentTarget.style.boxShadow = 'none'
-                }}
-              >
-                <BarChart3 size={20} />
-                <div>
-                  <p style={{ margin: '0 0 4px 0', fontSize: '15px', fontWeight: 600 }}>
-                    Ver Tablas
-                  </p>
-                  <p style={{ margin: 0, fontSize: '12px', opacity: 0.9 }}>
-                    Clasificaciones actualizadas
-                  </p>
-                </div>
-                <ChevronRight size={16} style={{ marginLeft: 'auto' }} />
-              </button>
             </div>
           </CardModern>
 
-          {/* Partidos de Hoy */}
-          {tournament.todayMatches.length > 0 && (
-            <CardModern variant="glass" padding="lg">
-              <div style={{ 
+          {/* Mensaje de Desarrollo */}
+          <CardModern variant="glass" padding="lg">
+            <div style={{ 
+              display: 'flex',
+              alignItems: 'center',
+              gap: '12px',
+              padding: '16px',
+              background: colors.primary[50],
+              borderRadius: '12px',
+              border: `1px solid ${colors.primary[200]}`
+            }}>
+              <div style={{
+                width: '40px',
+                height: '40px',
+                borderRadius: '10px',
+                background: colors.primary[600],
                 display: 'flex',
                 alignItems: 'center',
-                justifyContent: 'space-between',
-                marginBottom: '20px'
+                justifyContent: 'center',
+                color: 'white',
+                fontSize: '20px'
               }}>
-                <h3 style={{ 
-                  fontSize: '18px',
+                🚀
+              </div>
+              <div style={{ flex: 1 }}>
+                <h4 style={{ 
+                  fontSize: '16px',
                   fontWeight: 600,
-                  color: colors.text.primary,
-                  margin: 0
+                  color: colors.primary[700],
+                  margin: '0 0 4px 0'
                 }}>
-                  📅 Partidos de Hoy
-                </h3>
-                <button
-                  onClick={() => router.push(`/dashboard/tournaments/${tournamentId}/today`)}
-                  style={{
-                    padding: '6px 12px',
-                    borderRadius: '6px',
-                    background: colors.primary[100],
-                    color: colors.primary[700],
-                    border: 'none',
-                    fontSize: '12px',
-                    fontWeight: 500,
-                    cursor: 'pointer'
-                  }}
-                >
-                  Ver Todos
-                </button>
+                  Modo Desarrollo Activo
+                </h4>
+                <p style={{ 
+                  fontSize: '14px',
+                  color: colors.primary[600],
+                  margin: 0,
+                  lineHeight: 1.4
+                }}>
+                  Esta es la vista general del torneo en la interfaz v3. Las funcionalidades avanzadas como vista del día y captura de resultados requieren APIs adicionales.
+                </p>
               </div>
-              
-              <div style={{ 
-                display: 'grid',
-                gap: '12px'
-              }}>
-                {tournament.todayMatches.slice(0, 5).map((match) => (
-                  <div
-                    key={match.id}
-                    style={{
-                      padding: '16px',
-                      background: colors.neutral[50],
-                      borderRadius: '10px',
-                      border: `1px solid ${colors.border.light}`,
-                      cursor: 'pointer',
-                      transition: 'all 0.2s'
-                    }}
-                    onClick={() => router.push(`/dashboard/tournaments/${tournamentId}/matches/${match.id}/capture`)}
-                    onMouseEnter={(e) => {
-                      e.currentTarget.style.background = colors.primary[50]
-                      e.currentTarget.style.borderColor = colors.primary[200]
-                    }}
-                    onMouseLeave={(e) => {
-                      e.currentTarget.style.background = colors.neutral[50]
-                      e.currentTarget.style.borderColor = colors.border.light
-                    }}
-                  >
-                    <div style={{ 
-                      display: 'flex',
-                      alignItems: 'center',
-                      justifyContent: 'space-between',
-                      marginBottom: '8px'
-                    }}>
-                      <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                        <Clock size={14} style={{ color: colors.text.tertiary }} />
-                        <span style={{ 
-                          fontSize: '13px',
-                          fontWeight: 500,
-                          color: colors.text.primary
-                        }}>
-                          {formatTime(match.scheduledTime)}
-                        </span>
-                        <span style={{
-                          padding: '2px 6px',
-                          borderRadius: '4px',
-                          background: colors.primary[100],
-                          color: colors.primary[700],
-                          fontSize: '10px',
-                          fontWeight: 500
-                        }}>
-                          C{match.courtNumber}
-                        </span>
-                      </div>
-                      
-                      <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-                        {getStatusIcon(match.status)}
-                        <span style={{ 
-                          fontSize: '11px',
-                          fontWeight: 500,
-                          color: colors.text.secondary
-                        }}>
-                          {match.status === 'completed' ? 'Finalizado' : 
-                           match.status === 'in_progress' ? 'En Juego' : 'Pendiente'}
-                        </span>
-                      </div>
-                    </div>
-                    
-                    <div style={{ 
-                      display: 'flex',
-                      alignItems: 'center',
-                      justifyContent: 'space-between'
-                    }}>
-                      <div style={{ flex: 1 }}>
-                        <p style={{ 
-                          fontSize: '14px',
-                          fontWeight: 500,
-                          color: colors.text.primary,
-                          margin: '0 0 2px 0'
-                        }}>
-                          {match.team1.name} vs {match.team2.name}
-                        </p>
-                        <p style={{ 
-                          fontSize: '12px',
-                          color: colors.text.secondary,
-                          margin: 0
-                        }}>
-                          {match.category}
-                        </p>
-                      </div>
-                      
-                      {match.status === 'pending' && (
-                        <Target size={16} style={{ color: colors.primary[600] }} />
-                      )}
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </CardModern>
-          )}
-
-          {/* Resultados Recientes */}
-          {tournament.recentResults.length > 0 && (
-            <CardModern variant="glass" padding="lg">
-              <h3 style={{ 
-                fontSize: '18px',
-                fontWeight: 600,
-                color: colors.text.primary,
-                marginBottom: '16px'
-              }}>
-                🏆 Resultados Recientes
-              </h3>
-              
-              <div style={{ 
-                display: 'grid',
-                gap: '12px'
-              }}>
-                {tournament.recentResults.slice(0, 5).map((result) => (
-                  <div
-                    key={result.id}
-                    style={{
-                      padding: '16px',
-                      background: colors.success[50],
-                      borderRadius: '10px',
-                      border: `1px solid ${colors.success[200]}`
-                    }}
-                  >
-                    <div style={{ 
-                      display: 'flex',
-                      alignItems: 'center',
-                      justifyContent: 'space-between',
-                      marginBottom: '8px'
-                    }}>
-                      <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                        <CheckCircle size={14} style={{ color: colors.success[600] }} />
-                        <span style={{ 
-                          fontSize: '13px',
-                          fontWeight: 500,
-                          color: colors.success[700]
-                        }}>
-                          Finalizado
-                        </span>
-                      </div>
-                      
-                      <span style={{ 
-                        fontSize: '11px',
-                        color: colors.text.secondary
-                      }}>
-                        {new Date(result.completedAt).toLocaleTimeString('es-MX', {
-                          hour: '2-digit',
-                          minute: '2-digit'
-                        })}
-                      </span>
-                    </div>
-                    
-                    <div style={{ 
-                      display: 'flex',
-                      alignItems: 'center',
-                      gap: '12px'
-                    }}>
-                      <div style={{ flex: 1 }}>
-                        <p style={{ 
-                          fontSize: '14px',
-                          fontWeight: 500,
-                          color: colors.text.primary,
-                          margin: 0
-                        }}>
-                          {result.team1.name} vs {result.team2.name}
-                        </p>
-                      </div>
-                      
-                      <div style={{
-                        padding: '4px 8px',
-                        borderRadius: '6px',
-                        background: colors.success[100],
-                        color: colors.success[700],
-                        fontSize: '11px',
-                        fontWeight: 600
-                      }}>
-                        🏆 {result.winner === 'team1' ? result.team1.name : result.team2.name}
-                      </div>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </CardModern>
-          )}
+            </div>
+          </CardModern>
         </div>
       </div>
     </div>

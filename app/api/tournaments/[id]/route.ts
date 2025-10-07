@@ -8,6 +8,7 @@ export async function GET(
 ) {
   try {
     const paramData = await params
+    const { id: tournamentId } = paramData
     
     const session = await requireAuthAPI()
     
@@ -20,9 +21,6 @@ export async function GET(
     if (!session?.clubId) {
       return NextResponse.json({ error: 'No autorizado' }, { status: 401 })
     }
-
-    const paramData = await params
-    const { id: tournamentId } = paramData
 
 
     // Obtener datos del torneo con toda la información necesaria
@@ -244,6 +242,7 @@ export async function PATCH(
 ) {
   try {
     const paramData = await params
+    const { id: tournamentId } = paramData
     
     const session = await requireAuthAPI()
     
@@ -257,8 +256,6 @@ export async function PATCH(
       return NextResponse.json({ error: 'No autorizado' }, { status: 401 })
     }
 
-    const paramData = await params
-    const { id: tournamentId } = paramData
     const { matchId, team1Score, team2Score, winner, status } = await req.json()
 
     const updatedMatch = await prisma.tournamentMatch.update({

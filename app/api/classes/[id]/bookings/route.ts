@@ -241,9 +241,9 @@ export async function DELETE(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
-  const paramData = await params
-  const { id } = paramData
   try {
+    const paramData = await params
+    const { id } = paramData
     const { searchParams } = new URL(request.url)
     const bookingId = searchParams.get('bookingId')
     
