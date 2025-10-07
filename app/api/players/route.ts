@@ -196,6 +196,9 @@ export async function POST(request: NextRequest) {
             startsWith: `${clubPrefix}-${currentYear}-`
           }
         },
+        select: {
+          memberNumber: true
+        },
         orderBy: { memberNumber: 'desc' }
       })
       
@@ -214,6 +217,10 @@ export async function POST(request: NextRequest) {
         where: {
           clubId: session.clubId,
           memberNumber: memberNumber
+        },
+        select: {
+          id: true,
+          memberNumber: true
         }
       })
 
@@ -320,6 +327,12 @@ export async function PUT(request: NextRequest) {
       where: {
         id,
         clubId: session.clubId
+      },
+      select: {
+        id: true,
+        phone: true,
+        memberNumber: true,
+        name: true
       }
     })
 
@@ -340,6 +353,10 @@ export async function PUT(request: NextRequest) {
           clubId: session.clubId,
           phone: validatedData.phone,
           id: { not: id }
+        },
+        select: {
+          id: true,
+          phone: true
         }
       })
 
@@ -358,6 +375,10 @@ export async function PUT(request: NextRequest) {
           clubId: session.clubId,
           memberNumber: validatedData.memberNumber,
           id: { not: id }
+        },
+        select: {
+          id: true,
+          memberNumber: true
         }
       })
 
@@ -427,6 +448,10 @@ export async function DELETE(request: NextRequest) {
       where: {
         id,
         clubId: session.clubId
+      },
+      select: {
+        id: true,
+        name: true
       }
     })
 
