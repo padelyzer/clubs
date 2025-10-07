@@ -27,7 +27,32 @@ const createBookingSchema = z.object({
   notes: z.string().optional().nullable(),
   paymentMethod: z.enum(['stripe', 'onsite']).optional(),
   paymentType: z.enum(['terminal', 'transfer', 'cash']).optional(),
-  referenceNumber: z.string().optional()
+  referenceNumber: z.string().optional(),
+  // Additional fields that frontend might send
+  courtIds: z.array(z.string()).optional(),
+  isMultiCourt: z.boolean().optional(),
+  multiCourtCount: z.number().optional(),
+  name: z.string().optional(),
+  price: z.number().optional(),
+  type: z.string().optional()
+}).transform((data) => {
+  // Clean and normalize data
+  return {
+    courtId: data.courtId,
+    date: data.date,
+    startTime: data.startTime,
+    duration: data.duration,
+    playerName: data.playerName.trim(),
+    playerEmail: data.playerEmail,
+    playerPhone: data.playerPhone,
+    totalPlayers: data.totalPlayers > 8 ? 4 : data.totalPlayers, // Fix invalid totalPlayers
+    splitPaymentEnabled: data.splitPaymentEnabled || false,
+    splitPaymentCount: data.splitPaymentEnabled ? data.splitPaymentCount : 4,
+    notes: data.notes,
+    paymentMethod: data.paymentMethod,
+    paymentType: data.paymentType,
+    referenceNumber: data.referenceNumber
+  }
 })
 
 const updateBookingSchema = createBookingSchema.partial().extend({
