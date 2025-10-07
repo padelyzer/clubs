@@ -53,6 +53,12 @@ export async function POST(request: NextRequest) {
           clubId: session.clubId,
           phone: validatedData.phone
         }
+      },
+      select: {
+        id: true,
+        name: true,
+        phone: true,
+        email: true
       }
     })
     console.log('[DEBUG Player Creation] Existing player check result:', existingPlayer ? 'FOUND' : 'NOT_FOUND')

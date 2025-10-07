@@ -160,6 +160,12 @@ export async function POST(request: NextRequest) {
           clubId: session.clubId,
           phone: validatedData.phone
         }
+      },
+      select: {
+        id: true,
+        name: true,
+        phone: true,
+        email: true
       }
     })
 
