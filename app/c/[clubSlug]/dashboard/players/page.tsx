@@ -59,7 +59,6 @@ function PlayersPageContent() {
     email: '',
     phone: '',
     level: '',
-    memberNumber: '',
     gender: ''
   })
 
@@ -252,7 +251,6 @@ function PlayersPageContent() {
       email: '',
       phone: '',
       level: '',
-      memberNumber: '',
       gender: ''
     })
   }
