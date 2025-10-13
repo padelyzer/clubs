@@ -639,7 +639,7 @@ export function CheckInModal({
       isOpen={isOpen}
       onClose={onClose}
       title={splitPaymentView ? "Gestión de Pagos Divididos" : "Check-in de Reserva"}
-      size="medium"
+      size={splitPaymentView ? "large" : "medium"}
     >
       {splitPaymentView ? (
         // Vista de gestión de pagos divididos
