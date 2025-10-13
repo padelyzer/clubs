@@ -1,26 +1,38 @@
 import twilio, { Twilio } from 'twilio'
 
-// Validate required environment variables
-if (!process.env.TWILIO_ACCOUNT_SID) {
-  throw new Error('TWILIO_ACCOUNT_SID is required')
-}
-
-if (!process.env.TWILIO_AUTH_TOKEN) {
-  throw new Error('TWILIO_AUTH_TOKEN is required')
-}
-
-if (!process.env.TWILIO_WHATSAPP_NUMBER) {
-  throw new Error('TWILIO_WHATSAPP_NUMBER is required')
-}
+// Check if Twilio is configured
+const isTwilioConfigured =
+  process.env.TWILIO_ACCOUNT_SID &&
+  process.env.TWILIO_AUTH_TOKEN &&
+  process.env.TWILIO_WHATSAPP_NUMBER
 
 const accountSid = process.env.TWILIO_ACCOUNT_SID
 const authToken = process.env.TWILIO_AUTH_TOKEN
 const whatsappNumber = process.env.TWILIO_WHATSAPP_NUMBER
 
-// Initialize Twilio client with proper configuration
-export const twilioClient: Twilio = twilio(accountSid, authToken, {
-  region: process.env.TWILIO_REGION || 'us1',
-  edge: process.env.TWILIO_EDGE || 'sydney'
+// Initialize Twilio client lazily (only when configured)
+let _twilioClient: Twilio | null = null
+
+export function getTwilioClient(): Twilio {
+  if (!isTwilioConfigured) {
+    throw new Error('Twilio is not configured. Please set TWILIO_ACCOUNT_SID, TWILIO_AUTH_TOKEN, and TWILIO_WHATSAPP_NUMBER')
+  }
+
+  if (!_twilioClient) {
+    _twilioClient = twilio(accountSid!, authToken!, {
+      region: process.env.TWILIO_REGION || 'us1',
+      edge: process.env.TWILIO_EDGE || 'sydney'
+    })
+  }
+
+  return _twilioClient
+}
+
+// Legacy export for backward compatibility - will throw at runtime if not configured
+export const twilioClient: Twilio = new Proxy({} as Twilio, {
+  get(_target, prop) {
+    return getTwilioClient()[prop as keyof Twilio]
+  }
 })
 
 // Twilio configuration constants

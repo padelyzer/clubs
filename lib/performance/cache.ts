@@ -1,10 +1,17 @@
 import { Redis } from '@upstash/redis'
 
-// Initialize Redis client
-const redis = new Redis({
-  url: process.env.UPSTASH_REDIS_REST_URL || '',
-  token: process.env.UPSTASH_REDIS_REST_TOKEN || '',
-})
+// Check if Redis is configured
+const isRedisConfigured =
+  process.env.UPSTASH_REDIS_REST_URL &&
+  process.env.UPSTASH_REDIS_REST_TOKEN
+
+// Initialize Redis client only if configured
+const redis = isRedisConfigured
+  ? new Redis({
+      url: process.env.UPSTASH_REDIS_REST_URL!,
+      token: process.env.UPSTASH_REDIS_REST_TOKEN!,
+    })
+  : null
 
 // Cache key prefixes
 const CACHE_PREFIXES = {
@@ -28,8 +35,8 @@ const CACHE_TTL = {
  * Get cached data
  */
 export async function getCachedData<T>(key: string): Promise<T | null> {
-  if (!process.env.UPSTASH_REDIS_REST_URL) return null
-  
+  if (!redis) return null
+
   try {
     const data = await redis.get(key)
     return data as T
@@ -47,8 +54,8 @@ export async function setCachedData<T>(
   data: T,
   ttl: number = CACHE_TTL.MEDIUM
 ): Promise<void> {
-  if (!process.env.UPSTASH_REDIS_REST_URL) return
-  
+  if (!redis) return
+
   try {
     await redis.setex(key, ttl, JSON.stringify(data))
   } catch (error) {
@@ -60,8 +67,8 @@ export async function setCachedData<T>(
  * Invalidate cache by key or pattern
  */
 export async function invalidateCache(pattern: string): Promise<void> {
-  if (!process.env.UPSTASH_REDIS_REST_URL) return
-  
+  if (!redis) return
+
   try {
     const keys = await redis.keys(pattern)
     if (keys.length > 0) {
