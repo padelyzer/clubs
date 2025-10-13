@@ -109,7 +109,7 @@ function PlayersPageContent() {
 
   const handleCreatePlayer = async () => {
     try {
-      const response = await fetch('/api/players/debug', {
+      const response = await fetch('/api/players', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(formData)
