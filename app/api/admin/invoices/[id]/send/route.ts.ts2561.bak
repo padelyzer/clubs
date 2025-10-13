@@ -1,0 +1,106 @@
+import { NextRequest, NextResponse } from 'next/server'
+import { requireSuperAdmin } from '@/lib/auth/actions'
+import { prisma } from '@/lib/config/prisma'
+
+export async function POST(
+  request: NextRequest,
+  { params }: { params: Promise<{ id: string }> }
+) {
+  try {
+    const paramData = await params
+    const { id } = paramData
+    
+    // Verify super admin access
+    await requireSuperAdmin()
+
+    const invoiceId = id
+
+    if (!invoiceId) {
+      return NextResponse.json(
+        { error: 'ID de factura requerido' },
+        { status: 400 }
+      )
+    }
+
+    // Get invoice with club information
+    const invoice = await prisma.subscriptionInvoice.findUnique({
+      where: { id: invoiceId },
+      include: {
+        club: {
+          select: {
+            id: true,
+            name: true,
+            email: true,
+            city: true,
+            state: true
+          }
+        },
+        subscription: {
+          select: {
+            plan: {
+              select: {
+                displayName: true,
+                price: true
+              }
+            }
+          }
+        }
+      }
+    })
+
+    if (!invoice) {
+      return NextResponse.json(
+        { error: 'Factura no encontrada' },
+        { status: 404 }
+      )
+    }
+
+    // Here you would integrate with your email service
+    // For now, we'll just log the action and simulate success
+    console.log(`Sending invoice ${invoice.invoiceNumber} to ${invoice.Club.email}`)
+    
+    // In a real implementation, you would:
+    // 1. Generate PDF invoice
+    // 2. Send email with invoice attachment
+    // 3. Update invoice with sent timestamp
+    // 4. Create notification record
+
+    // Example email service integration:
+    /*
+    const emailService = new EmailService()
+    await emailService.sendInvoice({
+      to: invoice.Club.email,
+      invoice: invoice,
+      template: 'invoice-notification'
+    })
+    */
+
+    // For now, just return success
+    return NextResponse.json({
+      success: true,
+      message: `Factura ${invoice.invoiceNumber} enviada exitosamente a ${invoice.Club.email}`,
+      invoice: {
+        id: invoice.id,
+        invoiceNumber: invoice.invoiceNumber,
+        clubName: invoice.Club.name,
+        clubEmail: invoice.Club.email,
+        sentAt: new Date().toISOString()
+      }
+    })
+
+  } catch (error) {
+    console.error('Error sending invoice:', error)
+    
+    if (error instanceof Error && error.message.includes('Unauthorized')) {
+      return NextResponse.json(
+        { error: 'No tienes permisos para realizar esta acción' },
+        { status: 403 }
+      )
+    }
+
+    return NextResponse.json(
+      { error: 'Error interno del servidor al enviar la factura' },
+      { status: 500 }
+    )
+  }
+}

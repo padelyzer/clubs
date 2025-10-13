@@ -1,0 +1,408 @@
+import { WhatsAppLinkService } from '@/lib/services/whatsapp-link-service'
+import { prisma } from '@/lib/config/prisma'
+
+/**
+ * Notification hooks for automatic WhatsApp messages
+ * These functions are called from the booking and payment flows
+ */
+
+/**
+ * Called when a new booking is created
+ */
+export async function onBookingCreated(bookingId: string, paymentLink?: string) {
+  try {
+    console.log(`[WhatsApp Hook] Booking created: ${bookingId}`)
+
+    // Get booking details
+    const booking = await prisma.booking.findUnique({
+      where: { id: bookingId },
+      include: { 
+        SplitPayment: true,
+        Club: true,
+        Payment: true,
+        Court: true
+      }
+    })
+
+    if (!booking) {
+      console.error(`[WhatsApp Hook] Booking not found: ${bookingId}`)
+      return
+    }
+
+    // Check if this is a Stripe payment booking
+    const hasStripePayment = booking.Payment.some(p => p.method === 'STRIPE')
+    
+    // Send confirmation to organizer using WhatsApp link
+    console.log(`[WhatsApp Hook] Generating WhatsApp confirmation for organizer: ${booking.playerPhone}`)
+    const confirmationResult = await WhatsAppLinkService.sendBookingConfirmation(bookingId)
+    
+    if (confirmationResult.success) {
+      console.log(`[WhatsApp Hook] WhatsApp confirmation link generated: ${confirmationResult.whatsappLink}`)
+    } else {
+      console.error(`[WhatsApp Hook] Failed to generate confirmation link: ${confirmationResult.error}`)
+    }
+    
+    // If split payment is enabled, send pending payment notifications
+    if (booking.splitPaymentEnabled && booking.SplitPayment.length > 0) {
+      console.log(`[WhatsApp Hook] Generating split payment requests for ${booking.SplitPayment.length} players`)
+      
+      for (const splitPayment of booking.SplitPayment) {
+        if (splitPayment.status === 'pending') {
+          const splitResult = await WhatsAppLinkService.sendSplitPaymentRequest(splitPayment.id)
+          
+          if (splitResult.success) {
+            console.log(`[WhatsApp Hook] Split payment request generated for ${splitPayment.playerName}: ${splitResult.whatsappLink}`)
+          } else {
+            console.error(`[WhatsApp Hook] Failed to generate split payment request for ${splitPayment.playerName}: ${splitResult.error}`)
+          }
+        }
+      }
+    }
+    
+  } catch (error) {
+    console.error('[WhatsApp Hook] Error in onBookingCreated:', error)
+  }
+}
+
+/**
+ * Called when a split payment is completed
+ */
+export async function onPaymentCompleted(splitPaymentId: string) {
+  try {
+    console.log(`[WhatsApp Hook] Payment completed: ${splitPaymentId}`)
+
+    const splitPayment = await prisma.splitPayment.findUnique({
+      where: { id: splitPaymentId },
+      include: {
+        Booking: {
+          include: {
+            Club: true,
+            Court: true
+          }
+        },
+        BookingGroup: {
+          include: {
+            Club: true,
+            bookings: {
+              include: {
+                Court: true
+              }
+            }
+          }
+        }
+      }
+    })
+
+    if (!splitPayment) {
+      console.error(`[WhatsApp Hook] Split payment not found: ${splitPaymentId}`)
+      return
+    }
+
+    // Generate payment completion confirmation
+    console.log(`[WhatsApp Hook] Generating payment completion confirmation for: ${splitPayment.playerPhone}`)
+    
+    // Determine if it's a group booking or individual booking
+    const clubId = splitPayment.Booking?.clubId || splitPayment.BookingGroup?.clubId
+    const actualBookingId = splitPayment.bookingId || splitPayment.bookingGroupId
+    
+    const completionResult = await WhatsAppLinkService.generateLink({
+      clubId: clubId,
+      notificationType: 'SPLIT_PAYMENT_COMPLETED',
+      playerName: splitPayment.playerName,
+      playerPhone: splitPayment.playerPhone,
+      bookingId: actualBookingId
+    })
+    
+    if (completionResult.success) {
+      console.log(`[WhatsApp Hook] Payment completion link generated: ${completionResult.whatsappLink}`)
+    } else {
+      console.error(`[WhatsApp Hook] Failed to generate payment completion link: ${completionResult.error}`)
+    }
+    
+  } catch (error) {
+    console.error('[WhatsApp Hook] Error in onPaymentCompleted:', error)
+  }
+}
+
+/**
+ * Called when a booking is cancelled
+ */
+export async function onBookingCancelled(bookingId: string) {
+  try {
+    console.log(`[WhatsApp Hook] Booking cancelled: ${bookingId}`)
+
+    const booking = await prisma.booking.findUnique({
+      where: { id: bookingId },
+      include: { 
+        SplitPayment: true,
+        Club: true
+      }
+    })
+
+    if (!booking) {
+      console.error(`[WhatsApp Hook] Booking not found: ${bookingId}`)
+      return
+    }
+
+    // Generate cancellation notification
+    console.log(`[WhatsApp Hook] Generating cancellation notification for: ${booking.playerPhone}`)
+    
+    const cancellationResult = await WhatsAppLinkService.generateLink({
+      clubId: booking.clubId,
+      notificationType: 'BOOKING_CANCELLATION',
+      playerName: booking.playerName,
+      playerPhone: booking.playerPhone,
+      bookingId: booking.id
+    })
+    
+    if (cancellationResult.success) {
+      console.log(`[WhatsApp Hook] Cancellation notification generated: ${cancellationResult.whatsappLink}`)
+    } else {
+      console.error(`[WhatsApp Hook] Failed to generate cancellation notification: ${cancellationResult.error}`)
+    }
+    
+    // Generate cancellation notifications for split payment players
+    if (booking.SplitPayment.length > 0) {
+      for (const splitPayment of booking.SplitPayment) {
+        const splitCancellationResult = await WhatsAppLinkService.generateLink({
+          clubId: booking.clubId,
+          notificationType: 'BOOKING_CANCELLATION',
+          playerName: splitPayment.playerName,
+          playerPhone: splitPayment.playerPhone,
+          bookingId: booking.id
+        })
+        
+        if (splitCancellationResult.success) {
+          console.log(`[WhatsApp Hook] Cancellation notification generated for ${splitPayment.playerName}: ${splitCancellationResult.whatsappLink}`)
+        } else {
+          console.error(`[WhatsApp Hook] Failed to generate cancellation notification for ${splitPayment.playerName}: ${splitCancellationResult.error}`)
+        }
+      }
+    }
+    
+  } catch (error) {
+    console.error('[WhatsApp Hook] Error in onBookingCancelled:', error)
+  }
+}
+
+/**
+ * Called when a booking status changes to CONFIRMED (all payments completed)
+ */
+export async function onBookingConfirmed(bookingId: string) {
+  try {
+    console.log(`[WhatsApp Hook] Booking confirmed: ${bookingId}`)
+
+    const booking = await prisma.booking.findUnique({
+      where: { id: bookingId },
+      include: { 
+        SplitPayment: true,
+        Club: true
+      }
+    })
+
+    if (!booking) {
+      console.error(`[WhatsApp Hook] Booking not found: ${bookingId}`)
+      return
+    }
+
+    // Generate booking confirmation notification
+    console.log(`[WhatsApp Hook] Generating booking confirmation for: ${booking.playerPhone}`)
+    
+    const confirmationResult = await WhatsAppLinkService.generateLink({
+      clubId: booking.clubId,
+      notificationType: 'BOOKING_CONFIRMATION',
+      playerName: booking.playerName,
+      playerPhone: booking.playerPhone,
+      bookingId: booking.id
+    })
+    
+    if (confirmationResult.success) {
+      console.log(`[WhatsApp Hook] Booking confirmation generated: ${confirmationResult.whatsappLink}`)
+    } else {
+      console.error(`[WhatsApp Hook] Failed to generate booking confirmation: ${confirmationResult.error}`)
+    }
+    
+  } catch (error) {
+    console.error('[WhatsApp Hook] Error in onBookingConfirmed:', error)
+  }
+}
+
+/**
+ * Called when a player checks in at the club
+ */
+export async function onPlayerCheckIn(bookingId: string) {
+  try {
+    console.log(`[WhatsApp Hook] Player checked in: ${bookingId}`)
+
+    // Could send check-in confirmation or notify other players
+    // For now, this is optional functionality
+    
+  } catch (error) {
+    console.error('[WhatsApp Hook] Error in onPlayerCheckIn:', error)
+  }
+}
+
+/**
+ * Called to send promotional messages (with proper consent)
+ * Note: For now, promotional messages are simplified to generate individual links
+ */
+export async function sendPromotionalMessage(clubId: string, promotion: {
+  title: string
+  discountAmount: number
+  expiryDate: string
+  targetAudience?: 'all' | 'recent' | 'vip'
+}) {
+  try {
+    console.log(`[WhatsApp Hook] Generating promotional WhatsApp links for club: ${clubId}`)
+
+    // Get target customers based on criteria
+    const whereClause: any = {
+      clubId,
+      createdAt: {
+        gte: new Date(Date.now() - 30 * 24 * 60 * 60 * 1000) // Last 30 days
+      }
+    }
+
+    const recentBookings = await prisma.booking.findMany({
+      where: whereClause,
+      include: { Club: true },
+      orderBy: { createdAt: 'desc' },
+      take: 20 // Limit for testing
+    })
+
+    // Remove duplicates by phone number
+    const uniqueCustomers = recentBookings.reduce((acc, booking) => {
+      if (!acc.find(c => c.playerPhone === booking.playerPhone)) {
+        acc.push(booking)
+      }
+      return acc
+    }, [] as typeof recentBookings)
+
+    // Generate promotional WhatsApp links
+    for (const booking of uniqueCustomers) {
+      const promoMessage = 
+        `¡Hola ${booking.playerName}! 🎾\n\n` +
+        `${booking.Club.name} tiene una promoción especial para ti:\n\n` +
+        `🏆 ${promotion.title}\n` +
+        `💰 ${promotion.discountAmount}% de descuento\n` +
+        `📅 Válido hasta: ${promotion.expiryDate}\n\n` +
+        `¡No te lo pierdas! 🎾`
+
+      const promoResult = await WhatsAppLinkService.generateLink({
+        clubId,
+        notificationType: 'GENERAL',
+        playerName: booking.playerName,
+        playerPhone: booking.playerPhone,
+        message: promoMessage,
+        expirationHours: 72 // 3 days for promotions
+      })
+
+      if (promoResult.success) {
+        console.log(`[WhatsApp Hook] Promotional link generated for ${booking.playerName}: ${promoResult.whatsappLink}`)
+      } else {
+        console.error(`[WhatsApp Hook] Failed to generate promotional link for ${booking.playerName}: ${promoResult.error}`)
+      }
+    }
+    
+  } catch (error) {
+    console.error('[WhatsApp Hook] Error in sendPromotionalMessage:', error)
+  }
+}
+
+/**
+ * Helper to schedule reminder notifications
+ */
+export async function scheduleReminders() {
+  try {
+    console.log('[WhatsApp Hook] Checking for reminder notifications to generate')
+
+    const now = new Date()
+    const twoHoursFromNow = new Date(now.getTime() + 2 * 60 * 60 * 1000)
+
+    // Find bookings that need reminders (2 hours before)
+    const bookingsToRemind = await prisma.booking.findMany({
+      where: {
+        status: 'CONFIRMED',
+        date: {
+          gte: new Date(now.toDateString()), // Today or later
+          lte: new Date(twoHoursFromNow.toDateString()) // Within next 24 hours
+        },
+        // Check if reminder not already sent
+        notifications: {
+          none: {
+            type: 'PAYMENT_REMINDER',
+            status: {
+              in: ['link_generated', 'delivered']
+            }
+          }
+        }
+      },
+      include: {
+        club: true,
+        court: true
+      }
+    })
+
+    for (const booking of bookingsToRemind) {
+      // Parse booking datetime
+      const [hours, minutes] = booking.startTime.split(':').map(Number)
+      const bookingDateTime = new Date(booking.date)
+      bookingDateTime.setHours(hours, minutes, 0, 0)
+      
+      // Check if booking is exactly 2 hours away (±30 minutes window)
+      const timeDiff = bookingDateTime.getTime() - now.getTime()
+      const isInReminderWindow = timeDiff >= (1.5 * 60 * 60 * 1000) && timeDiff <= (2.5 * 60 * 60 * 1000)
+      
+      if (isInReminderWindow) {
+        console.log(`[WhatsApp Hook] Generating reminder for booking: ${booking.id}`)
+        
+        const reminderMessage = 
+          `¡Hola ${booking.playerName}! ⏰\n\n` +
+          `Te recordamos tu reserva en ${booking.Club.name}:\n\n` +
+          `📅 Hoy a las ${booking.startTime}\n` +
+          `🎾 Cancha: ${booking.Court.name}\n` +
+          `📍 ${booking.Club.address}\n\n` +
+          `¡Te esperamos en 2 horas! 🎾`
+
+        const reminderResult = await WhatsAppLinkService.generateLink({
+          clubId: booking.clubId,
+          notificationType: 'PAYMENT_REMINDER',
+          playerName: booking.playerName,
+          playerPhone: booking.playerPhone,
+          bookingId: booking.id,
+          message: reminderMessage
+        })
+
+        if (reminderResult.success) {
+          console.log(`[WhatsApp Hook] Reminder generated: ${reminderResult.whatsappLink}`)
+        } else {
+          console.error(`[WhatsApp Hook] Failed to generate reminder: ${reminderResult.error}`)
+        }
+      }
+    }
+
+    console.log(`[WhatsApp Hook] Processed ${bookingsToRemind.length} potential reminders`)
+    
+  } catch (error) {
+    console.error('[WhatsApp Hook] Error in scheduleReminders:', error)
+  }
+}
+
+/**
+ * Update notification status (simplified for link-based approach)
+ */
+export async function updateNotificationStatus(notificationId: string, status: 'delivered' | 'failed' | 'expired', errorMessage?: string) {
+  try {
+    await prisma.notification.update({
+      where: { id: notificationId },
+      data: {
+        status,
+        errorMessage}
+    })
+    
+    console.log(`[WhatsApp Hook] Updated notification status: ${notificationId} -> ${status}`)
+    
+  } catch (error) {
+    console.error('[WhatsApp Hook] Error updating notification status:', error)
+  }
+}

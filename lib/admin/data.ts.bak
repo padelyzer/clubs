@@ -1,0 +1,104 @@
+// Admin Data Service
+// This file provides real-time data for the admin dashboard
+
+import { prisma } from '@/lib/config/prisma'
+
+export async function getAdminStats() {
+  const [
+    pendingClubs,
+    pendingSupportTickets,
+    unreadNotifications,
+    activeSubscriptions,
+    totalRevenue,
+    totalClubs,
+    totalUsers
+  ] = await Promise.all([
+    // Pending clubs awaiting approval
+    prisma.Club.count({
+      where: { status: 'PENDING' }
+    }),
+    
+    // Support tickets (we'll need to create this model later)
+    // For now, return 0
+    Promise.resolve(0),
+    
+    // Unread notifications (we'll need to create this model later)
+    // For now, return 0
+    Promise.resolve(0),
+    
+    // Active subscriptions
+    prisma.clubSubscription.count({
+      where: { 
+        status: 'ACTIVE',
+        currentPeriodEnd: { gte: new Date() }
+      }
+    }),
+    
+    // Total revenue
+    prisma.subscriptionInvoice.aggregate({
+      where: { status: 'PAID' },
+      _sum: { total: true }
+    }),
+    
+    // Total clubs
+    prisma.Club.count({
+      where: { status: 'APPROVED' }
+    }),
+    
+    // Total users
+    prisma.user.count()
+  ])
+
+  return {
+    pendingClubs,
+    pendingSupportTickets,
+    unreadNotifications,
+    activeSubscriptions,
+    totalRevenue: (totalRevenue._sum.total || 0) / 100,
+    totalClubs,
+    totalUsers
+  }
+}
+
+export async function getSystemMetrics() {
+  // For now, return static values
+  // In production, these would come from monitoring services like:
+  // - Vercel Analytics
+  // - Datadog
+  // - New Relic
+  // - Custom health checks
+  
+  return {
+    uptime: 99.9, // This would come from uptime monitoring
+    latency: 45,  // This would come from performance monitoring
+    errorRate: 0.1, // This would come from error tracking
+    activeConnections: 150, // This would come from WebSocket server
+    cpuUsage: 35, // This would come from system monitoring
+    memoryUsage: 60 // This would come from system monitoring
+  }
+}
+
+export async function getCurrentUser(userId: string) {
+  return await prisma.user.findUnique({
+    where: { id: userId },
+    select: {
+      id: true,
+      name: true,
+      email: true,
+      role: true,
+      image: true
+    }
+  })
+}
+
+export async function getBusinessMetrics() {
+  // Get from environment variables with defaults
+  return {
+    cacMultiplier: parseFloat(process.env.BUSINESS_CAC_MULTIPLIER || '0.3'),
+    churnThreshold: parseFloat(process.env.BUSINESS_CHURN_THRESHOLD || '5'),
+    growthTarget: parseFloat(process.env.BUSINESS_GROWTH_TARGET || '10'),
+    ltcMultiplier: parseFloat(process.env.BUSINESS_LTC_MULTIPLIER || '3'),
+    minArpu: parseFloat(process.env.BUSINESS_MIN_ARPU || '500'),
+    maxChurn: parseFloat(process.env.BUSINESS_MAX_CHURN || '10')
+  }
+}

@@ -1,0 +1,699 @@
+import { NextRequest, NextResponse } from 'next/server'
+import { requireAuthAPI } from '@/lib/auth/actions'
+import { prisma } from '@/lib/config/prisma'
+import { z } from 'zod'
+import { startOfMonth, endOfMonth, startOfYear, endOfYear, format } from 'date-fns'
+import { es } from 'date-fns/locale'
+
+// Validation schema for report generation
+const generateReportSchema = z.object({
+  type: z.enum(['income_statement', 'cash_flow', 'balance_sheet', 'custom']),
+  period: z.string(), // YYYY-MM or YYYY or custom date range
+  startDate: z.string().optional(),
+  endDate: z.string().optional(),
+  includeDetails: z.boolean().default(true),
+  format: z.enum(['json', 'csv', 'excel']).default('json')
+})
+
+// GET - Generate financial reports
+export async function GET(request: NextRequest) {
+  try {
+    const session = await requireAuthAPI()
+    
+    if (!session) {
+      return NextResponse.json(
+        { success: false, error: 'No autorizado' },
+        { status: 401 }
+      )
+    }
+    const { searchParams } = new URL(request.url)
+    
+    const type = searchParams.get('type') || 'income_statement'
+    const period = searchParams.get('period') || format(new Date(), 'yyyy-MM')
+    const includeDetails = searchParams.get('includeDetails') !== 'false'
+    
+    // Determine date range
+    let startDate: Date
+    let endDate: Date
+    
+    if (searchParams.get('startDate') && searchParams.get('endDate')) {
+      startDate = new Date(searchParams.get('startDate')!)
+      endDate = new Date(searchParams.get('endDate')!)
+    } else if (period === 'month') {
+      // Current month
+      startDate = startOfMonth(new Date())
+      endDate = endOfMonth(new Date())
+    } else if (period === 'year') {
+      // Current year
+      startDate = startOfYear(new Date())
+      endDate = endOfYear(new Date())
+    } else if (period.length === 4 && !isNaN(parseInt(period))) {
+      // Specific year (YYYY)
+      const year = parseInt(period)
+      startDate = startOfYear(new Date(year, 0))
+      endDate = endOfYear(new Date(year, 0))
+    } else if (period.includes('-')) {
+      // Monthly format (YYYY-MM)
+      const [year, month] = period.split('-').map(Number)
+      if (!isNaN(year) && !isNaN(month) && month >= 1 && month <= 12) {
+        startDate = startOfMonth(new Date(year, month - 1))
+        endDate = endOfMonth(new Date(year, month - 1))
+      } else {
+        // Fallback to current month if invalid
+        startDate = startOfMonth(new Date())
+        endDate = endOfMonth(new Date())
+      }
+    } else {
+      // Default to current month for any other case
+      startDate = startOfMonth(new Date())
+      endDate = endOfMonth(new Date())
+    }
+
+    // Generate report based on type
+    let report: any = {
+      type,
+      period: {
+        start: startDate,
+        end: endDate,
+        label: format(startDate, 'MMMM yyyy', { locale: es })
+      },
+      generatedAt: new Date(),
+      clubId: session.clubId
+    }
+
+    switch (type) {
+      case 'income_statement':
+        report = await generateIncomeStatement(session.clubId, startDate, endDate, includeDetails)
+        break
+      case 'cash_flow':
+        report = await generateCashFlow(session.clubId, startDate, endDate, includeDetails)
+        break
+      case 'balance_sheet':
+        report = await generateBalanceSheet(session.clubId, endDate, includeDetails)
+        break
+      default:
+        report = await generateCustomReport(session.clubId, startDate, endDate, includeDetails)
+    }
+
+    // TODO: Store report in database when FinancialReport model is created
+    // const savedReport = await prisma.financialReport.create({
+    //   data: {
+    //     clubId: session.clubId,
+    //     type,
+    //     period: period,
+    //     data: report,
+    //     generatedBy: session.userId
+    //   }
+    // })
+
+    return NextResponse.json({
+      success: true,
+      report: {
+        ...report,
+        id: `report-${type}-${period}-${Date.now()}`
+      }
+    })
+
+  } catch (error) {
+    console.error('Error generating report:', error)
+    return NextResponse.json(
+      { success: false, error: 'Error al generar reporte' },
+      { status: 500 }
+    )
+  }
+}
+
+// Generate Income Statement (Estado de Resultados)
+async function generateIncomeStatement(
+  clubId: string, 
+  startDate: Date, 
+  endDate: Date, 
+  includeDetails: boolean
+) {
+  // Get income by category
+  const income = await prisma.transaction.groupBy({
+    by: ['category'],
+    where: {
+      clubId,
+      type: 'INCOME',
+      date: {
+        gte: startDate,
+        lte: endDate
+      }
+    },
+    _sum: {
+      amount: true
+    },
+    _count: true
+  })
+
+  // Get expenses by category
+  const expenses = await prisma.transaction.groupBy({
+    by: ['category'],
+    where: {
+      clubId,
+      type: 'EXPENSE',
+      date: {
+        gte: startDate,
+        lte: endDate
+      }
+    },
+    _sum: {
+      amount: true
+    },
+    _count: true
+  })
+
+  // Get refunds
+  const refunds = await prisma.transaction.aggregate({
+    where: {
+      clubId,
+      type: 'REFUND',
+      date: {
+        gte: startDate,
+        lte: endDate
+      }
+    },
+    _sum: {
+      amount: true
+    },
+    _count: true
+  })
+
+  // Calculate totals
+  const totalIncome = income.reduce((sum: number, item) => sum + (item._sum.amount || 0), 0)
+  const totalExpenses = expenses.reduce((sum: number, item) => sum + (item._sum.amount || 0), 0)
+  const totalRefunds = refunds._sum.amount || 0
+  const netIncome = totalIncome - totalExpenses - totalRefunds
+
+  // Get detailed transactions if requested
+  let details = null
+  if (includeDetails) {
+    const [incomeDetails, expenseDetails] = await Promise.all([
+      prisma.transaction.findMany({
+        where: {
+          clubId,
+          type: 'INCOME',
+          date: {
+            gte: startDate,
+            lte: endDate
+          }
+        },
+        orderBy: {
+          date: 'desc'
+        },
+        take: 100
+      }),
+      prisma.transaction.findMany({
+        where: {
+          clubId,
+          type: 'EXPENSE',
+          date: {
+            gte: startDate,
+            lte: endDate
+          }
+        },
+        orderBy: {
+          date: 'desc'
+        },
+        take: 100
+      })
+    ])
+    
+    details = {
+      incomeTransactions: incomeDetails,
+      expenseTransactions: expenseDetails
+    }
+  }
+
+  return {
+    type: 'income_statement',
+    period: {
+      start: startDate,
+      end: endDate,
+      label: `${format(startDate, 'dd/MM/yyyy')} - ${format(endDate, 'dd/MM/yyyy')}`
+    },
+    income: {
+      byCategory: income.map(item => ({
+        category: item.category,
+        amount: item._sum.amount || 0,
+        count: item._count,
+        percentage: totalIncome > 0 ? ((item._sum.amount || 0) / totalIncome * 100).toFixed(2) : '0'
+      })),
+      total: totalIncome
+    },
+    expenses: {
+      byCategory: expenses.map(item => ({
+        category: item.category,
+        amount: item._sum.amount || 0,
+        count: item._count,
+        percentage: totalExpenses > 0 ? ((item._sum.amount || 0) / totalExpenses * 100).toFixed(2) : '0'
+      })),
+      total: totalExpenses
+    },
+    refunds: {
+      total: totalRefunds,
+      count: refunds._count
+    },
+    summary: {
+      grossIncome: totalIncome,
+      totalExpenses,
+      totalRefunds,
+      netIncome,
+      profitMargin: totalIncome > 0 ? ((netIncome / totalIncome) * 100).toFixed(2) : '0',
+      expenseRatio: totalIncome > 0 ? ((totalExpenses / totalIncome) * 100).toFixed(2) : '0'
+    },
+    details
+  }
+}
+
+// Generate Cash Flow Report (Flujo de Caja)
+async function generateCashFlow(
+  clubId: string, 
+  startDate: Date, 
+  endDate: Date, 
+  includeDetails: boolean
+) {
+  // Get all transactions grouped by date
+  const transactions = await prisma.transaction.findMany({
+    where: {
+      clubId,
+      date: {
+        gte: startDate,
+        lte: endDate
+      }
+    },
+    orderBy: {
+      date: 'asc'
+    }
+  })
+
+  // Group by day
+  const dailyCashFlow: Record<string, any> = {}
+  let runningBalance = 0
+
+  transactions.forEach(transaction => {
+    const dateKey = format(transaction.date, 'yyyy-MM-dd')
+    
+    if (!dailyCashFlow[dateKey]) {
+      dailyCashFlow[dateKey] = {
+        date: dateKey,
+        income: 0,
+        expenses: 0,
+        refunds: 0,
+        net: 0,
+        balance: 0,
+        transactions: includeDetails ? [] : undefined
+      }
+    }
+
+    if (transaction.type === 'INCOME') {
+      dailyCashFlow[dateKey].income += transaction.amount
+      runningBalance += transaction.amount
+    } else if (transaction.type === 'EXPENSE') {
+      dailyCashFlow[dateKey].expenses += transaction.amount
+      runningBalance -= transaction.amount
+    } else if (transaction.type === 'REFUND') {
+      dailyCashFlow[dateKey].refunds += transaction.amount
+      runningBalance -= transaction.amount
+    }
+
+    dailyCashFlow[dateKey].net = dailyCashFlow[dateKey].income - dailyCashFlow[dateKey].expenses - dailyCashFlow[dateKey].refunds
+    dailyCashFlow[dateKey].balance = runningBalance
+
+    if (includeDetails) {
+      dailyCashFlow[dateKey].transactions.push(transaction)
+    }
+  })
+
+  // Get payment methods breakdown
+  const paymentMethods = await prisma.payment.groupBy({
+    by: ['method'],
+    where: {
+      booking: {
+        clubId
+      },
+      createdAt: {
+        gte: startDate,
+        lte: endDate
+      },
+      status: 'completed'
+    },
+    _sum: {
+      amount: true
+    },
+    _count: true
+  })
+
+  return {
+    type: 'cash_flow',
+    period: {
+      start: startDate,
+      end: endDate,
+      label: `${format(startDate, 'dd/MM/yyyy')} - ${format(endDate, 'dd/MM/yyyy')}`
+    },
+    dailyFlow: Object.values(dailyCashFlow),
+    summary: {
+      totalInflow: transactions
+        .filter(t => t.type === 'INCOME')
+        .reduce((sum: number, t) => sum + t.amount, 0),
+      totalOutflow: transactions
+        .filter(t => t.type === 'EXPENSE' || t.type === 'REFUND')
+        .reduce((sum: number, t) => sum + t.amount, 0),
+      netCashFlow: runningBalance,
+      averageDailyInflow: Object.values(dailyCashFlow).length > 0
+        ? Object.values(dailyCashFlow).reduce((sum: number, day: any) => sum + day.income, 0) / Object.values(dailyCashFlow).length
+        : 0,
+      averageDailyOutflow: Object.values(dailyCashFlow).length > 0
+        ? Object.values(dailyCashFlow).reduce((sum: number, day: any) => sum + day.expenses, 0) / Object.values(dailyCashFlow).length
+        : 0
+    },
+    paymentMethods: paymentMethods.map(pm => ({
+      method: pm.method,
+      amount: pm._sum.amount || 0,
+      count: pm._count
+    }))
+  }
+}
+
+// Generate Balance Sheet (Balance General - Simplified)
+async function generateBalanceSheet(
+  clubId: string, 
+  asOfDate: Date, 
+  includeDetails: boolean
+) {
+  // Get total income up to date
+  const totalIncome = await prisma.transaction.aggregate({
+    where: {
+      clubId,
+      type: 'INCOME',
+      date: {
+        lte: asOfDate
+      }
+    },
+    _sum: {
+      amount: true
+    }
+  })
+
+  // Get total expenses up to date
+  const totalExpenses = await prisma.transaction.aggregate({
+    where: {
+      clubId,
+      type: 'EXPENSE',
+      date: {
+        lte: asOfDate
+      }
+    },
+    _sum: {
+      amount: true
+    }
+  })
+
+  // Get total refunds up to date
+  const totalRefunds = await prisma.transaction.aggregate({
+    where: {
+      clubId,
+      type: 'REFUND',
+      date: {
+        lte: asOfDate
+      }
+    },
+    _sum: {
+      amount: true
+    }
+  })
+
+  // Get pending payments (accounts receivable)
+  const pendingPayments = await prisma.payment.aggregate({
+    where: {
+      Booking: {
+        clubId
+      },
+      status: 'pending'
+    },
+    _sum: {
+      amount: true
+    },
+    _count: true
+  })
+
+  // Get unpaid payroll (accounts payable)
+  const unpaidPayroll = await prisma.payroll.aggregate({
+    where: {
+      clubId,
+      status: 'pending'
+    },
+    _sum: {
+      netAmount: true
+    },
+    _count: true
+  })
+
+  // Get unpaid expenses
+  const unpaidExpenses = await prisma.expense.aggregate({
+    where: {
+      clubId,
+      status: { in: ['pending', 'approved'] }
+    },
+    _sum: {
+      amount: true
+    },
+    _count: true
+  })
+
+  const income = totalIncome._sum.amount || 0
+  const expenses = totalExpenses._sum.amount || 0
+  const refunds = totalRefunds._sum.amount || 0
+  const netPosition = income - expenses - refunds
+
+  return {
+    type: 'balance_sheet',
+    asOfDate,
+    assets: {
+      current: {
+        cash: netPosition,
+        accountsReceivable: pendingPayments._sum.amount || 0,
+        total: netPosition + (pendingPayments._sum.amount || 0)
+      },
+      totalAssets: netPosition + (pendingPayments._sum.amount || 0)
+    },
+    liabilities: {
+      current: {
+        accountsPayable: (unpaidPayroll._sum.netAmount || 0) + (unpaidExpenses._sum.amount || 0),
+        unpaidPayroll: unpaidPayroll._sum.netAmount || 0,
+        unpaidExpenses: unpaidExpenses._sum.amount || 0,
+        total: (unpaidPayroll._sum.netAmount || 0) + (unpaidExpenses._sum.amount || 0)
+      },
+      totalLiabilities: (unpaidPayroll._sum.netAmount || 0) + (unpaidExpenses._sum.amount || 0)
+    },
+    equity: {
+      retainedEarnings: netPosition,
+      totalEquity: netPosition
+    },
+    summary: {
+      totalAssets: netPosition + (pendingPayments._sum.amount || 0),
+      totalLiabilities: (unpaidPayroll._sum.netAmount || 0) + (unpaidExpenses._sum.amount || 0),
+      netWorth: netPosition + (pendingPayments._sum.amount || 0) - (unpaidPayroll._sum.netAmount || 0) - (unpaidExpenses._sum.amount || 0)
+    },
+    details: includeDetails ? {
+      pendingPaymentsCount: pendingPayments._count,
+      unpaidPayrollCount: unpaidPayroll._count,
+      unpaidExpensesCount: unpaidExpenses._count
+    } : null
+  }
+}
+
+// Generate Custom Report
+async function generateCustomReport(
+  clubId: string, 
+  startDate: Date, 
+  endDate: Date, 
+  includeDetails: boolean
+) {
+  // Get comprehensive metrics
+  const [transactions, bookings, classes, players] = await Promise.all([
+    // Financial metrics
+    prisma.transaction.groupBy({
+      by: ['type', 'category'],
+      where: {
+        clubId,
+        date: {
+          gte: startDate,
+          lte: endDate
+        }
+      },
+      _sum: {
+        amount: true
+      },
+      _count: true
+    }),
+    // Booking metrics
+    prisma.booking.aggregate({
+      where: {
+        clubId,
+        date: {
+          gte: startDate,
+          lte: endDate
+        }
+      },
+      _count: true,
+      _sum: {
+        price: true
+      }
+    }),
+    // Class metrics
+    prisma.class.aggregate({
+      where: {
+        clubId,
+        date: {
+          gte: startDate,
+          lte: endDate
+        }
+      },
+      _count: true,
+      _sum: {
+        price: true,
+        currentStudents: true
+      }
+    }),
+    // Active players
+    prisma.player.count({
+      where: {
+        clubId,
+        bookings: {
+          some: {
+            date: {
+              gte: startDate,
+              lte: endDate
+            }
+          }
+        }
+      }
+    })
+  ])
+
+  return {
+    type: 'custom',
+    period: {
+      start: startDate,
+      end: endDate,
+      label: `${format(startDate, 'dd/MM/yyyy')} - ${format(endDate, 'dd/MM/yyyy')}`
+    },
+    financial: {
+      transactions: transactions.map(t => ({
+        type: t.type,
+        category: t.category,
+        amount: t._sum.amount || 0,
+        count: t._count
+      }))
+    },
+    operations: {
+      bookings: {
+        count: bookings._count,
+        revenue: bookings._sum.price || 0
+      },
+      classes: {
+        count: classes._count,
+        revenue: classes._sum.price || 0,
+        totalStudents: classes._sum.currentStudents || 0
+      },
+      activePlayers: players
+    },
+    kpis: {
+      averageBookingValue: bookings._count > 0 ? (bookings._sum.price || 0) / bookings._count : 0,
+      averageClassSize: classes._count > 0 ? (classes._sum.currentStudents || 0) / classes._count : 0,
+      playerEngagement: players
+    }
+  }
+}
+
+// POST - Save generated report
+export async function POST(request: NextRequest) {
+  try {
+    const session = await requireAuthAPI()
+    
+    if (!session) {
+      return NextResponse.json(
+        { success: false, error: 'No autorizado' },
+        { status: 401 }
+      )
+    }
+    const body = await request.json()
+    
+    const { type, period, data } = body
+    
+    const report = await prisma.financialReport.create({
+      data: {
+        clubId: session.clubId,
+        type,
+        period,
+        data,
+        generatedBy: session.userId
+      }
+    })
+
+    return NextResponse.json({
+      success: true,
+      report,
+      message: 'Reporte guardado exitosamente'
+    })
+
+  } catch (error) {
+    console.error('Error saving report:', error)
+    return NextResponse.json(
+      { success: false, error: 'Error al guardar reporte' },
+      { status: 500 }
+    )
+  }
+}
+
+// GET saved reports
+// NOTA: Función desactivada temporalmente - No es un método HTTP válido para Next.js
+// TODO: Mover esta lógica a GET con un parámetro específico o crear un archivo route separado
+/*
+async function getSavedReports(request: NextRequest) {
+  try {
+    const session = await requireAuthAPI()
+    
+    if (!session) {
+      return NextResponse.json(
+        { success: false, error: 'No autorizado' },
+        { status: 401 }
+      )
+    }
+    const { searchParams } = new URL(request.url)
+    
+    const type = searchParams.get('type')
+    const limit = parseInt(searchParams.get('limit') || '10')
+    
+    const where: any = {
+      clubId: session.clubId
+    }
+    
+    if (type) {
+      where.type = type
+    }
+    
+    const reports = await prisma.financialReport.findMany({
+      where,
+      orderBy: {
+        createdAt: 'desc'
+      },
+      take: limit
+    })
+    
+    return NextResponse.json({
+      success: true,
+      reports
+    })
+
+  } catch (error) {
+    console.error('Error fetching saved reports:', error)
+    return NextResponse.json(
+      { success: false, error: 'Error al obtener reportes guardados' },
+      { status: 500 }
+    )
+  }
+}
+*/

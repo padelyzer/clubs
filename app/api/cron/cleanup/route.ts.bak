@@ -1,0 +1,138 @@
+import { NextRequest, NextResponse } from 'next/server'
+import { prisma } from '@/lib/config/prisma'
+
+/**
+ * Cleanup cron job for notifications and expired data
+ */
+export async function GET(request: NextRequest) {
+  try {
+    // Verify cron secret for security
+    const authHeader = request.headers.get('authorization')
+    if (authHeader !== `Bearer ${process.env.CRON_SECRET}`) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+    }
+
+    console.log('[Cleanup Cron] Starting cleanup job...')
+
+    const now = new Date()
+    const results = []
+
+    // 1. Clean up old notifications (older than 90 days)
+    const ninetyDaysAgo = new Date(Date.now() - 90 * 24 * 60 * 60 * 1000)
+    
+    const deletedNotifications = await prisma.notification.deleteMany({
+      where: {
+        createdAt: {
+          lt: ninetyDaysAgo
+        },
+        status: {
+          in: ['sent', 'delivered', 'failed']
+        }
+      }
+    })
+
+    results.push({
+      task: 'cleanup_old_notifications',
+      deleted: deletedNotifications.count,
+      cutoffDate: ninetyDaysAgo.toISOString()
+    })
+
+    // 2. Update pending notifications that are older than 1 hour to failed
+    const oneHourAgo = new Date(Date.now() - 60 * 60 * 1000)
+    
+    const failedNotifications = await prisma.notification.updateMany({
+      where: {
+        status: 'pending',
+        createdAt: {
+          lt: oneHourAgo
+        }
+      },
+      data: {
+        status: 'failed',
+        errorMessage: 'Timeout - notification pending for over 1 hour',
+        updatedAt: now
+      }
+    })
+
+    results.push({
+      task: 'timeout_pending_notifications',
+      updated: failedNotifications.count,
+      cutoffTime: oneHourAgo.toISOString()
+    })
+
+    // 3. Clean up expired split payments (older than 48 hours and still pending)
+    const fortyEightHoursAgo = new Date(Date.now() - 48 * 60 * 60 * 1000)
+    
+    const expiredSplitPayments = await prisma.splitPayment.updateMany({
+      where: {
+        status: 'pending',
+        createdAt: {
+          lt: fortyEightHoursAgo
+        }
+      },
+      data: {
+        status: 'cancelled',
+        updatedAt: now
+      }
+    })
+
+    results.push({
+      task: 'expire_old_split_payments',
+      updated: expiredSplitPayments.count,
+      cutoffTime: fortyEightHoursAgo.toISOString()
+    })
+
+    // 4. Cancel old bookings that are still pending (older than 2 hours)
+    const twoHoursAgo = new Date(Date.now() - 2 * 60 * 60 * 1000)
+    
+    const cancelledBookings = await prisma.Booking.updateMany({
+      where: {
+        status: 'PENDING',
+        createdAt: {
+          lt: twoHoursAgo
+        }
+      },
+      data: {
+        status: 'CANCELLED',
+        cancelledAt: now,
+        updatedAt: now
+      }
+    })
+
+    results.push({
+      task: 'cancel_old_pending_bookings',
+      updated: cancelledBookings.count,
+      cutoffTime: twoHoursAgo.toISOString()
+    })
+
+    // 5. Clean up notification statistics - aggregate old data
+    // This could involve creating daily/weekly summaries and removing individual records
+    
+    const summary = {
+      totalTasks: results.length,
+      totalRecordsProcessed: results.reduce((sum: number, result) => sum + (result.deleted || result.updated || 0), 0),
+      tasks: results.map(r => ({ task: r.task, count: r.deleted || r.updated || 0 }))
+    }
+
+    console.log('[Cleanup Cron] Cleanup job completed:', summary)
+
+    return NextResponse.json({
+      success: true,
+      timestamp: now.toISOString(),
+      summary,
+      results,
+      message: `Cleanup completed. Processed ${summary.totalRecordsProcessed} records across ${summary.totalTasks} tasks.`
+    })
+
+  } catch (error) {
+    console.error('[Cleanup Cron] Cleanup job error:', error)
+    return NextResponse.json(
+      { 
+        error: 'Internal server error', 
+        details: error instanceof Error ? error.message : 'Unknown error',
+        timestamp: new Date().toISOString()
+      }, 
+      { status: 500 }
+    )
+  }
+}

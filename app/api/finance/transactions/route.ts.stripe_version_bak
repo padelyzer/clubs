@@ -1,0 +1,342 @@
+import { NextRequest, NextResponse } from 'next/server'
+import { requireAuthAPI } from '@/lib/auth/actions'
+import { prisma } from '@/lib/config/prisma'
+import { z } from 'zod'
+import { startOfMonth, endOfMonth, startOfYear, endOfYear } from 'date-fns'
+import { nanoid } from 'nanoid'
+
+// Validation schemas
+const createTransactionSchema = z.object({
+  type: z.enum(['INCOME', 'EXPENSE', 'REFUND']),
+  category: z.enum([
+    'BOOKING', 'CLASS', 'TOURNAMENT', 'MEMBERSHIP', 'EQUIPMENT',
+    'MAINTENANCE', 'SALARY', 'UTILITIES', 'RENT', 'MARKETING', 'OTHER'
+  ]),
+  amount: z.number().min(1),
+  description: z.string().min(1).max(500),
+  reference: z.string().optional(),
+  bookingId: z.string().optional(),
+  playerId: z.string().optional(),
+  date: z.string(),
+  notes: z.string().optional()
+})
+
+// GET - Retrieve transactions with filters
+export async function GET(request: NextRequest) {
+  try {
+    const session = await requireAuthAPI()
+    
+    if (!session) {
+      return NextResponse.json(
+        { success: false, error: 'No autorizado' },
+        { status: 401 }
+      )
+    }
+    const { searchParams } = new URL(request.url)
+    
+    const type = searchParams.get('type')
+    const category = searchParams.get('category')
+    const startDate = searchParams.get('startDate')
+    const endDate = searchParams.get('endDate')
+    const period = searchParams.get('period') // month, year, custom
+    const limit = parseInt(searchParams.get('limit') || '100')
+    const offset = parseInt(searchParams.get('offset') || '0')
+
+    const where: any = {
+      clubId: session.clubId
+    }
+
+    // Type filter
+    if (type) {
+      where.type = type
+    }
+
+    // Category filter
+    if (category) {
+      where.category = category
+    }
+
+    // Date filtering
+    const now = new Date()
+    if (period === 'month') {
+      where.date = {
+        gte: startOfMonth(now),
+        lte: endOfMonth(now)
+      }
+    } else if (period === 'year') {
+      where.date = {
+        gte: startOfYear(now),
+        lte: endOfYear(now)
+      }
+    } else if (startDate && endDate) {
+      where.date = {
+        gte: new Date(startDate),
+        lte: new Date(endDate)
+      }
+    }
+
+    // Get transactions with related data
+    const [transactions, total, summary] = await Promise.all([
+      prisma.transaction.findMany({
+        where,
+        include: {
+          Booking: {
+            select: {
+              id: true,
+              playerName: true,
+              Court: {
+                select: {
+                  name: true
+                }
+              },
+              Payment: {
+                select: {
+                  method: true,
+                  status: true
+                },
+                orderBy: {
+                  createdAt: 'desc'
+                },
+                take: 1
+              }
+            }
+          },
+          Player: {
+            select: {
+              id: true,
+              name: true
+            }
+          }
+        },
+        orderBy: {
+          date: 'desc'
+        },
+        take: limit,
+        skip: offset
+      }),
+      prisma.transaction.count({ where }),
+      // Get summary statistics
+      prisma.transaction.groupBy({
+        by: ['type'],
+        where,
+        _sum: {
+          amount: true
+        }
+      })
+    ])
+
+    // Calculate totals
+    const totals = {
+      income: 0,
+      expense: 0,
+      refund: 0,
+      net: 0
+    }
+
+    summary.forEach(item => {
+      if (item.type === 'INCOME') {
+        totals.income = item._sum.amount || 0
+      } else if (item.type === 'EXPENSE') {
+        totals.expense = item._sum.amount || 0
+      } else if (item.type === 'REFUND') {
+        totals.refund = item._sum.amount || 0
+      }
+    })
+
+    totals.net = totals.income - totals.expense - totals.refund
+
+    // Get payment methods breakdown for income transactions
+    let paymentMethodsBreakdown = {}
+    if (type === 'INCOME' || !type) {
+      const bookingTransactions = await prisma.transaction.findMany({
+        where: {
+          ...where,
+          type: 'INCOME',
+          bookingId: { not: null }
+        },
+        include: {
+          Booking: {
+            include: {
+              Payment: {
+                orderBy: { createdAt: 'desc' },
+                take: 1
+              }
+            }
+          }
+        }
+      })
+
+      paymentMethodsBreakdown = bookingTransactions.reduce((acc: any, transaction) => {
+        let method = 'OTHER'
+        
+        // Check if it's a split payment
+        if (transaction.reference?.startsWith('split-')) {
+          // For split payments, always use STRIPE as they are processed through Stripe
+          method = 'STRIPE'
+        } else if (transaction.Booking?.Payment?.[0]) {
+          // For regular payments, get the method from the payment record
+          method = transaction.Booking.Payment[0].method
+        } else if (transaction.reference) {
+          // Try to infer from reference
+          const refLower = transaction.reference.toLowerCase()
+          if (refLower.includes('cash') || refLower.startsWith('cash-')) method = 'CASH'
+          else if (refLower.includes('terminal') || refLower.startsWith('terminal-')) method = 'TERMINAL'
+          else if (refLower.includes('transfer') || refLower.includes('spei') || refLower.startsWith('transfer-')) method = 'SPEI'
+          else if (refLower.includes('stripe') || refLower.startsWith('pi_') || refLower.startsWith('payment-')) method = 'STRIPE'
+        }
+        
+        if (!acc[method]) {
+          acc[method] = {
+            count: 0,
+            amount: 0
+          }
+        }
+        
+        acc[method].count++
+        acc[method].amount += transaction.amount
+        
+        return acc
+      }, {})
+    }
+
+    return NextResponse.json({
+      success: true,
+      transactions,
+      summary: totals,
+      paymentMethodsBreakdown,
+      pagination: {
+        total,
+        limit,
+        offset,
+        hasMore: offset + limit < total
+      }
+    })
+
+  } catch (error) {
+    console.error('Error fetching transactions:', error)
+    return NextResponse.json(
+      { success: false, error: 'Error al obtener transacciones' },
+      { status: 500 }
+    )
+  }
+}
+
+// POST - Create new transaction
+export async function POST(request: NextRequest) {
+  try {
+    const session = await requireAuthAPI()
+    
+    if (!session) {
+      return NextResponse.json(
+        { success: false, error: 'No autorizado' },
+        { status: 401 }
+      )
+    }
+    const body = await request.json()
+    
+    const validatedData = createTransactionSchema.parse(body)
+    
+    // Create transaction with generated ID
+    const transaction = await prisma.transaction.create({
+      data: {
+        id: nanoid(),
+        clubId: session.clubId,
+        type: validatedData.type,
+        category: validatedData.category,
+        amount: validatedData.amount,
+        currency: 'MXN',
+        description: validatedData.description,
+        reference: validatedData.reference,
+        bookingId: validatedData.bookingId,
+        playerId: validatedData.playerId,
+        date: new Date(validatedData.date),
+        createdBy: session.userId,
+        notes: validatedData.notes,
+        createdAt: new Date()}
+    })
+
+    // If it's a booking income, update booking payment status
+    if (validatedData.bookingId && validatedData.type === 'INCOME') {
+      await prisma.booking.update({
+        where: { id: validatedData.bookingId },
+        data: { paymentStatus: 'completed' }
+      })
+    }
+
+    return NextResponse.json({ 
+      success: true, 
+      transaction,
+      message: 'Transacción registrada exitosamente' 
+    })
+
+  } catch (error) {
+    console.error('Error creating transaction:', error)
+    
+    if (error instanceof z.ZodError) {
+      return NextResponse.json(
+        { success: false, error: 'Datos inválidos', details: error.issues },
+        { status: 400 }
+      )
+    }
+    
+    return NextResponse.json(
+      { success: false, error: 'Error al crear transacción' },
+      { status: 500 }
+    )
+  }
+}
+
+// DELETE - Delete transaction
+export async function DELETE(request: NextRequest) {
+  try {
+    const session = await requireAuthAPI()
+    
+    if (!session) {
+      return NextResponse.json(
+        { success: false, error: 'No autorizado' },
+        { status: 401 }
+      )
+    }
+    const { searchParams } = new URL(request.url)
+    const id = searchParams.get('id')
+    
+    if (!id) {
+      return NextResponse.json(
+        { success: false, error: 'ID de transacción requerido' },
+        { status: 400 }
+      )
+    }
+
+    // Check if transaction exists and belongs to club
+    const transaction = await prisma.transaction.findFirst({
+      where: {
+        id,
+        clubId: session.clubId
+      }
+    })
+
+    if (!transaction) {
+      return NextResponse.json(
+        { success: false, error: 'Transacción no encontrada' },
+        { status: 404 }
+      )
+    }
+
+    // Delete transaction
+    await prisma.transaction.delete({
+      where: { id }
+    })
+
+    return NextResponse.json({
+      success: true,
+      message: 'Transacción eliminada exitosamente'
+    })
+
+  } catch (error) {
+    console.error('Error deleting transaction:', error)
+    return NextResponse.json(
+      { success: false, error: 'Error al eliminar transacción' },
+      { status: 500 }
+    )
+  }
+}

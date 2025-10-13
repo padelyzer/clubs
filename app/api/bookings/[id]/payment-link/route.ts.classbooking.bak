@@ -1,0 +1,206 @@
+import { NextRequest, NextResponse } from 'next/server'
+import { prisma } from '@/lib/config/prisma'
+import { requireAuthAPI } from '@/lib/auth/actions'
+
+export async function GET(
+  request: NextRequest,
+  { params }: { params: Promise<{ id: string }> }
+) {
+  try {
+    const session = await requireAuthAPI()
+    
+    if (!session) {
+      return NextResponse.json(
+        { success: false, error: 'No autorizado' },
+        { status: 401 }
+      )
+    }
+
+    const paramData = await params
+    const { id } = paramData
+
+    // First try to find as a regular booking
+    let booking = await prisma.booking.findUnique({
+      where: { 
+        id,
+        clubId: session.clubId
+      },
+      include: {
+        Payment: {
+          where: {
+            method: 'STRIPE'
+          }
+        }
+      }
+    })
+
+    // If not found, try as a booking group
+    let bookingGroup = null
+    if (!booking) {
+      bookingGroup = await prisma.bookingGroup.findUnique({
+        where: { 
+          id,
+          clubId: session.clubId
+        },
+        include: {
+          payments: {
+            where: {
+              method: 'STRIPE'
+            }
+          }
+        }
+      })
+    }
+
+    // If not found, try as a class booking (enrollment)
+    let classBooking = null
+    if (!booking && !bookingGroup) {
+      classBooking = await prisma.classBooking.findUnique({
+        where: { 
+          id
+        },
+        include: {
+          Class: true
+        }
+      })
+      
+      // Verify the class belongs to the user's club
+      if (classBooking && classBooking.Class?.clubId !== session.clubId) {
+        classBooking = null
+      }
+    }
+
+    if (!booking && !bookingGroup && !classBooking) {
+      return NextResponse.json(
+        { error: 'Reserva no encontrada' },
+        { status: 404 }
+      )
+    }
+
+    // Generar el link de pago local (sin Stripe real por ahora)  
+    const paymentLink = `${process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000'}/pay/${id}`
+
+    if (bookingGroup) {
+      return NextResponse.json({
+        success: true,
+        paymentLink,
+        Booking: {
+          id: bookingGroup.id,
+          playerName: bookingGroup.name,
+          price: bookingGroup.totalPrice,
+          paymentStatus: bookingGroup.paymentStatus,
+          isGroup: true,
+          type: 'group'
+        }
+      })
+    } else if (classBooking) {
+      return NextResponse.json({
+        success: true,
+        paymentLink,
+        Booking: {
+          id: classBooking.id,
+          playerName: classBooking.studentName,
+          price: classBooking.dueAmount,
+          paymentStatus: classBooking.paymentStatus,
+          isGroup: false,
+          type: 'class',
+          className: classBooking.Class?.name,
+          studentEmail: classBooking.studentEmail,
+          studentPhone: classBooking.studentPhone
+        }
+      })
+    } else {
+      return NextResponse.json({
+        success: true,
+        paymentLink,
+        Booking: {
+          id: booking.id,
+          playerName: booking.playerName,
+          price: booking.price,
+          paymentStatus: booking.paymentStatus,
+          isGroup: false,
+          type: 'booking'
+        }
+      })
+    }
+
+  } catch (error) {
+    console.error('Error getting payment link:', error)
+    return NextResponse.json(
+      { error: 'Error al obtener link de pago' },
+      { status: 500 }
+    )
+  }
+}
+
+// POST para reenviar por WhatsApp (futuro)
+export async function POST(
+  request: NextRequest,
+  { params }: { params: Promise<{ id: string }> }
+) {
+  try {
+    const session = await requireAuthAPI()
+    
+    if (!session) {
+      return NextResponse.json(
+        { success: false, error: 'No autorizado' },
+        { status: 401 }
+      )
+    }
+
+    const paramData = await params
+    const { id } = paramData
+
+    // Try to find regular booking first
+    let booking = await prisma.booking.findUnique({
+      where: { 
+        id,
+        clubId: session.clubId
+      }
+    })
+
+    // If not found, try class booking
+    let classBooking = null
+    if (!booking) {
+      classBooking = await prisma.classBooking.findUnique({
+        where: { 
+          id
+        },
+        include: {
+          Class: true
+        }
+      })
+      
+      // Verify the class belongs to the user's club
+      if (classBooking && classBooking.Class?.clubId !== session.clubId) {
+        classBooking = null
+      }
+    }
+
+    if (!booking && !classBooking) {
+      return NextResponse.json(
+        { error: 'Reserva no encontrada' },
+        { status: 404 }
+      )
+    }
+
+    const recordId = booking?.id || classBooking?.id
+    const paymentLink = `${process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000'}/pay/${recordId}`
+
+    // Aquí se enviaría por WhatsApp cuando esté configurado
+    // await WhatsAppService.sendPaymentLink(booking.id, paymentLink)
+
+    return NextResponse.json({
+      success: true,
+      message: 'Link de pago enviado por WhatsApp',
+      paymentLink
+    })
+
+  } catch (error) {
+    console.error('Error sending payment link:', error)
+    return NextResponse.json(
+      { error: 'Error al enviar link de pago' },
+      { status: 500 }
+    )
+  }
+}

@@ -1,0 +1,393 @@
+import { NextRequest, NextResponse } from 'next/server'
+import { prisma } from '@/lib/config/prisma'
+import { requireAuthAPI } from '@/lib/auth/actions'
+
+// GET - Get class history for a student
+export async function GET(
+  request: NextRequest,
+  { params }: { params: Promise<{ id: string }> }
+) {
+  try {
+    const session = await requireAuthAPI()
+    
+    if (!session) {
+      return NextResponse.json(
+        { success: false, error: 'No autorizado' },
+        { status: 401 }
+      )
+    }
+    const paramData = await params
+    const { id: studentId } = paramData
+    const { searchParams } = new URL(request.url)
+    const phone = searchParams.get('phone')
+    const email = searchParams.get('email')
+    
+    // Find student bookings by ID, phone or email
+    const where: any = {
+      class: {
+        clubId: session.clubId
+      }
+    }
+    
+    if (studentId && studentId !== 'search') {
+      where.playerId = studentId
+    } else if (phone) {
+      where.studentPhone = phone.replace(/\s/g, '')
+    } else if (email) {
+      where.studentEmail = email
+    } else {
+      return NextResponse.json(
+        { success: false, error: 'Debe proporcionar ID, teléfono o email del estudiante' },
+        { status: 400 }
+      )
+    }
+    
+    const classBookings = await prisma.classBooking.findMany({
+      where,
+      include: {
+        Class: {
+          include: {
+            Instructor: true,
+            Court: true
+          }
+        },
+        Player: true
+      },
+      orderBy: {
+        class: {
+          date: 'desc'
+        }
+      }
+    })
+    
+    if (classBookings.length === 0) {
+      return NextResponse.json({
+        success: true,
+        student: null,
+        history: [],
+        statistics: {
+          totalClasses: 0,
+          completedClasses: 0,
+          upcomingClasses: 0,
+          attendanceRate: 0,
+          totalPaid: 0,
+          totalDue: 0
+        }
+      })
+    }
+    
+    // Get student info from first booking
+    const studentInfo = {
+      name: classBookings[0].studentName,
+      email: classBookings[0].studentEmail,
+      phone: classBookings[0].studentPhone,
+      playerId: classBookings[0].playerId
+    }
+    
+    // Calculate statistics
+    const now = new Date()
+    const statistics = {
+      totalClasses: classBookings.length,
+      completedClasses: 0,
+      upcomingClasses: 0,
+      cancelledClasses: 0,
+      attendedClasses: 0,
+      attendanceRate: 0,
+      totalPaid: 0,
+      totalDue: 0,
+      pendingPayment: 0,
+      favoriteInstructor: null as string | null,
+      preferredLevel: null as string | null,
+      averageClassDuration: 0
+    }
+    
+    const instructorCount: Record<string, number> = {}
+    const levelCount: Record<string, number> = {}
+    let totalDuration = 0
+    
+    // Process each booking
+    const history = classBookings.map(booking => {
+      const classDate = new Date(booking.classId.date)
+      const isPast = classDate < now
+      const isUpcoming = classDate >= now
+      
+      // Update statistics
+      if (booking.classId.status === 'COMPLETED' || (isPast && booking.classId.status !== 'CANCELLED')) {
+        statistics.completedClasses++
+        if (booking.attended || booking.attendanceStatus === 'PRESENT' || booking.attendanceStatus === 'LATE') {
+          statistics.attendedClasses++
+        }
+      } else if (isUpcoming && booking.classId.status !== 'CANCELLED') {
+        statistics.upcomingClasses++
+      } else if (booking.classId.status === 'CANCELLED' || booking.status === 'CANCELLED') {
+        statistics.cancelledClasses++
+      }
+      
+      statistics.totalPaid += booking.paidAmount
+      statistics.totalDue += booking.dueAmount
+      
+      if (booking.paymentStatus === 'pending') {
+        statistics.pendingPayment += (booking.dueAmount - booking.paidAmount)
+      }
+      
+      // Track instructor and level preferences
+      if (booking.classId.instructor?.name) {
+        instructorCount[booking.classId.Instructor.name] = (instructorCount[booking.classId.Instructor.name] || 0) + 1
+      }
+      
+      levelCount[booking.classId.level] = (levelCount[booking.classId.level] || 0) + 1
+      totalDuration += booking.classId.duration
+      
+      return {
+        id: booking.id,
+        classId: booking.classId,
+        className: booking.classId.name,
+        classType: booking.classId.type,
+        level: booking.classId.level,
+        date: booking.classId.date,
+        time: `${booking.classId.startTime} - ${booking.classId.endTime}`,
+        duration: booking.classId.duration,
+        instructor: booking.classId.instructor?.name,
+        court: booking.classId.court?.name,
+        enrollmentDate: booking.enrollmentDate,
+        status: booking.status,
+        classStatus: booking.classId.status,
+        attended: booking.attended,
+        attendanceStatus: booking.attendanceStatus,
+        paymentStatus: booking.paymentStatus,
+        paidAmount: booking.paidAmount,
+        dueAmount: booking.dueAmount,
+        isPast,
+        isUpcoming
+      }
+    })
+    
+    // Calculate attendance rate
+    if (statistics.completedClasses > 0) {
+      statistics.attendanceRate = Math.round((statistics.attendedClasses / statistics.completedClasses) * 100)
+    }
+    
+    // Find favorite instructor
+    if (Object.keys(instructorCount).length > 0) {
+      statistics.favoriteInstructor = Object.entries(instructorCount)
+        .sort(([, a], [, b]) => b - a)[0][0]
+    }
+    
+    // Find preferred level
+    if (Object.keys(levelCount).length > 0) {
+      statistics.preferredLevel = Object.entries(levelCount)
+        .sort(([, a], [, b]) => b - a)[0][0]
+    }
+    
+    // Calculate average duration
+    if (classBookings.length > 0) {
+      statistics.averageClassDuration = Math.round(totalDuration / classBookings.length)
+    }
+    
+    // Group classes by month for better visualization
+    const classesByMonth = history.reduce((acc: any, cls) => {
+      const monthKey = new Date(cls.date).toLocaleDateString('es-MX', { year: 'numeric', month: 'long' })
+      if (!acc[monthKey]) {
+        acc[monthKey] = []
+      }
+      acc[monthKey].push(cls)
+      return acc
+    }, {})
+    
+    return NextResponse.json({
+      success: true,
+      student: studentInfo,
+      statistics,
+      history,
+      classesByMonth,
+      totalRecords: history.length
+    })
+    
+  } catch (error) {
+    console.error('Error fetching student class history:', error)
+    return NextResponse.json(
+      { success: false, error: 'Error al obtener historial del estudiante' },
+      { status: 500 }
+    )
+  }
+}
+
+// POST - Generate student report/certificate
+export async function POST(
+  request: NextRequest,
+  { params }: { params: Promise<{ id: string }> }
+) {
+  try {
+    const session = await requireAuthAPI()
+    
+    if (!session) {
+      return NextResponse.json(
+        { success: false, error: 'No autorizado' },
+        { status: 401 }
+      )
+    }
+    const paramData = await params
+    const { id: studentId } = paramData
+    const body = await request.json()
+    const { type = 'attendance', format = 'pdf', classIds } = body
+    
+    // Get student's class history
+    const classBookings = await prisma.classBooking.findMany({
+      where: {
+        playerId: studentId,
+        Class: {
+          clubId: session.clubId,
+          status: 'COMPLETED'
+        },
+        ...(classIds && { classId: { in: classIds } })
+      },
+      include: {
+        Class: {
+          include: {
+            Instructor: true
+          }
+        },
+        Player: true
+      },
+      orderBy: {
+        class: {
+          date: 'desc'
+        }
+      }
+    })
+    
+    if (classBookings.length === 0) {
+      return NextResponse.json(
+        { success: false, error: 'No se encontraron clases completadas para este estudiante' },
+        { status: 404 }
+      )
+    }
+    
+    const studentInfo = {
+      name: classBookings[0].studentName,
+      email: classBookings[0].studentEmail,
+      phone: classBookings[0].studentPhone
+    }
+    
+    // Generate report content based on type
+    let reportContent = ''
+    
+    if (type === 'attendance') {
+      reportContent = generateAttendanceReport(studentInfo, classBookings)
+    } else if (type === 'participation') {
+      reportContent = generateParticipationCertificate(studentInfo, classBookings)
+    } else if (type === 'payment') {
+      reportContent = generatePaymentHistory(studentInfo, classBookings)
+    }
+    
+    // For now, return the content as text
+    // In production, you would generate a PDF using a library like puppeteer or pdfkit
+    return NextResponse.json({
+      success: true,
+      type,
+      format,
+      content: reportContent,
+      student: studentInfo,
+      classCount: classBookings.length
+    })
+    
+  } catch (error) {
+    console.error('Error generating student report:', error)
+    return NextResponse.json(
+      { success: false, error: 'Error al generar reporte del estudiante' },
+      { status: 500 }
+    )
+  }
+}
+
+function generateAttendanceReport(student: any, bookings: any[]): string {
+  const attendedCount = bookings.filter((b: any) => b.attended || b.attendanceStatus === 'PRESENT' || b.attendanceStatus === 'LATE').length
+  const attendanceRate = Math.round((attendedCount / bookings.length) * 100)
+  
+  return `
+REPORTE DE ASISTENCIA
+
+Estudiante: ${student.name}
+Email: ${student.email || 'N/A'}
+Teléfono: ${student.phone}
+
+RESUMEN DE ASISTENCIA
+Total de clases: ${bookings.length}
+Clases asistidas: ${attendedCount}
+Tasa de asistencia: ${attendanceRate}%
+
+DETALLE DE CLASES:
+${bookings.map((b: any) => `
+- ${b.Class.name}
+  Fecha: ${new Date(b.Class.date).toLocaleDateString('es-MX')}
+  Horario: ${b.Class.startTime} - ${b.Class.endTime}
+  Instructor: ${b.Class.instructor?.name || 'N/A'}
+  Asistencia: ${b.attended || b.attendanceStatus === 'PRESENT' ? '✓ Presente' : b.attendanceStatus === 'LATE' ? '⏰ Tarde' : '✗ Ausente'}
+`).join('')}
+
+Fecha de generación: ${new Date().toLocaleString('es-MX')}
+`
+}
+
+function generateParticipationCertificate(student: any, bookings: any[]): string {
+  const uniqueClasses = new Set(bookings.map((b: any) => b.Class.name))
+  const totalHours = bookings.reduce((sum: number, b) => sum + (b.Class.duration / 60), 0)
+  
+  return `
+CERTIFICADO DE PARTICIPACIÓN
+
+Por medio del presente se certifica que:
+
+${student.name.toUpperCase()}
+
+Ha participado en ${bookings.length} sesiones de clases de pádel en nuestro club,
+completando un total de ${totalHours.toFixed(1)} horas de entrenamiento.
+
+Clases cursadas:
+${Array.from(uniqueClasses).map(name => `• ${name}`).join('\n')}
+
+Se extiende el presente certificado para los fines que convengan al interesado.
+
+Fecha: ${new Date().toLocaleDateString('es-MX')}
+
+________________________
+Dirección del Club
+`
+}
+
+function generatePaymentHistory(student: any, bookings: any[]): string {
+  const totalPaid = bookings.reduce((sum: number, b) => sum + b.paidAmount, 0)
+  const totalDue = bookings.reduce((sum: number, b) => sum + b.dueAmount, 0)
+  const pending = totalDue - totalPaid
+  
+  return `
+HISTORIAL DE PAGOS
+
+Estudiante: ${student.name}
+Email: ${student.email || 'N/A'}
+Teléfono: ${student.phone}
+
+RESUMEN FINANCIERO
+Total pagado: ${formatCurrency(totalPaid / 100)}
+Total adeudado: ${formatCurrency(totalDue / 100)}
+Saldo pendiente: ${formatCurrency(pending / 100)}
+
+DETALLE DE PAGOS:
+${bookings.map((b: any) => `
+- ${b.Class.name}
+  Fecha: ${new Date(b.Class.date).toLocaleDateString('es-MX')}
+  Costo: ${formatCurrency(b.dueAmount / 100)}
+  Pagado: ${formatCurrency(b.paidAmount / 100)}
+  Estado: ${b.paymentStatus === 'completed' ? '✓ Pagado' : b.paymentStatus === 'partial' ? '⚠ Pago parcial' : '✗ Pendiente'}
+`).join('')}
+
+Fecha de generación: ${new Date().toLocaleString('es-MX')}
+`
+}
+
+function formatCurrency(amount: number): string {
+  return new Intl.NumberFormat('es-MX', {
+    style: 'currency',
+    currency: 'MXN'
+  }).format(amount)
+}

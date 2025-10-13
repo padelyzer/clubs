@@ -1,0 +1,438 @@
+import QRCode from 'qrcode'
+import { prisma } from '@/lib/config/prisma'
+
+export interface QRCodeData {
+  type: 'booking' | 'check-in' | 'payment' | 'whatsapp' | 'tournament'
+  bookingId?: string
+  checkInCode?: string
+  paymentLink?: string
+  whatsappLink?: string
+  metadata?: Record<string, any>
+}
+
+export class QRCodeService {
+  
+  /**
+   * Generate QR code for booking with embedded WhatsApp link
+   */
+  static async generateBookingQR(bookingId: string): Promise<string> {
+    try {
+      const booking = await prisma.booking.findUnique({
+        where: { id: bookingId },
+        include: {
+          club: true,
+          court: true
+        }
+      })
+
+      if (!booking) {
+        throw new Error('Booking not found')
+      }
+
+      // Generate unique check-in code
+      const checkInCode = this.generateCheckInCode(bookingId)
+
+      // Create WhatsApp link for quick communication
+      const whatsappLink = await this.generateWhatsAppLink(booking)
+
+      // Create QR data
+      const qrData: QRCodeData = {
+        type: 'booking',
+        bookingId,
+        checkInCode,
+        whatsappLink,
+        metadata: {
+          playerName: booking.playerName,
+          clubName: booking.Club.name,
+          courtName: booking.Court.name,
+          date: booking.date.toISOString(),
+          time: booking.startTime,
+          price: booking.price
+        }
+      }
+
+      // Generate QR code with custom styling
+      const qrOptions = {
+        errorCorrectionLevel: 'M',
+        type: 'image/png',
+        quality: 0.92,
+        margin: 1,
+        color: {
+          dark: '#1a1a1a',
+          light: '#FFFFFF'
+        },
+        width: 400
+      }
+
+      const qrCodeDataUrl = await QRCode.toDataURL(
+        JSON.stringify(qrData),
+        qrOptions
+      )
+
+      // Store QR code reference
+      await this.storeQRCodeReference(bookingId, checkInCode, qrCodeDataUrl)
+
+      return qrCodeDataUrl
+
+    } catch (error) {
+      console.error('Error generating booking QR:', error)
+      throw error
+    }
+  }
+
+  /**
+   * Generate QR code for quick check-in
+   */
+  static async generateCheckInQR(bookingId: string): Promise<string> {
+    try {
+      const checkInCode = this.generateCheckInCode(bookingId)
+      
+      // Create check-in URL
+      const checkInUrl = `${process.env.NEXT_PUBLIC_APP_URL}/check-in/${checkInCode}`
+      
+      const qrData: QRCodeData = {
+        type: 'check-in',
+        bookingId,
+        checkInCode,
+        metadata: {
+          url: checkInUrl,
+          expiresAt: new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString() // 24 hours
+        }
+      }
+
+      const qrCodeDataUrl = await QRCode.toDataURL(
+        checkInUrl, // Direct URL for easy scanning
+        {
+          errorCorrectionLevel: 'L',
+          width: 300
+        }
+      )
+
+      return qrCodeDataUrl
+
+    } catch (error) {
+      console.error('Error generating check-in QR:', error)
+      throw error
+    }
+  }
+
+  /**
+   * Generate QR code for split payment
+   */
+  static async generatePaymentQR(splitPaymentId: string): Promise<string> {
+    try {
+      const splitPayment = await prisma.splitPayment.findUnique({
+        where: { id: splitPaymentId },
+        include: {
+          booking: {
+            include: {
+              club: true,
+              court: true
+            }
+          }
+        }
+      })
+
+      if (!splitPayment) {
+        throw new Error('Split payment not found')
+      }
+
+      const paymentLink = `${process.env.NEXT_PUBLIC_APP_URL}/pay/${splitPayment.bookingId}?split=${splitPaymentId}`
+      
+      const qrData: QRCodeData = {
+        type: 'payment',
+        bookingId: splitPayment.bookingId,
+        paymentLink,
+        metadata: {
+          playerName: splitPayment.playerName,
+          amount: splitPayment.amount,
+          clubName: splitPayment.Booking.Club.name,
+          courtName: splitPayment.Booking.Court.name
+        }
+      }
+
+      // Generate QR with payment branding
+      const qrCodeDataUrl = await QRCode.toDataURL(
+        paymentLink, // Direct payment link
+        {
+          errorCorrectionLevel: 'M',
+          color: {
+            dark: '#0070f3',
+            light: '#FFFFFF'
+          },
+          width: 350
+        }
+      )
+
+      return qrCodeDataUrl
+
+    } catch (error) {
+      console.error('Error generating payment QR:', error)
+      throw error
+    }
+  }
+
+  /**
+   * Generate QR with embedded WhatsApp link
+   * Creates QR code that opens WhatsApp with CLIENT as destination
+   * @param phoneNumber - Client's phone number (destination)
+   * @param message - Message from club to client
+   */
+  static async generateWhatsAppQR(
+    phoneNumber: string,
+    message: string
+  ): Promise<string> {
+    try {
+      // Clean CLIENT phone number (destination)
+      const cleanPhone = phoneNumber.replace(/[^\d]/g, '')
+      // Add Mexico country code if needed
+      const formattedPhone = cleanPhone.length === 10 ? `52${cleanPhone}` : cleanPhone
+      const encodedMessage = encodeURIComponent(message)
+      // Link opens WhatsApp with CLIENT as destination
+      const whatsappLink = `https://wa.me/${formattedPhone}?text=${encodedMessage}`
+
+      const qrData: QRCodeData = {
+        type: 'whatsapp',
+        whatsappLink,
+        metadata: {
+          phone: phoneNumber,
+          messagePreview: message.substring(0, 50)
+        }
+      }
+
+      const qrCodeDataUrl = await QRCode.toDataURL(
+        whatsappLink,
+        {
+          errorCorrectionLevel: 'L',
+          color: {
+            dark: '#25D366', // WhatsApp green
+            light: '#FFFFFF'
+          },
+          width: 300
+        }
+      )
+
+      return qrCodeDataUrl
+
+    } catch (error) {
+      console.error('Error generating WhatsApp QR:', error)
+      throw error
+    }
+  }
+
+  /**
+   * Generate tournament check-in QR
+   */
+  static async generateTournamentQR(
+    tournamentId: string,
+    playerId: string
+  ): Promise<string> {
+    try {
+      const tournament = await prisma.tournament.findUnique({
+        where: { id: tournamentId }
+      })
+
+      if (!tournament) {
+        throw new Error('Tournament not found')
+      }
+
+      const checkInData = {
+        tournamentId,
+        playerId,
+        checkInCode: this.generateCheckInCode(`${tournamentId}-${playerId}`),
+        timestamp: Date.now()
+      }
+
+      const qrCodeDataUrl = await QRCode.toDataURL(
+        JSON.stringify(checkInData),
+        {
+          errorCorrectionLevel: 'M',
+          width: 350
+        }
+      )
+
+      return qrCodeDataUrl
+
+    } catch (error) {
+      console.error('Error generating tournament QR:', error)
+      throw error
+    }
+  }
+
+  /**
+   * Validate QR code for check-in
+   */
+  static async validateCheckInQR(checkInCode: string): Promise<{
+    valid: boolean
+    bookingId?: string
+    error?: string
+  }> {
+    try {
+      // Find QR code reference
+      const qrReference = await prisma.qRCodeReference.findUnique({
+        where: { checkInCode }
+      })
+
+      if (!qrReference) {
+        return { valid: false, error: 'Invalid check-in code' }
+      }
+
+      // Check if expired
+      if (qrReference.expiresAt && qrReference.expiresAt < new Date()) {
+        return { valid: false, error: 'Check-in code expired' }
+      }
+
+      // Check if already used
+      if (qrReference.usedAt) {
+        return { valid: false, error: 'Check-in code already used' }
+      }
+
+      // Mark as used
+      await prisma.qRCodeReference.update({
+        where: { id: qrReference.id },
+        data: { 
+          usedAt: new Date(),
+          scannedCount: qrReference.scannedCount + 1
+        }
+      })
+
+      // Perform check-in
+      if (qrReference.bookingId) {
+        await prisma.booking.update({
+          where: { id: qrReference.bookingId },
+          data: {
+            checkedIn: true,
+            checkedInAt: new Date()
+          }
+        })
+      }
+
+      return { 
+        valid: true, 
+        bookingId: qrReference.bookingId 
+      }
+
+    } catch (error) {
+      console.error('Error validating check-in QR:', error)
+      return { valid: false, error: 'Error validating code' }
+    }
+  }
+
+  /**
+   * Generate unique check-in code
+   */
+  private static generateCheckInCode(seed: string): string {
+    const timestamp = Date.now().toString(36)
+    const random = Math.random().toString(36).substring(2, 8)
+    const hash = Buffer.from(seed).toString('base64')
+      .replace(/[^a-zA-Z0-9]/g, '')
+      .substring(0, 4)
+    
+    return `CHK-${timestamp}-${random}-${hash}`.toUpperCase()
+  }
+
+  /**
+   * Generate WhatsApp link for booking
+   * Creates link for club to contact client
+   */
+  private static async generateWhatsAppLink(booking: any): Promise<string> {
+    // Message from club to client perspective
+    const message = 
+      `¡Hola ${booking.playerName}! 👋\n\n` +
+      `Tu reserva en ${booking.Club.name} ha sido confirmada:\n\n` +
+      `• Fecha: ${booking.date.toLocaleDateString('es-MX')}\n` +
+      `• Hora: ${booking.startTime}\n` +
+      `• Cancha: ${booking.Court.name}\n\n` +
+      `¡Te esperamos! 🎾`
+
+    // Use CLIENT phone as destination (club sends to client)
+    const clientPhone = booking.playerPhone?.replace(/[^\d]/g, '')
+    if (!clientPhone) {
+      throw new Error('Client phone number is required')
+    }
+    
+    // Add Mexico country code if needed
+    const formattedPhone = clientPhone.length === 10 ? `52${clientPhone}` : clientPhone
+    const encodedMessage = encodeURIComponent(message)
+    
+    return `https://wa.me/${formattedPhone}?text=${encodedMessage}`
+  }
+
+  /**
+   * Store QR code reference in database
+   */
+  private static async storeQRCodeReference(
+    bookingId: string,
+    checkInCode: string,
+    qrCodeData: string
+  ) {
+    try {
+      await prisma.qRCodeReference.create({
+        data: {
+          bookingId,
+          checkInCode,
+          qrCodeData,
+          expiresAt: new Date(Date.now() + 24 * 60 * 60 * 1000), // 24 hours
+          scannedCount: 0
+        }
+      })
+    } catch (error) {
+      console.error('Error storing QR reference:', error)
+    }
+  }
+
+  /**
+   * Generate bulk QR codes for events
+   */
+  static async generateBulkQRCodes(
+    bookingIds: string[]
+  ): Promise<Map<string, string>> {
+    const qrCodes = new Map<string, string>()
+
+    for (const bookingId of bookingIds) {
+      try {
+        const qrCode = await this.generateBookingQR(bookingId)
+        qrCodes.set(bookingId, qrCode)
+      } catch (error) {
+        console.error(`Error generating QR for booking ${bookingId}:`, error)
+      }
+    }
+
+    return qrCodes
+  }
+
+  /**
+   * Get QR code analytics
+   */
+  static async getQRCodeAnalytics(clubId: string) {
+    const [totalGenerated, totalScanned, uniqueScans] = await Promise.all([
+      prisma.qRCodeReference.count({
+        where: {
+          booking: { clubId }
+        }
+      }),
+      prisma.qRCodeReference.aggregate({
+        where: {
+          booking: { clubId },
+          scannedCount: { gt: 0 }
+        },
+        _sum: { scannedCount: true }
+      }),
+      prisma.qRCodeReference.count({
+        where: {
+          booking: { clubId },
+          usedAt: { not: null }
+        }
+      })
+    ])
+
+    return {
+      totalGenerated,
+      totalScanned: totalScanned._sum.scannedCount || 0,
+      uniqueScans,
+      scanRate: totalGenerated > 0 
+        ? ((uniqueScans / totalGenerated) * 100).toFixed(2) 
+        : '0.00'
+    }
+  }
+}

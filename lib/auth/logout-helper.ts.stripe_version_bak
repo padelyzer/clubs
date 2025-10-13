@@ -1,0 +1,28 @@
+/**
+ * Helper function to logout using the API Route
+ * Replaces the old logoutAction Server Action
+ */
+export async function logout() {
+  try {
+    const response = await fetch('/api/auth/logout', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json'
+      }
+    })
+
+    const data = await response.json()
+
+    if (response.ok && data.success) {
+      // Redirigir al login
+      window.location.href = '/login'
+      return { success: true }
+    } else {
+      console.error('Logout failed:', data.error)
+      return { success: false, error: data.error }
+    }
+  } catch (error) {
+    console.error('Logout error:', error)
+    return { success: false, error: 'Error al cerrar sesión' }
+  }
+}

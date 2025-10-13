@@ -1,0 +1,497 @@
+import { NextRequest, NextResponse } from 'next/server'
+import { requireAuthAPI } from '@/lib/auth/actions'
+import { prisma } from '@/lib/config/prisma'
+import { processSplitPaymentCompletion } from '@/lib/payments/split-payment'
+import { onBookingConfirmed, onPaymentCompleted } from '@/lib/whatsapp/notification-hooks'
+import { QRCodeService } from '@/lib/services/qr-code-service'
+import { EmailService } from '@/lib/services/email-service'
+import { nanoid } from 'nanoid'
+import Stripe from 'stripe'
+
+export async function POST(request: NextRequest) {
+  try {
+    const session = await requireAuthAPI()
+    
+    if (!session) {
+      return NextResponse.json(
+        { success: false, error: 'No autorizado' },
+        { status: 401 }
+      )
+    }
+    const body = await request.json()
+    console.log('🔍 Request body completo:', JSON.stringify(body, null, 2))
+    const { paymentIntentId, testMode = false, metadata, bookingId } = body
+
+    if (!paymentIntentId) {
+      return NextResponse.json(
+        { error: 'Se requiere paymentIntentId' },
+        { status: 400 }
+      )
+    }
+
+    console.log('🔍 Confirmando pago con:', { paymentIntentId, testMode, metadata, bookingId })
+    console.log('🔍 BookingId extraído:', bookingId, typeof bookingId)
+
+    // Si estamos en modo de prueba, buscar tanto split payment como pago normal
+    if (testMode) {
+      console.log('🧪 Confirmando pago en modo de prueba...')
+      
+      // Primero buscar si es un split payment - verificar que pertenece al club del usuario
+      const splitPayment = await prisma.splitPayment.findFirst({
+        where: { 
+          stripePaymentIntentId: paymentIntentId,
+          OR: [
+            {
+              Booking: {
+                clubId: session.clubId
+              }
+            },
+            {
+              BookingGroup: {
+                clubId: session.clubId
+              }
+            }
+          ]
+        },
+        include: {
+          Booking: {
+            include: {
+              Club: true,
+              Court: true
+            }
+          },
+          BookingGroup: {
+            include: {
+              Club: true,
+              bookings: {
+                include: {
+                  Court: true
+                }
+              }
+            }
+          }
+        }
+      })
+
+      if (splitPayment) {
+        console.log('✅ Split payment encontrado en modo de prueba')
+        // Procesar completado del split payment en modo de prueba
+        const result = await processSplitPaymentCompletion(splitPayment.id)
+        
+        // Actualizar split payment como completado
+        await prisma.splitPayment.update({
+          where: { id: splitPayment.id },
+          data: {
+            status: 'completed',
+            stripeChargeId: `ch_test_${Date.now()}`, // Simular charge ID
+            completedAt: new Date()
+          }
+        })
+
+        console.log('✅ Split payment completado en modo de prueba')
+
+        // 🔔 TRIGGER SPLIT PAYMENT COMPLETION NOTIFICATIONS, QR AND EMAIL
+        try {
+          console.log('🔔 Triggering split payment completion notification for:', splitPayment.id)
+          await onPaymentCompleted(splitPayment.id)
+          
+          // 🔲 Generate QR Code for the related booking
+          if (splitPayment.bookingId) {
+            console.log('🔲 Generating QR code for split payment booking:', splitPayment.bookingId)
+            await QRCodeService.generateBookingQR(splitPayment.bookingId)
+          }
+          
+          // 📧 Send split payment confirmation email
+          console.log('📧 Sending split payment confirmation email for:', splitPayment.id)
+          await EmailService.sendSplitPaymentConfirmation(splitPayment.id)
+          
+        } catch (notificationError) {
+          console.error('⚠️ Error sending split payment completion notification:', notificationError)
+          // Don't fail the payment - just log the error
+        }
+
+        return NextResponse.json({
+          success: true,
+          paymentConfirmed: true,
+          testMode: true,
+          ...result
+        })
+      }
+
+      // Si no es split payment, buscar en payments normales - verificar club
+      console.log('🔍 No es split payment, buscando pago normal...')
+      const payment = await prisma.payment.findFirst({
+        where: { 
+          stripePaymentIntentId: paymentIntentId,
+          OR: [
+            {
+              Booking: {
+                clubId: session.clubId
+              }
+            },
+            {
+              BookingGroup: {
+                clubId: session.clubId
+              }
+            }
+          ]
+        },
+        include: {
+          Booking: {
+            include: {
+              Club: true,
+              Court: true
+            }
+          },
+          BookingGroup: {
+            include: {
+              Club: true,
+              bookings: {
+                include: {
+                  Court: true
+                }
+              }
+            }
+          }
+        }
+      })
+
+      if (payment) {
+        console.log('✅ Pago normal encontrado en modo de prueba')
+        
+        // Update payment status
+        await prisma.payment.update({
+          where: { id: payment.id },
+          data: {
+            status: 'completed',
+            stripeChargeId: `ch_test_${Date.now()}`,
+            completedAt: new Date()
+          }
+        })
+
+        // Update booking payment status
+        if (payment.bookingId) {
+          await prisma.booking.update({
+            where: { id: payment.bookingId },
+            data: {
+              paymentStatus: 'completed',
+              paymentType: 'ONLINE_FULL', // Pagos con Stripe son ONLINE_FULL
+              status: 'CONFIRMED'
+            }
+          })
+        } else if (payment.bookingGroupId) {
+          await prisma.bookingGroup.update({
+            where: { id: payment.bookingGroupId },
+            data: {
+              paymentStatus: 'completed',
+              paymentType: 'ONLINE_FULL', // Pagos con Stripe son ONLINE_FULL
+              status: 'CONFIRMED'
+            }
+          })
+        }
+
+        // Create transaction record (check if not already exists)
+        const booking = payment.booking || payment.bookingGroup
+        if (booking) {
+          // Check if transaction already exists for this payment intent
+          const existingTransaction = await prisma.transaction.findFirst({
+            where: {
+              reference: `stripe_${paymentIntentId}`
+            }
+          })
+          
+          if (!existingTransaction) {
+            await prisma.transaction.create({
+              data: {
+                id: nanoid(),
+                clubId: booking.clubId,
+                type: 'INCOME',
+                category: 'BOOKING',
+                amount: payment.amount,
+                currency: payment.currency,
+                description: `Pago online - ${booking.playerName}`,
+                date: new Date(),
+                reference: `stripe_${paymentIntentId}`,
+                bookingId: payment.bookingId, // Solo usar bookingId - Transaction no tiene bookingGroupId
+                createdAt: new Date()}
+            })
+            console.log('✅ Transaction created for payment intent:', paymentIntentId)
+          } else {
+            console.log('⚠️ Transaction already exists for payment intent:', paymentIntentId)
+          }
+        }
+
+        console.log('✅ Pago normal completado en modo de prueba')
+
+        // 🔔 TRIGGER POST-PAYMENT NOTIFICATIONS, QR GENERATION AND EMAILS
+        try {
+          if (payment.bookingId) {
+            console.log('🔔 Triggering WhatsApp confirmation for booking:', payment.bookingId)
+            await onBookingConfirmed(payment.bookingId)
+            
+            // 🔲 Generate QR Code for check-in
+            console.log('🔲 Generating QR code for booking:', payment.bookingId)
+            await QRCodeService.generateBookingQR(payment.bookingId)
+            
+            // 📧 Send booking confirmation email
+            console.log('📧 Sending booking confirmation email for:', payment.bookingId)
+            await EmailService.sendBookingConfirmation(payment.bookingId)
+            
+            // 📧 Send payment receipt email
+            console.log('📧 Sending payment receipt email for payment:', payment.id)
+            await EmailService.sendPaymentReceipt(payment.id)
+            
+          } else if (payment.bookingGroupId) {
+            console.log('🔔 Triggering WhatsApp confirmation for booking group:', payment.bookingGroupId)
+            await onBookingConfirmed(payment.bookingGroupId)
+            
+            // 🔲 Generate QR Code for booking group (if method exists)
+            console.log('🔲 Generating QR code for booking group:', payment.bookingGroupId)
+            try {
+              await QRCodeService.generateBookingQR(payment.bookingGroupId)
+            } catch (qrError) {
+              console.log('ℹ️ QR generation not available for booking groups yet')
+            }
+            
+            // 📧 Send payment receipt email (booking group confirmation)
+            console.log('📧 Sending payment receipt email for group payment:', payment.id)
+            await EmailService.sendPaymentReceipt(payment.id)
+          }
+        } catch (notificationError) {
+          console.error('⚠️ Error sending post-payment notifications:', notificationError)
+          // Don't fail the payment - just log the error
+        }
+
+        return NextResponse.json({
+          success: true,
+          paymentConfirmed: true,
+          testMode: true,
+          Payment: {
+            id: payment.id,
+            amount: payment.amount,
+            bookingId: payment.bookingId,
+            bookingGroupId: payment.bookingGroupId
+          }
+        })
+      }
+
+      if (!payment) {
+        // If no regular payment found, check for ClassBooking
+        console.log('🔍 No es pago normal, buscando ClassBooking...')
+        
+        // Use the bookingId from the request or try to get it from metadata
+        let targetBookingId = bookingId
+        if (!targetBookingId && metadata && metadata.booking_id) {
+          targetBookingId = metadata.booking_id
+        } else if (!targetBookingId && metadata && metadata.class_booking_id) {
+          targetBookingId = metadata.class_booking_id
+        }
+        
+        console.log('🔍 Buscando ClassBooking con booking ID:', targetBookingId)
+        
+        let classBooking = null
+        if (targetBookingId) {
+          // First try to find with processing status - verificar club
+          classBooking = await prisma.classBooking.findFirst({
+            where: { 
+              id: targetBookingId,
+              paymentStatus: 'processing',
+              class: {
+                clubId: session.clubId
+              }
+            },
+            include: {
+              class: {
+                include: {
+                  Club: true,
+                  Court: true,
+                  instructor: true
+                }
+              }
+            }
+          })
+          
+          console.log('🔍 ClassBooking con processing:', classBooking ? 'ENCONTRADO' : 'NO ENCONTRADO')
+          
+          // If not found with processing, try with pending status (in case it wasn't updated)
+          if (!classBooking) {
+            console.log('🔍 Intentando buscar con pending status...')
+            classBooking = await prisma.classBooking.findFirst({
+              where: { 
+                id: targetBookingId,
+                paymentStatus: 'pending'
+              },
+              include: {
+                class: {
+                  include: {
+                    Club: true,
+                    Court: true,
+                    instructor: true
+                  }
+                }
+              }
+            })
+            
+            console.log('🔍 ClassBooking con pending:', classBooking ? 'ENCONTRADO' : 'NO ENCONTRADO')
+          }
+          
+          // If still not found, try without status filter to see if the booking exists at all
+          if (!classBooking) {
+            console.log('🔍 Intentando buscar sin filtro de status...')
+            const anyClassBooking = await prisma.classBooking.findFirst({
+              where: { 
+                id: targetBookingId
+              },
+              select: {
+                id: true,
+                studentName: true,
+                paymentStatus: true,
+                paymentMethod: true
+              }
+            })
+            
+            console.log('🔍 ClassBooking (cualquier status):', anyClassBooking)
+          }
+        }
+        
+        // If not found by ID, try to find by processing status (fallback)
+        if (!classBooking) {
+          console.log('🔍 No encontrado por ID, buscando por estado processing con paymentMethod online...')
+          classBooking = await prisma.classBooking.findFirst({
+            where: { 
+              paymentStatus: 'processing',
+              paymentMethod: 'online'
+            },
+            orderBy: {
+              updatedAt: 'desc' // Get the most recent one
+            },
+            include: {
+              class: {
+                include: {
+                  Club: true,
+                  Court: true,
+                  instructor: true
+                }
+              }
+            }
+          })
+          
+          console.log('🔍 ClassBooking con processing+online:', classBooking ? 'ENCONTRADO' : 'NO ENCONTRADO')
+          
+          // If still not found, try without paymentMethod filter
+          if (!classBooking) {
+            console.log('🔍 Segundo fallback: buscando solo por estado processing...')
+            classBooking = await prisma.classBooking.findFirst({
+              where: { 
+                paymentStatus: 'processing'
+              },
+              orderBy: {
+                updatedAt: 'desc' // Get the most recent one
+              },
+              include: {
+                class: {
+                  include: {
+                    Club: true,
+                    Court: true,
+                    instructor: true
+                  }
+                }
+              }
+            })
+            console.log('🔍 ClassBooking solo processing:', classBooking ? 'ENCONTRADO' : 'NO ENCONTRADO')
+          }
+        }
+
+        if (classBooking) {
+          console.log('✅ ClassBooking encontrado en modo de prueba')
+          
+          // Create transaction record for the class payment
+          await prisma.transaction.create({
+            data: {
+              id: nanoid(),
+              clubId: classBooking.Class.clubId,
+              type: 'INCOME',
+              category: 'CLASS',
+              amount: classBooking.dueAmount || classBooking.Class.price,
+              currency: 'MXN',
+              description: `Pago online de clase: ${classBooking.Class.name} - ${classBooking.studentName}`,
+              date: new Date(),
+              reference: `stripe_${paymentIntentId}`,
+              notes: JSON.stringify({
+                classId: classBooking.Class.id,
+                classBookingId: classBooking.id,
+                studentName: classBooking.studentName,
+                paymentMethod: 'ONLINE',
+                className: classBooking.Class.name,
+                stripePaymentIntentId: paymentIntentId
+              }),
+              createdAt: new Date()}
+          })
+
+          // Update ClassBooking payment status
+          await prisma.classBooking.update({
+            where: { id: classBooking.id },
+            data: {
+              paymentStatus: 'completed',
+              paymentMethod: 'online',
+              paidAmount: classBooking.dueAmount || classBooking.Class.price}
+          })
+
+          console.log('✅ ClassBooking payment completado en modo de prueba')
+
+          // 🔔 TRIGGER CLASS BOOKING CONFIRMATION, QR AND EMAIL
+          try {
+            console.log('🔔 Triggering class booking confirmation for:', classBooking.id)
+            // For class bookings, we use the classBooking ID as bookingId
+            await onBookingConfirmed(classBooking.id)
+            
+            // 🔲 Generate QR Code for class check-in
+            console.log('🔲 Generating QR code for class booking:', classBooking.id)
+            await QRCodeService.generateBookingQR(classBooking.id)
+            
+            // 📧 Send class booking confirmation email
+            console.log('📧 Sending class booking confirmation email for:', classBooking.id)
+            await EmailService.sendClassBookingConfirmation(classBooking.id)
+            
+          } catch (notificationError) {
+            console.error('⚠️ Error sending class booking confirmation:', notificationError)
+            // Don't fail the payment - just log the error
+          }
+
+          return NextResponse.json({
+            success: true,
+            paymentConfirmed: true,
+            testMode: true,
+            type: 'class',
+            classBooking: {
+              id: classBooking.id,
+              studentName: classBooking.studentName,
+              className: classBooking.Class.name,
+              amount: classBooking.dueAmount || classBooking.Class.price
+            }
+          })
+        }
+
+        return NextResponse.json(
+          { error: 'Pago no encontrado (ni split payment, ni pago normal, ni clase)' },
+          { status: 404 }
+        )
+      }
+
+    } else {
+      // Production mode - use real Stripe webhook
+      console.log('🏭 Modo de producción - usando webhook real de Stripe')
+      return NextResponse.json(
+        { error: 'Webhook mode not implemented in this endpoint' },
+        { status: 501 }
+      )
+    }
+
+  } catch (error) {
+    console.error('Error confirming payment:', error)
+    return NextResponse.json(
+      { error: 'Error interno del servidor' },
+      { status: 500 }
+    )
+  }
+}

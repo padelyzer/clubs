@@ -1,0 +1,117 @@
+import { NextRequest, NextResponse } from 'next/server'
+import { getSession } from '@/lib/auth/actions'
+import { prisma } from '@/lib/config/prisma'
+
+export async function PUT(
+  request: NextRequest,
+  { params }: { params: Promise<{ id: string }> }
+) {
+  try {
+    const paramData = await params
+    const { id } = paramData
+    const session = await getSession()
+    
+    if (!session || session.role !== 'SUPER_ADMIN') {
+      return NextResponse.json(
+        { error: 'No autorizado' },
+        { status: 401 }
+      )
+    }
+
+    const data = await request.json()
+
+    // Validar que el slug sea único si se está cambiando
+    if (data.slug) {
+      const existingClub = await prisma.Club.findFirst({
+        where: {
+          slug: data.slug,
+          NOT: { id }
+        }
+      })
+
+      if (existingClub) {
+        return NextResponse.json(
+          { error: 'El slug ya está en uso por otro club' },
+          { status: 400 }
+        )
+      }
+    }
+
+    // Actualizar el club (sin campos de ubicación)
+    const updatedClub = await prisma.Club.update({
+      where: { id },
+      data: {
+        name: data.name,
+        slug: data.slug,
+        email: data.email,
+        phone: data.phone,
+        description: data.description || null,
+        website: data.website || null,
+        status: data.status,
+        active: data.active
+      }
+    })
+
+    return NextResponse.json({
+      success: true,
+      club: updatedClub
+    })
+
+  } catch (error) {
+    console.error('Error actualizando club:', error)
+    return NextResponse.json(
+      { error: 'Error interno del servidor' },
+      { status: 500 }
+    )
+  }
+}
+
+export async function GET(
+  request: NextRequest,
+  { params }: { params: Promise<{ id: string }> }
+) {
+  try {
+    const paramData = await params
+    const { id } = paramData
+    const session = await getSession()
+    
+    if (!session || session.role !== 'SUPER_ADMIN') {
+      return NextResponse.json(
+        { error: 'No autorizado' },
+        { status: 401 }
+      )
+    }
+
+    const club = await prisma.Club.findUnique({
+      where: { id },
+      include: {
+        _count: {
+          select: {
+            User: true,
+            Court: true,
+            Booking: true
+          }
+        }
+      }
+    })
+
+    if (!club) {
+      return NextResponse.json(
+        { error: 'Club no encontrado' },
+        { status: 404 }
+      )
+    }
+
+    return NextResponse.json({
+      success: true,
+      club
+    })
+
+  } catch (error) {
+    console.error('Error obteniendo club:', error)
+    return NextResponse.json(
+      { error: 'Error interno del servidor' },
+      { status: 500 }
+    )
+  }
+}

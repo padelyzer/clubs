@@ -1,0 +1,74 @@
+import { notFound, redirect } from 'next/navigation'
+import { prisma } from '@/lib/config/prisma'
+import { getSession } from '@/lib/auth/actions'
+import { ReactNode } from 'react'
+
+interface ClubLayoutProps {
+  children: ReactNode
+  params: Promise<{ clubSlug: string }>
+}
+
+async function validateClubAccess(clubSlug: string) {
+  // Buscar el club por slug
+  const club = await prisma.club.findUnique({
+    where: { slug: clubSlug },
+    select: {
+      id: true,
+      name: true,
+      status: true,
+      active: true
+    }
+  })
+
+  if (!club) {
+    notFound()
+  }
+
+  // Verificar que el club esté activo
+  if (!club.active || club.status !== 'APPROVED') {
+    notFound()
+  }
+
+  // Obtener la sesión del usuario
+  const session = await getSession()
+  
+  if (!session) {
+    redirect(`/login?redirect=/c/${clubSlug}/dashboard`)
+  }
+
+  // Verificar acceso del usuario al club
+  // Super Admin puede acceder a cualquier club
+  if (session.role === 'SUPER_ADMIN') {
+    return { club, session, hasAccess: true }
+  }
+
+  // Usuarios normales solo pueden acceder a su propio club
+  if (session.clubId !== club.id) {
+    // Verificar si el usuario tiene acceso a múltiples clubes
+    const userClubAccess = await prisma.user.findUnique({
+      where: { id: session.userId },
+      select: {
+        clubId: true,
+        role: true
+      }
+    })
+
+    if (userClubAccess?.clubId !== club.id) {
+      notFound()
+    }
+  }
+
+  return { club, session, hasAccess: true }
+}
+
+export default async function ClubLayout({ children, params }: ClubLayoutProps) {
+  const { clubSlug } = await params
+  const { club, session } = await validateClubAccess(clubSlug)
+
+  // Agregar el contexto del club a los children
+  return (
+    <div data-club-id={club.id} data-club-slug={clubSlug}>
+      {children}
+    </div>
+  )
+}

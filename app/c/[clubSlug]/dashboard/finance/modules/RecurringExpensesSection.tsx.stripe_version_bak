@@ -1,0 +1,496 @@
+'use client'
+
+import React, { useState, useEffect } from 'react'
+import { CardModern } from '@/components/design-system/CardModern'
+import { 
+  Plus, Calendar, RefreshCw, X, Check, Clock,
+  Home, Zap, Wifi, Wrench, Edit, Trash2
+} from 'lucide-react'
+import { formatCurrency } from '@/lib/design-system/localization'
+import { format } from 'date-fns'
+import { es } from 'date-fns/locale'
+
+interface RecurringExpense {
+  id: string
+  category: string
+  description: string
+  amount: number
+  vendor?: string
+  frequency: 'WEEKLY' | 'BIWEEKLY' | 'MONTHLY' | 'QUARTERLY' | 'YEARLY'
+  dayOfMonth?: number
+  dayOfWeek?: number
+  nextDue: string
+  isActive: boolean
+  lastGenerated?: string
+}
+
+export default function RecurringExpensesSection() {
+  const [recurringExpenses, setRecurringExpenses] = useState<RecurringExpense[]>([])
+  const [loading, setLoading] = useState(true)
+  const [showCreateModal, setShowCreateModal] = useState(false)
+  const [newRecurring, setNewRecurring] = useState({
+    category: 'RENT',
+    description: '',
+    amount: '',
+    vendor: '',
+    frequency: 'MONTHLY' as const,
+    dayOfMonth: '1',
+    startDate: format(new Date(), 'yyyy-MM-dd')
+  })
+
+  useEffect(() => {
+    fetchRecurringExpenses()
+  }, [])
+
+  const fetchRecurringExpenses = async () => {
+    try {
+      setLoading(true)
+      const response = await fetch('/api/finance/recurring-expenses?active=true')
+      if (response.ok) {
+        const data = await response.json()
+        const mapped = data.recurringExpenses?.map((e: any) => ({
+          ...e,
+          amount: e.amount / 100 // Convert from cents to pesos
+        })) || []
+        setRecurringExpenses(mapped)
+      }
+    } catch (error) {
+      console.error('Error fetching recurring expenses:', error)
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  const handleCreateRecurring = async () => {
+    try {
+      const recurringData = {
+        ...newRecurring,
+        amount: Math.round(parseFloat(newRecurring.amount) * 100), // Convert to cents
+        dayOfMonth: newRecurring.frequency === 'MONTHLY' ? parseInt(newRecurring.dayOfMonth) : undefined
+      }
+
+      const response = await fetch('/api/finance/recurring-expenses', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify(recurringData)
+      })
+
+      if (response.ok) {
+        setShowCreateModal(false)
+        setNewRecurring({
+          category: 'RENT',
+          description: '',
+          amount: '',
+          vendor: '',
+          frequency: 'MONTHLY',
+          dayOfMonth: '1',
+          startDate: format(new Date(), 'yyyy-MM-dd')
+        })
+        fetchRecurringExpenses()
+      } else {
+        const error = await response.json()
+        alert(error.error || 'Error al crear gasto recurrente')
+      }
+    } catch (error) {
+      console.error('Error creating recurring expense:', error)
+      alert('Error al crear gasto recurrente')
+    }
+  }
+
+  const handleDelete = async (id: string) => {
+    if (!confirm('¿Estás seguro de desactivar este gasto recurrente?')) return
+    
+    try {
+      const response = await fetch(`/api/finance/recurring-expenses?id=${id}`, {
+        method: 'DELETE'
+      })
+
+      if (response.ok) {
+        fetchRecurringExpenses()
+      } else {
+        alert('Error al desactivar gasto recurrente')
+      }
+    } catch (error) {
+      console.error('Error deleting recurring expense:', error)
+      alert('Error al desactivar gasto recurrente')
+    }
+  }
+
+  const getFrequencyLabel = (frequency: string) => {
+    switch (frequency) {
+      case 'WEEKLY': return 'Semanal'
+      case 'BIWEEKLY': return 'Quincenal'
+      case 'MONTHLY': return 'Mensual'
+      case 'QUARTERLY': return 'Trimestral'
+      case 'YEARLY': return 'Anual'
+      default: return frequency
+    }
+  }
+
+  const getCategoryIcon = (category: string) => {
+    switch (category) {
+      case 'RENT': return <Home style={{ width: '20px', height: '20px', color: '#EF4444' }} />
+      case 'UTILITIES': return <Zap style={{ width: '20px', height: '20px', color: '#EF4444' }} />
+      case 'INTERNET': return <Wifi style={{ width: '20px', height: '20px', color: '#EF4444' }} />
+      case 'MAINTENANCE': return <Wrench style={{ width: '20px', height: '20px', color: '#EF4444' }} />
+      default: return <RefreshCw style={{ width: '20px', height: '20px', color: '#EF4444' }} />
+    }
+  }
+
+  return (
+    <>
+      <CardModern variant="glass">
+        <div style={{ padding: '24px' }}>
+          {/* Header */}
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '20px' }}>
+            <h3 style={{
+              fontSize: '18px',
+              fontWeight: 600,
+              color: '#182A01'
+            }}>
+              Gastos Recurrentes Configurados
+            </h3>
+            <button
+              onClick={() => setShowCreateModal(true)}
+              style={{
+                padding: '8px 16px',
+                borderRadius: '10px',
+                border: 'none',
+                background: 'linear-gradient(135deg, #66E7AA 0%, #A4DF4E 100%)',
+                color: '#182A01',
+                fontSize: '14px',
+                fontWeight: 600,
+                cursor: 'pointer',
+                display: 'flex',
+                alignItems: 'center',
+                gap: '6px'
+              }}
+            >
+              <Plus style={{ width: '14px', height: '14px' }} />
+              Configurar Gasto Recurrente
+            </button>
+          </div>
+
+          {/* Recurring Expenses List */}
+          {loading ? (
+            <div style={{ textAlign: 'center', padding: '40px', color: '#516640' }}>
+              Cargando gastos recurrentes...
+            </div>
+          ) : recurringExpenses.length === 0 ? (
+            <div style={{ textAlign: 'center', padding: '40px' }}>
+              <RefreshCw style={{ width: '48px', height: '48px', color: '#D1D5DB', margin: '0 auto 16px' }} />
+              <p style={{ color: '#516640', fontSize: '14px', marginBottom: '8px' }}>
+                No hay gastos recurrentes configurados
+              </p>
+              <p style={{ color: '#9CA3AF', fontSize: '12px' }}>
+                Configura gastos que se repiten automáticamente cada mes
+              </p>
+            </div>
+          ) : (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+              {recurringExpenses.map((expense) => (
+                <div
+                  key={expense.id}
+                  style={{
+                    padding: '16px',
+                    borderRadius: '12px',
+                    border: '1px solid rgba(164, 223, 78, 0.1)',
+                    background: 'white',
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '16px'
+                  }}
+                >
+                  {getCategoryIcon(expense.category)}
+                  
+                  <div style={{ flex: 1 }}>
+                    <p style={{ 
+                      fontSize: '14px', 
+                      fontWeight: 600, 
+                      color: '#182A01',
+                      marginBottom: '4px'
+                    }}>
+                      {expense.description}
+                    </p>
+                    <div style={{ display: 'flex', gap: '12px', alignItems: 'center' }}>
+                      <span style={{ fontSize: '12px', color: '#516640' }}>
+                        {getFrequencyLabel(expense.frequency)}
+                        {expense.frequency === 'MONTHLY' && expense.dayOfMonth && 
+                          ` - Día ${expense.dayOfMonth}`}
+                      </span>
+                      {expense.vendor && (
+                        <span style={{ fontSize: '12px', color: '#516640' }}>
+                          • {expense.vendor}
+                        </span>
+                      )}
+                      <span style={{ 
+                        fontSize: '12px', 
+                        color: '#66E7AA',
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: '4px'
+                      }}>
+                        <Clock style={{ width: '12px', height: '12px' }} />
+                        Próximo: {format(new Date(expense.nextDue), 'dd MMM', { locale: es })}
+                      </span>
+                    </div>
+                  </div>
+
+                  <p style={{ 
+                    fontSize: '16px', 
+                    fontWeight: 700, 
+                    color: '#182A01'
+                  }}>
+                    {formatCurrency(expense.amount)}
+                  </p>
+
+                  <button
+                    onClick={() => handleDelete(expense.id)}
+                    style={{
+                      padding: '8px',
+                      borderRadius: '8px',
+                      border: '1px solid rgba(239, 68, 68, 0.2)',
+                      background: 'white',
+                      cursor: 'pointer',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center'
+                    }}
+                  >
+                    <Trash2 style={{ width: '14px', height: '14px', color: '#EF4444' }} />
+                  </button>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      </CardModern>
+
+      {/* Create Recurring Expense Modal */}
+      {showCreateModal && (
+        <div style={{
+          position: 'fixed',
+          top: 0,
+          left: 0,
+          right: 0,
+          bottom: 0,
+          backgroundColor: 'rgba(0, 0, 0, 0.5)',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          zIndex: 1000
+        }}>
+          <div style={{
+            backgroundColor: 'white',
+            borderRadius: '16px',
+            padding: '24px',
+            width: '90%',
+            maxWidth: '500px',
+            maxHeight: '90vh',
+            overflowY: 'auto'
+          }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' }}>
+              <h3 style={{ fontSize: '20px', fontWeight: 600, color: '#182A01' }}>
+                Configurar Gasto Recurrente
+              </h3>
+              <button
+                onClick={() => setShowCreateModal(false)}
+                style={{
+                  background: 'transparent',
+                  border: 'none',
+                  cursor: 'pointer'
+                }}
+              >
+                <X style={{ width: '20px', height: '20px', color: '#516640' }} />
+              </button>
+            </div>
+
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+              <div>
+                <label style={{ display: 'block', marginBottom: '8px', fontSize: '14px', color: '#516640' }}>
+                  Categoría
+                </label>
+                <select
+                  value={newRecurring.category}
+                  onChange={(e) => setNewRecurring({...newRecurring, category: e.target.value})}
+                  style={{
+                    width: '100%',
+                    padding: '10px',
+                    borderRadius: '8px',
+                    border: '1px solid rgba(164, 223, 78, 0.2)',
+                    fontSize: '14px'
+                  }}
+                >
+                  <option value="RENT">Renta</option>
+                  <option value="UTILITIES">Servicios (Luz, Agua, Gas)</option>
+                  <option value="MAINTENANCE">Mantenimiento</option>
+                  <option value="SALARY">Salarios</option>
+                  <option value="MARKETING">Marketing</option>
+                  <option value="EQUIPMENT">Equipamiento</option>
+                  <option value="OTHER">Otro</option>
+                </select>
+              </div>
+
+              <div>
+                <label style={{ display: 'block', marginBottom: '8px', fontSize: '14px', color: '#516640' }}>
+                  Descripción
+                </label>
+                <input
+                  type="text"
+                  value={newRecurring.description}
+                  onChange={(e) => setNewRecurring({...newRecurring, description: e.target.value})}
+                  placeholder="Ej: Renta del local"
+                  style={{
+                    width: '100%',
+                    padding: '10px',
+                    borderRadius: '8px',
+                    border: '1px solid rgba(164, 223, 78, 0.2)',
+                    fontSize: '14px'
+                  }}
+                />
+              </div>
+
+              <div>
+                <label style={{ display: 'block', marginBottom: '8px', fontSize: '14px', color: '#516640' }}>
+                  Monto
+                </label>
+                <input
+                  type="number"
+                  value={newRecurring.amount}
+                  onChange={(e) => setNewRecurring({...newRecurring, amount: e.target.value})}
+                  placeholder="0.00"
+                  style={{
+                    width: '100%',
+                    padding: '10px',
+                    borderRadius: '8px',
+                    border: '1px solid rgba(164, 223, 78, 0.2)',
+                    fontSize: '14px'
+                  }}
+                />
+              </div>
+
+              <div>
+                <label style={{ display: 'block', marginBottom: '8px', fontSize: '14px', color: '#516640' }}>
+                  Proveedor (opcional)
+                </label>
+                <input
+                  type="text"
+                  value={newRecurring.vendor}
+                  onChange={(e) => setNewRecurring({...newRecurring, vendor: e.target.value})}
+                  placeholder="Ej: CFE, Telmex"
+                  style={{
+                    width: '100%',
+                    padding: '10px',
+                    borderRadius: '8px',
+                    border: '1px solid rgba(164, 223, 78, 0.2)',
+                    fontSize: '14px'
+                  }}
+                />
+              </div>
+
+              <div>
+                <label style={{ display: 'block', marginBottom: '8px', fontSize: '14px', color: '#516640' }}>
+                  Frecuencia
+                </label>
+                <select
+                  value={newRecurring.frequency}
+                  onChange={(e) => setNewRecurring({...newRecurring, frequency: e.target.value as any})}
+                  style={{
+                    width: '100%',
+                    padding: '10px',
+                    borderRadius: '8px',
+                    border: '1px solid rgba(164, 223, 78, 0.2)',
+                    fontSize: '14px'
+                  }}
+                >
+                  <option value="WEEKLY">Semanal</option>
+                  <option value="BIWEEKLY">Quincenal</option>
+                  <option value="MONTHLY">Mensual</option>
+                  <option value="QUARTERLY">Trimestral</option>
+                  <option value="YEARLY">Anual</option>
+                </select>
+              </div>
+
+              {newRecurring.frequency === 'MONTHLY' && (
+                <div>
+                  <label style={{ display: 'block', marginBottom: '8px', fontSize: '14px', color: '#516640' }}>
+                    Día del mes
+                  </label>
+                  <input
+                    type="number"
+                    min="1"
+                    max="31"
+                    value={newRecurring.dayOfMonth}
+                    onChange={(e) => setNewRecurring({...newRecurring, dayOfMonth: e.target.value})}
+                    style={{
+                      width: '100%',
+                      padding: '10px',
+                      borderRadius: '8px',
+                      border: '1px solid rgba(164, 223, 78, 0.2)',
+                      fontSize: '14px'
+                    }}
+                  />
+                </div>
+              )}
+
+              <div>
+                <label style={{ display: 'block', marginBottom: '8px', fontSize: '14px', color: '#516640' }}>
+                  Fecha de inicio
+                </label>
+                <input
+                  type="date"
+                  value={newRecurring.startDate}
+                  onChange={(e) => setNewRecurring({...newRecurring, startDate: e.target.value})}
+                  style={{
+                    width: '100%',
+                    padding: '10px',
+                    borderRadius: '8px',
+                    border: '1px solid rgba(164, 223, 78, 0.2)',
+                    fontSize: '14px'
+                  }}
+                />
+              </div>
+
+              <div style={{ display: 'flex', gap: '12px', marginTop: '8px' }}>
+                <button
+                  onClick={() => setShowCreateModal(false)}
+                  style={{
+                    flex: 1,
+                    padding: '12px',
+                    borderRadius: '10px',
+                    border: '1px solid rgba(164, 223, 78, 0.2)',
+                    background: 'white',
+                    color: '#516640',
+                    fontSize: '14px',
+                    fontWeight: 600,
+                    cursor: 'pointer'
+                  }}
+                >
+                  Cancelar
+                </button>
+                <button
+                  onClick={handleCreateRecurring}
+                  style={{
+                    flex: 1,
+                    padding: '12px',
+                    borderRadius: '10px',
+                    border: 'none',
+                    background: 'linear-gradient(135deg, #66E7AA 0%, #A4DF4E 100%)',
+                    color: '#182A01',
+                    fontSize: '14px',
+                    fontWeight: 600,
+                    cursor: 'pointer'
+                  }}
+                >
+                  Crear Gasto Recurrente
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+    </>
+  )
+}

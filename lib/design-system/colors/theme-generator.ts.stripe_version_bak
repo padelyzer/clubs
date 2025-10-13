@@ -1,0 +1,311 @@
+/**
+ * Theme Generator System
+ * Inspired by Linear's approach to automatic theme generation
+ * Uses LCH color space for perceptually uniform themes
+ */
+
+import {
+  LCHColor,
+  lchToCss,
+  hexToLch,
+  adjustLightness,
+  adjustChroma,
+  interpolateLch,
+  createColorScale
+} from './lch';
+
+export type ThemeMode = 'light' | 'dark';
+export type ContrastLevel = 'normal' | 'high' | 'super';
+
+export interface ThemeConfig {
+  mode: ThemeMode;
+  baseColor: string; // Hex color
+  accentColor: string; // Hex color
+  contrast: ContrastLevel;
+  reducedMotion?: boolean;
+}
+
+export interface ColorTokens {
+  // Background layers (elevation)
+  bgBase: string;
+  bgSubtle: string;
+  bgElement: string;
+  bgElementHover: string;
+  bgPanel: string;
+  bgModal: string;
+  bgOverlay: string;
+  
+  // Foreground colors
+  fgBase: string;
+  fgSubtle: string;
+  fgMuted: string;
+  fgDisabled: string;
+  fgOnAccent: string;
+  
+  // Border colors
+  borderBase: string;
+  borderSubtle: string;
+  borderElement: string;
+  borderFocus: string;
+  
+  // Accent colors
+  accentBase: string;
+  accentHover: string;
+  accentActive: string;
+  accentSubtle: string;
+  accentSubtleHover: string;
+  
+  // Semantic colors
+  success: string;
+  successSubtle: string;
+  warning: string;
+  warningSubtle: string;
+  danger: string;
+  dangerSubtle: string;
+  info: string;
+  infoSubtle: string;
+  
+  // Special effects
+  glassBg: string;
+  glassBlur: string;
+  glassBorder: string;
+  shadowBase: string;
+  shadowElevated: string;
+}
+
+export interface Theme {
+  config: ThemeConfig;
+  colors: ColorTokens;
+  cssVariables: string;
+}
+
+/**
+ * Generate a complete theme from configuration
+ */
+export function generateTheme(config: ThemeConfig): Theme {
+  const baseLch = hexToLch(config.baseColor);
+  const accentLch = hexToLch(config.accentColor);
+  const isLight = config.mode === 'light';
+  
+  // Adjust contrast multipliers based on level
+  const contrastMultiplier = {
+    normal: 1,
+    high: 1.3,
+    super: 1.6
+  }[config.contrast];
+  
+  // Generate color scales
+  const neutralScale = createNeutralScale(baseLch, isLight, contrastMultiplier);
+  const accentScale = createColorScale(accentLch, 9);
+  
+  // Generate semantic colors
+  const semanticColors = generateSemanticColors(isLight, contrastMultiplier);
+  
+  // Build color tokens
+  const colors: ColorTokens = {
+    // Backgrounds (elevation layers)
+    bgBase: lchToCss(neutralScale[isLight ? 0 : 10]),
+    bgSubtle: lchToCss(neutralScale[isLight ? 1 : 9]),
+    bgElement: lchToCss(neutralScale[isLight ? 1 : 8]),
+    bgElementHover: lchToCss(neutralScale[isLight ? 2 : 7]),
+    bgPanel: lchToCss(adjustLightness(neutralScale[isLight ? 0 : 9], isLight ? 2 : -2)),
+    bgModal: lchToCss(adjustLightness(neutralScale[isLight ? 0 : 10], isLight ? 1 : -1)),
+    bgOverlay: `${lchToCss(neutralScale[isLight ? 10 : 0])}20`,
+    
+    // Foregrounds
+    fgBase: lchToCss(neutralScale[isLight ? 10 : 0]),
+    fgSubtle: lchToCss(neutralScale[isLight ? 8 : 2]),
+    fgMuted: lchToCss(neutralScale[isLight ? 6 : 4]),
+    fgDisabled: lchToCss(neutralScale[isLight ? 4 : 6]),
+    fgOnAccent: lchToCss(neutralScale[isLight ? 0 : 10]),
+    
+    // Borders
+    borderBase: lchToCss(neutralScale[isLight ? 3 : 7]),
+    borderSubtle: lchToCss(neutralScale[isLight ? 2 : 8]),
+    borderElement: lchToCss(neutralScale[isLight ? 4 : 6]),
+    borderFocus: lchToCss(accentScale[5]),
+    
+    // Accents
+    accentBase: lchToCss(accentScale[isLight ? 6 : 4]),
+    accentHover: lchToCss(accentScale[isLight ? 7 : 3]),
+    accentActive: lchToCss(accentScale[isLight ? 8 : 2]),
+    accentSubtle: lchToCss(adjustLightness(accentScale[isLight ? 1 : 8], isLight ? 0 : 10)),
+    accentSubtleHover: lchToCss(adjustLightness(accentScale[isLight ? 2 : 7], isLight ? 0 : 10)),
+    
+    // Semantic
+    ...semanticColors,
+    
+    // Glass morphism effects
+    glassBg: isLight 
+      ? 'rgba(255, 255, 255, 0.7)'
+      : 'rgba(20, 20, 20, 0.7)',
+    glassBlur: '12px',
+    glassBorder: isLight
+      ? 'rgba(255, 255, 255, 0.2)'
+      : 'rgba(255, 255, 255, 0.1)',
+    shadowBase: isLight
+      ? 'rgba(0, 0, 0, 0.08)'
+      : 'rgba(0, 0, 0, 0.3)',
+    shadowElevated: isLight
+      ? 'rgba(0, 0, 0, 0.12)'
+      : 'rgba(0, 0, 0, 0.5)'
+  };
+  
+  // Generate CSS variables
+  const cssVariables = generateCssVariables(colors);
+  
+  return {
+    config,
+    colors,
+    cssVariables
+  };
+}
+
+/**
+ * Create a neutral color scale with proper contrast
+ */
+function createNeutralScale(
+  baseLch: LCHColor,
+  isLight: boolean,
+  contrastMultiplier: number
+): LCHColor[] {
+  const scale: LCHColor[] = [];
+  const steps = 11;
+  
+  // Reduce chroma for neutrals (more gray)
+  const neutralLch = {
+    ...baseLch,
+    c: baseLch.c * 0.15, // Very low chroma for neutrals
+  };
+  
+  for (let i = 0; i < steps; i++) {
+    const t = i / (steps - 1);
+    
+    // Calculate lightness with contrast adjustment
+    let lightness: number;
+    if (isLight) {
+      // Light mode: 98 to 5
+      lightness = 98 - (t * 93 * contrastMultiplier);
+    } else {
+      // Dark mode: 5 to 98
+      lightness = 5 + (t * 93 * contrastMultiplier);
+    }
+    
+    // Slightly increase chroma for middle values (more vibrant)
+    const chromaBoost = Math.sin(t * Math.PI) * 5;
+    
+    scale.push({
+      l: Math.max(0, Math.min(100, lightness)),
+      c: neutralLch.c + chromaBoost,
+      h: neutralLch.h
+    });
+  }
+  
+  return scale;
+}
+
+/**
+ * Generate semantic colors for success, warning, danger, info
+ */
+function generateSemanticColors(
+  isLight: boolean,
+  contrastMultiplier: number
+): Partial<ColorTokens> {
+  // Define semantic hues in LCH
+  const semanticHues = {
+    success: 142, // Green
+    warning: 45,  // Orange
+    danger: 25,   // Red
+    info: 230,    // Blue
+  };
+  
+  const colors: Partial<ColorTokens> = {};
+  
+  Object.entries(semanticHues).forEach(([name, hue]) => {
+    const baseLch: LCHColor = {
+      l: isLight ? 50 : 60,
+      c: 60 * contrastMultiplier,
+      h: hue
+    };
+    
+    const subtleLch: LCHColor = {
+      l: isLight ? 95 : 15,
+      c: 20 * contrastMultiplier,
+      h: hue
+    };
+    
+    colors[name as keyof ColorTokens] = lchToCss(baseLch);
+    colors[`${name}Subtle` as keyof ColorTokens] = lchToCss(subtleLch);
+  });
+  
+  return colors;
+}
+
+/**
+ * Generate CSS variables from color tokens
+ */
+function generateCssVariables(colors: ColorTokens): string {
+  const variables: string[] = [];
+  
+  Object.entries(colors).forEach(([key, value]) => {
+    // Convert camelCase to kebab-case
+    const cssVarName = key.replace(/([A-Z])/g, '-$1').toLowerCase();
+    variables.push(`  --${cssVarName}: ${value};`);
+  });
+  
+  return `:root {\n${variables.join('\n')}\n}`;
+}
+
+/**
+ * Predefined theme presets
+ */
+export const themePresets = {
+  linearLight: {
+    mode: 'light' as ThemeMode,
+    baseColor: '#5E6AD2', // Linear's signature blue
+    accentColor: '#F76B15', // Orange accent
+    contrast: 'normal' as ContrastLevel
+  },
+  linearDark: {
+    mode: 'dark' as ThemeMode,
+    baseColor: '#5E6AD2',
+    accentColor: '#F76B15',
+    contrast: 'normal' as ContrastLevel
+  },
+  monochrome: {
+    mode: 'light' as ThemeMode,
+    baseColor: '#6B7280', // Neutral gray
+    accentColor: '#3B82F6', // Blue accent
+    contrast: 'high' as ContrastLevel
+  },
+  highContrast: {
+    mode: 'dark' as ThemeMode,
+    baseColor: '#1F2937',
+    accentColor: '#10B981', // Green accent
+    contrast: 'super' as ContrastLevel
+  }
+};
+
+/**
+ * Apply theme to DOM
+ */
+export function applyTheme(theme: Theme): void {
+  const root = document.documentElement;
+  
+  // Apply CSS variables
+  Object.entries(theme.colors).forEach(([key, value]) => {
+    const cssVarName = key.replace(/([A-Z])/g, '-$1').toLowerCase();
+    root.style.setProperty(`--${cssVarName}`, value);
+  });
+  
+  // Apply theme mode
+  root.setAttribute('data-theme', theme.config.mode);
+  root.setAttribute('data-contrast', theme.config.contrast);
+  
+  // Apply reduced motion if requested
+  if (theme.config.reducedMotion) {
+    root.classList.add('reduce-motion');
+  } else {
+    root.classList.remove('reduce-motion');
+  }
+}

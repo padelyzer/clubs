@@ -1,0 +1,521 @@
+'use client'
+
+import React, { useEffect, useState } from 'react'
+import { useParams } from 'next/navigation'
+import BracketVisualization from '@/components/tournaments/BracketVisualization'
+import {
+  Trophy, Calendar, MapPin, Users, DollarSign, Clock,
+  CheckCircle, AlertCircle, Share2, ExternalLink, User
+} from 'lucide-react'
+
+export default function PublicTournamentPage() {
+  const params = useParams()
+  const tournamentSlug = params?.slug as string
+  
+  const [tournament, setTournament] = useState<any>(null)
+  const [matches, setMatches] = useState<any[]>([])
+  const [registrations, setRegistrations] = useState<any[]>([])
+  const [loading, setLoading] = useState(true)
+  const [activeTab, setActiveTab] = useState<'info' | 'bracket' | 'players'>('bracket')
+
+  useEffect(() => {
+    if (tournamentSlug) {
+      loadTournamentData()
+    }
+  }, [tournamentSlug])
+
+  const loadTournamentData = async () => {
+    try {
+      setLoading(true)
+      
+      // Load tournament info (public endpoint) - using slug for now
+      const tournamentRes = await fetch(`/api/public/tournaments/${tournamentSlug}`)
+      const tournamentData = await tournamentRes.json()
+      
+      if (tournamentData.success) {
+        setTournament(tournamentData.tournament)
+        setMatches(tournamentData.matches || [])
+        setRegistrations(tournamentData.registrations || [])
+      }
+    } catch (error) {
+      console.error('Error loading tournament:', error)
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  if (loading) {
+    return (
+      <div style={{
+        minHeight: '100vh',
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)'
+      }}>
+        <div style={{ color: 'white', fontSize: '18px' }}>Cargando torneo...</div>
+      </div>
+    )
+  }
+
+  if (!tournament) {
+    return (
+      <div style={{
+        minHeight: '100vh',
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)'
+      }}>
+        <div style={{ textAlign: 'center', color: 'white' }}>
+          <Trophy size={64} style={{ margin: '0 auto 16px', opacity: 0.5 }} />
+          <h1 style={{ fontSize: '24px', marginBottom: '8px' }}>Torneo no encontrado</h1>
+          <p>El torneo que buscas no existe o ha sido eliminado.</p>
+        </div>
+      </div>
+    )
+  }
+
+  const getStatusBadge = () => {
+    const statusConfig = {
+      DRAFT: { bg: '#6B7280', label: 'Borrador' },
+      REGISTRATION_OPEN: { bg: '#10B981', label: 'Inscripciones Abiertas' },
+      REGISTRATION_CLOSED: { bg: '#F59E0B', label: 'Inscripciones Cerradas' },
+      IN_PROGRESS: { bg: '#3B82F6', label: 'En Progreso' },
+      COMPLETED: { bg: '#8B5CF6', label: 'Finalizado' }
+    }
+    
+    const config = statusConfig[tournament.status] || statusConfig.DRAFT
+    
+    return (
+      <span style={{
+        padding: '6px 12px',
+        borderRadius: '20px',
+        background: config.bg,
+        color: 'white',
+        fontSize: '12px',
+        fontWeight: 600
+      }}>
+        {config.label}
+      </span>
+    )
+  }
+
+  return (
+    <div style={{
+      minHeight: '100vh',
+      background: 'linear-gradient(135deg, #F9FAFB 0%, #F3F4F6 100%)'
+    }}>
+      {/* Hero Section */}
+      <div style={{
+        background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+        padding: '48px 24px',
+        color: 'white'
+      }}>
+        <div style={{
+          maxWidth: '1200px',
+          margin: '0 auto'
+        }}>
+          <div style={{
+            display: 'flex',
+            justifyContent: 'space-between',
+            alignItems: 'start',
+            marginBottom: '32px'
+          }}>
+            <div>
+              <h1 style={{
+                fontSize: '36px',
+                fontWeight: 700,
+                marginBottom: '16px'
+              }}>
+                {tournament.name}
+              </h1>
+              <p style={{
+                fontSize: '18px',
+                opacity: 0.9,
+                marginBottom: '24px'
+              }}>
+                {tournament.description}
+              </p>
+              <div style={{ display: 'flex', gap: '12px', alignItems: 'center' }}>
+                {getStatusBadge()}
+                <button
+                  onClick={() => {
+                    const shareData = {
+                      title: tournament.name,
+                      text: `¡Mira el torneo ${tournament.name}!`,
+                      url: window.location.href
+                    }
+                    if (navigator.share) {
+                      navigator.share(shareData)
+                    } else {
+                      navigator.clipboard.writeText(window.location.href)
+                      alert('Enlace copiado al portapapeles')
+                    }
+                  }}
+                  style={{
+                    padding: '6px 12px',
+                    borderRadius: '8px',
+                    background: 'rgba(255, 255, 255, 0.2)',
+                    border: '1px solid rgba(255, 255, 255, 0.3)',
+                    color: 'white',
+                    fontSize: '14px',
+                    fontWeight: 600,
+                    cursor: 'pointer',
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '6px'
+                  }}
+                >
+                  <Share2 size={14} />
+                  Compartir
+                </button>
+              </div>
+            </div>
+            
+            {tournament.club && (
+              <div style={{
+                textAlign: 'right'
+              }}>
+                <div style={{ fontSize: '14px', opacity: 0.8, marginBottom: '4px' }}>
+                  Organizado por
+                </div>
+                <div style={{ fontSize: '18px', fontWeight: 600 }}>
+                  {tournament.Club.name}
+                </div>
+              </div>
+            )}
+          </div>
+          
+          {/* Tournament Info Cards */}
+          <div style={{
+            display: 'grid',
+            gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))',
+            gap: '16px'
+          }}>
+            <div style={{
+              background: 'rgba(255, 255, 255, 0.1)',
+              backdropFilter: 'blur(10px)',
+              borderRadius: '12px',
+              padding: '16px',
+              border: '1px solid rgba(255, 255, 255, 0.2)'
+            }}>
+              <Calendar size={20} style={{ marginBottom: '8px', opacity: 0.8 }} />
+              <div style={{ fontSize: '14px', opacity: 0.8, marginBottom: '4px' }}>Fechas</div>
+              <div style={{ fontSize: '16px', fontWeight: 600 }}>
+                {new Date(tournament.startDate).toLocaleDateString()} - {new Date(tournament.endDate).toLocaleDateString()}
+              </div>
+            </div>
+            
+            <div style={{
+              background: 'rgba(255, 255, 255, 0.1)',
+              backdropFilter: 'blur(10px)',
+              borderRadius: '12px',
+              padding: '16px',
+              border: '1px solid rgba(255, 255, 255, 0.2)'
+            }}>
+              <Users size={20} style={{ marginBottom: '8px', opacity: 0.8 }} />
+              <div style={{ fontSize: '14px', opacity: 0.8, marginBottom: '4px' }}>Participantes</div>
+              <div style={{ fontSize: '16px', fontWeight: 600 }}>
+                {registrations.filter((r: any) => r.confirmed).length} / {tournament.maxPlayers}
+              </div>
+            </div>
+            
+            <div style={{
+              background: 'rgba(255, 255, 255, 0.1)',
+              backdropFilter: 'blur(10px)',
+              borderRadius: '12px',
+              padding: '16px',
+              border: '1px solid rgba(255, 255, 255, 0.2)'
+            }}>
+              <DollarSign size={20} style={{ marginBottom: '8px', opacity: 0.8 }} />
+              <div style={{ fontSize: '14px', opacity: 0.8, marginBottom: '4px' }}>Inscripción</div>
+              <div style={{ fontSize: '16px', fontWeight: 600 }}>
+                ${tournament.registrationFee} {tournament.currency}
+              </div>
+            </div>
+            
+            <div style={{
+              background: 'rgba(255, 255, 255, 0.1)',
+              backdropFilter: 'blur(10px)',
+              borderRadius: '12px',
+              padding: '16px',
+              border: '1px solid rgba(255, 255, 255, 0.2)'
+            }}>
+              <Trophy size={20} style={{ marginBottom: '8px', opacity: 0.8 }} />
+              <div style={{ fontSize: '14px', opacity: 0.8, marginBottom: '4px' }}>Formato</div>
+              <div style={{ fontSize: '16px', fontWeight: 600 }}>
+                {tournament.type === 'ELIMINATION' ? 'Eliminación' :
+                 tournament.type === 'ROUND_ROBIN' ? 'Todos contra Todos' : tournament.type}
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+      
+      {/* Navigation Tabs */}
+      <div style={{
+        background: 'white',
+        borderBottom: '1px solid #E5E7EB',
+        position: 'sticky',
+        top: 0,
+        zIndex: 100
+      }}>
+        <div style={{
+          maxWidth: '1200px',
+          margin: '0 auto',
+          display: 'flex',
+          gap: '32px',
+          padding: '0 24px'
+        }}>
+          <button
+            onClick={() => setActiveTab('bracket')}
+            style={{
+              padding: '16px 0',
+              background: 'none',
+              border: 'none',
+              borderBottom: activeTab === 'bracket' ? '3px solid #667eea' : '3px solid transparent',
+              color: activeTab === 'bracket' ? '#667eea' : '#6B7280',
+              fontSize: '15px',
+              fontWeight: 600,
+              cursor: 'pointer',
+              transition: 'all 0.2s ease'
+            }}
+          >
+            Bracket
+          </button>
+          <button
+            onClick={() => setActiveTab('players')}
+            style={{
+              padding: '16px 0',
+              background: 'none',
+              border: 'none',
+              borderBottom: activeTab === 'players' ? '3px solid #667eea' : '3px solid transparent',
+              color: activeTab === 'players' ? '#667eea' : '#6B7280',
+              fontSize: '15px',
+              fontWeight: 600,
+              cursor: 'pointer',
+              transition: 'all 0.2s ease'
+            }}
+          >
+            Jugadores
+          </button>
+          <button
+            onClick={() => setActiveTab('info')}
+            style={{
+              padding: '16px 0',
+              background: 'none',
+              border: 'none',
+              borderBottom: activeTab === 'info' ? '3px solid #667eea' : '3px solid transparent',
+              color: activeTab === 'info' ? '#667eea' : '#6B7280',
+              fontSize: '15px',
+              fontWeight: 600,
+              cursor: 'pointer',
+              transition: 'all 0.2s ease'
+            }}
+          >
+            Información
+          </button>
+        </div>
+      </div>
+      
+      {/* Content */}
+      <div style={{
+        maxWidth: '1200px',
+        margin: '32px auto',
+        padding: '0 24px'
+      }}>
+        {/* Bracket Tab */}
+        {activeTab === 'bracket' && (
+          <div>
+            {matches.length > 0 ? (
+              <BracketVisualization
+                matches={matches}
+                tournamentType={tournament.type}
+              />
+            ) : (
+              <div style={{
+                background: 'white',
+                borderRadius: '16px',
+                padding: '60px',
+                textAlign: 'center'
+              }}>
+                <Trophy size={48} style={{ margin: '0 auto 16px', opacity: 0.3 }} />
+                <h3 style={{ fontSize: '20px', marginBottom: '8px' }}>
+                  Bracket no disponible
+                </h3>
+                <p style={{ color: '#6B7280' }}>
+                  El bracket se generará cuando comiencen las inscripciones
+                </p>
+              </div>
+            )}
+          </div>
+        )}
+        
+        {/* Players Tab */}
+        {activeTab === 'players' && (
+          <div style={{
+            display: 'grid',
+            gap: '16px'
+          }}>
+            {registrations.filter((r: any) => r.confirmed).map((reg: any, index: number) => (
+              <div key={reg.id} style={{
+                background: 'white',
+                borderRadius: '12px',
+                padding: '20px',
+                display: 'flex',
+                justifyContent: 'space-between',
+                alignItems: 'center',
+                boxShadow: '0 1px 3px rgba(0, 0, 0, 0.1)'
+              }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
+                  <div style={{
+                    width: '48px',
+                    height: '48px',
+                    borderRadius: '50%',
+                    background: `linear-gradient(135deg, #667eea 0%, #764ba2 100%)`,
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    color: 'white',
+                    fontSize: '20px',
+                    fontWeight: 700
+                  }}>
+                    {index + 1}
+                  </div>
+                  <div>
+                    <div style={{ fontSize: '16px', fontWeight: 600, marginBottom: '4px' }}>
+                      {reg.player1Name}
+                    </div>
+                    {reg.player2Name && (
+                      <div style={{ fontSize: '14px', color: '#6B7280' }}>
+                        & {reg.player2Name}
+                      </div>
+                    )}
+                  </div>
+                </div>
+                
+                {reg.checkedIn && (
+                  <span style={{
+                    padding: '4px 12px',
+                    borderRadius: '20px',
+                    background: '#10B981',
+                    color: 'white',
+                    fontSize: '12px',
+                    fontWeight: 600,
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '4px'
+                  }}>
+                    <CheckCircle size={12} />
+                    Check-in
+                  </span>
+                )}
+              </div>
+            ))}
+            
+            {registrations.length === 0 && (
+              <div style={{
+                background: 'white',
+                borderRadius: '16px',
+                padding: '60px',
+                textAlign: 'center'
+              }}>
+                <Users size={48} style={{ margin: '0 auto 16px', opacity: 0.3 }} />
+                <h3 style={{ fontSize: '20px', marginBottom: '8px' }}>
+                  No hay jugadores inscritos
+                </h3>
+                <p style={{ color: '#6B7280' }}>
+                  Los jugadores aparecerán aquí cuando se inscriban al torneo
+                </p>
+              </div>
+            )}
+          </div>
+        )}
+        
+        {/* Info Tab */}
+        {activeTab === 'info' && (
+          <div style={{
+            background: 'white',
+            borderRadius: '16px',
+            padding: '32px'
+          }}>
+            <h2 style={{ fontSize: '24px', fontWeight: 700, marginBottom: '24px' }}>
+              Información del Torneo
+            </h2>
+            
+            <div style={{ display: 'grid', gap: '24px' }}>
+              <div>
+                <h3 style={{ fontSize: '16px', fontWeight: 600, marginBottom: '8px', color: '#6B7280' }}>
+                  Descripción
+                </h3>
+                <p style={{ lineHeight: 1.6 }}>
+                  {tournament.description || 'No hay descripción disponible'}
+                </p>
+              </div>
+              
+              <div>
+                <h3 style={{ fontSize: '16px', fontWeight: 600, marginBottom: '8px', color: '#6B7280' }}>
+                  Reglas
+                </h3>
+                <p style={{ lineHeight: 1.6 }}>
+                  {tournament.rules || 'Las reglas estándar del tenis aplican para este torneo.'}
+                </p>
+              </div>
+              
+              <div>
+                <h3 style={{ fontSize: '16px', fontWeight: 600, marginBottom: '8px', color: '#6B7280' }}>
+                  Premios
+                </h3>
+                <p style={{ lineHeight: 1.6 }}>
+                  Premio total: ${tournament.prizePool} {tournament.currency}
+                </p>
+              </div>
+              
+              <div>
+                <h3 style={{ fontSize: '16px', fontWeight: 600, marginBottom: '8px', color: '#6B7280' }}>
+                  Contacto
+                </h3>
+                <p style={{ lineHeight: 1.6 }}>
+                  {tournament.club?.email} • {tournament.club?.phone}
+                </p>
+              </div>
+            </div>
+            
+            {tournament.status === 'REGISTRATION_OPEN' && (
+              <div style={{
+                marginTop: '32px',
+                padding: '24px',
+                background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+                borderRadius: '12px',
+                textAlign: 'center'
+              }}>
+                <h3 style={{ color: 'white', marginBottom: '12px' }}>
+                  ¡Inscripciones Abiertas!
+                </h3>
+                <p style={{ color: 'rgba(255, 255, 255, 0.9)', marginBottom: '20px' }}>
+                  Regístrate antes del {new Date(tournament.registrationEnd).toLocaleDateString()}
+                </p>
+                <button
+                  onClick={() => window.location.href = `/tournament/${tournamentSlug}/register`}
+                  style={{
+                    padding: '12px 32px',
+                    background: 'white',
+                    border: 'none',
+                    borderRadius: '8px',
+                    color: '#667eea',
+                    fontSize: '16px',
+                    fontWeight: 600,
+                    cursor: 'pointer'
+                  }}
+                >
+                  Inscribirme Ahora
+                </button>
+              </div>
+            )}
+          </div>
+        )}
+      </div>
+    </div>
+  )
+}

@@ -1,0 +1,393 @@
+'use client'
+
+import { useState, useEffect } from 'react'
+
+// Datos de prueba directos - EXACTAMENTE IGUALES A LOS QUE FUNCIONAN
+const TEST_DATA = [
+  {
+    id: '1',
+    employeeName: 'Carlos Rodríguez',
+    employeeRole: 'Instructor de Pádel',
+    baseSalary: 1500000,
+    bonuses: 300000,
+    deductions: 150000,
+    netAmount: 1650000,
+    period: '2025-09',
+    status: 'paid'
+  },
+  {
+    id: '2',
+    employeeName: 'María González',
+    employeeRole: 'Recepcionista',
+    baseSalary: 1200000,
+    bonuses: 100000,
+    deductions: 100000,
+    netAmount: 1200000,
+    period: '2025-09',
+    status: 'paid'
+  },
+  {
+    id: '3',
+    employeeName: 'Ana Martínez',
+    employeeRole: 'Gerente',
+    baseSalary: 2500000,
+    bonuses: 500000,
+    deductions: 300000,
+    netAmount: 2700000,
+    period: '2025-09',
+    status: 'pending'
+  },
+  {
+    id: '4',
+    employeeName: 'Pedro Sánchez',
+    employeeRole: 'Mantenimiento',
+    baseSalary: 900000,
+    bonuses: 50000,
+    deductions: 80000,
+    netAmount: 870000,
+    period: '2025-09',
+    status: 'paid'
+  },
+  {
+    id: '5',
+    employeeName: 'Laura Jiménez',
+    employeeRole: 'Coordinadora',
+    baseSalary: 1800000,
+    bonuses: 200000,
+    deductions: 160000,
+    netAmount: 1840000,
+    period: '2025-09',
+    status: 'paid'
+  },
+  {
+    id: '6',
+    employeeName: 'Diego Ramírez',
+    employeeRole: 'Instructor de Tenis',
+    baseSalary: 1600000,
+    bonuses: 250000,
+    deductions: 140000,
+    netAmount: 1710000,
+    period: '2025-09',
+    status: 'paid'
+  },
+  {
+    id: '7',
+    employeeName: 'Valentina Torres',
+    employeeRole: 'Instructor de Fitness',
+    baseSalary: 1400000,
+    bonuses: 180000,
+    deductions: 120000,
+    netAmount: 1460000,
+    period: '2025-09',
+    status: 'pending'
+  },
+  {
+    id: '8',
+    employeeName: 'Juan Pérez',
+    employeeRole: 'Contador',
+    baseSalary: 2000000,
+    bonuses: 400000,
+    deductions: 220000,
+    netAmount: 2180000,
+    period: '2025-09',
+    status: 'paid'
+  },
+  {
+    id: '9',
+    employeeName: 'Sofia Hernández',
+    employeeRole: 'Marketing',
+    baseSalary: 1700000,
+    bonuses: 300000,
+    deductions: 180000,
+    netAmount: 1820000,
+    period: '2025-09',
+    status: 'paid'
+  }
+]
+
+export default function PayrollModuleWorking() {
+  const [mounted, setMounted] = useState(false)
+  const [apiData, setApiData] = useState<any[]>([])
+  const [loading, setLoading] = useState(false)
+  const [error, setError] = useState('')
+  const [showApi, setShowApi] = useState(false)
+
+  useEffect(() => {
+    console.log('💰 PAYROLL MODULE WORKING - MOUNTED')
+    setMounted(true)
+    return () => {
+      console.log('💰 PAYROLL MODULE WORKING - UNMOUNTING')
+    }
+  }, [])
+
+  const fetchApiData = async () => {
+    console.log('📡 Fetching payroll API data...')
+    setLoading(true)
+    setError('')
+
+    try {
+      const response = await fetch('/api/finance/payroll?period=2025-09')
+      console.log('API Response status:', response.status)
+
+      const data = await response.json()
+      console.log('API Data:', data)
+
+      if (data.success && data.payroll) {
+        setApiData(data.payroll)
+        console.log('✅ API payroll data loaded:', data.payroll.length, 'records')
+      } else {
+        setError(data.error || 'No se pudieron cargar los datos de la API')
+        console.error('❌ API error:', data.error)
+      }
+    } catch (err) {
+      console.error('❌ Fetch error:', err)
+      setError('Error al conectar con la API')
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  const dataToShow = showApi ? apiData : TEST_DATA
+  const totalNomina = dataToShow.reduce((sum: number, r) => sum + r.netAmount, 0)
+
+  if (!mounted) {
+    return null
+  }
+
+  return (
+    <div style={{ padding: '20px' }}>
+      {/* Controles */}
+      <div style={{
+        background: 'white',
+        padding: '20px',
+        borderRadius: '10px',
+        marginBottom: '20px',
+        boxShadow: '0 2px 8px rgba(0,0,0,0.1)'
+      }}>
+        <h2 style={{ marginBottom: '15px', color: '#182A01' }}>
+          💰 Módulo de Nómina - Septiembre 2025
+        </h2>
+
+        <div style={{ display: 'flex', gap: '10px', alignItems: 'center', marginBottom: '15px' }}>
+          <button
+            onClick={() => setShowApi(false)}
+            style={{
+              padding: '10px 20px',
+              background: !showApi ? '#A4DF4E' : '#e0e0e0',
+              color: !showApi ? 'white' : '#666',
+              border: 'none',
+              borderRadius: '8px',
+              cursor: 'pointer',
+              fontSize: '14px',
+              fontWeight: '500'
+            }}
+          >
+            📦 Datos de Prueba ({TEST_DATA.length})
+          </button>
+
+          <button
+            onClick={() => {
+              setShowApi(true)
+              if (apiData.length === 0) fetchApiData()
+            }}
+            style={{
+              padding: '10px 20px',
+              background: showApi ? '#516640' : '#e0e0e0',
+              color: showApi ? 'white' : '#666',
+              border: 'none',
+              borderRadius: '8px',
+              cursor: 'pointer',
+              fontSize: '14px',
+              fontWeight: '500'
+            }}
+          >
+            🌐 Datos Reales ({apiData.length})
+          </button>
+
+          {showApi && (
+            <button
+              onClick={fetchApiData}
+              disabled={loading}
+              style={{
+                padding: '10px 20px',
+                background: '#FF9800',
+                color: 'white',
+                border: 'none',
+                borderRadius: '8px',
+                cursor: loading ? 'not-allowed' : 'pointer',
+                fontSize: '14px',
+                fontWeight: '500',
+                opacity: loading ? 0.6 : 1
+              }}
+            >
+              🔄 Recargar
+            </button>
+          )}
+        </div>
+
+        {error && (
+          <div style={{
+            padding: '10px',
+            background: '#ffebee',
+            color: '#c62828',
+            borderRadius: '5px'
+          }}>
+            ⚠️ {error}
+          </div>
+        )}
+      </div>
+
+      {/* Resumen */}
+      <div style={{
+        display: 'grid',
+        gridTemplateColumns: 'repeat(4, 1fr)',
+        gap: '15px',
+        marginBottom: '20px'
+      }}>
+        <div style={{
+          background: 'white',
+          padding: '20px',
+          borderRadius: '10px',
+          boxShadow: '0 2px 8px rgba(0,0,0,0.1)'
+        }}>
+          <div style={{ fontSize: '12px', color: '#666', marginBottom: '5px' }}>
+            Total Empleados
+          </div>
+          <div style={{ fontSize: '24px', fontWeight: 'bold', color: '#182A01' }}>
+            {dataToShow.length}
+          </div>
+        </div>
+
+        <div style={{
+          background: 'white',
+          padding: '20px',
+          borderRadius: '10px',
+          boxShadow: '0 2px 8px rgba(0,0,0,0.1)'
+        }}>
+          <div style={{ fontSize: '12px', color: '#666', marginBottom: '5px' }}>
+            Total Salarios
+          </div>
+          <div style={{ fontSize: '24px', fontWeight: 'bold', color: '#182A01' }}>
+            ${(dataToShow.reduce((sum: number, r) => sum + r.baseSalary, 0) / 100).toLocaleString('es-MX')}
+          </div>
+        </div>
+
+        <div style={{
+          background: 'white',
+          padding: '20px',
+          borderRadius: '10px',
+          boxShadow: '0 2px 8px rgba(0,0,0,0.1)'
+        }}>
+          <div style={{ fontSize: '12px', color: '#666', marginBottom: '5px' }}>
+            Total Bonos
+          </div>
+          <div style={{ fontSize: '24px', fontWeight: 'bold', color: '#4CAF50' }}>
+            +${(dataToShow.reduce((sum: number, r) => sum + r.bonuses, 0) / 100).toLocaleString('es-MX')}
+          </div>
+        </div>
+
+        <div style={{
+          background: 'white',
+          padding: '20px',
+          borderRadius: '10px',
+          boxShadow: '0 2px 8px rgba(0,0,0,0.1)'
+        }}>
+          <div style={{ fontSize: '12px', color: '#666', marginBottom: '5px' }}>
+            Total Neto
+          </div>
+          <div style={{ fontSize: '24px', fontWeight: 'bold', color: '#A4DF4E' }}>
+            ${(totalNomina / 100).toLocaleString('es-MX')}
+          </div>
+        </div>
+      </div>
+
+      {/* Tabla */}
+      <div style={{
+        background: 'white',
+        padding: '20px',
+        borderRadius: '10px',
+        boxShadow: '0 2px 8px rgba(0,0,0,0.1)'
+      }}>
+        <h3 style={{ marginBottom: '15px', color: '#182A01' }}>
+          Detalle de Empleados
+        </h3>
+
+        {loading ? (
+          <div style={{ textAlign: 'center', padding: '40px' }}>
+            <p>Cargando datos...</p>
+          </div>
+        ) : dataToShow.length === 0 ? (
+          <div style={{ textAlign: 'center', padding: '40px' }}>
+            <p>No hay datos disponibles</p>
+          </div>
+        ) : (
+          <div style={{ overflowX: 'auto' }}>
+            <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+              <thead>
+                <tr style={{ borderBottom: '2px solid #e0e0e0' }}>
+                  <th style={{ padding: '12px', textAlign: 'left', color: '#666', fontSize: '12px', fontWeight: '600' }}>
+                    EMPLEADO
+                  </th>
+                  <th style={{ padding: '12px', textAlign: 'left', color: '#666', fontSize: '12px', fontWeight: '600' }}>
+                    ROL
+                  </th>
+                  <th style={{ padding: '12px', textAlign: 'right', color: '#666', fontSize: '12px', fontWeight: '600' }}>
+                    SALARIO BASE
+                  </th>
+                  <th style={{ padding: '12px', textAlign: 'right', color: '#666', fontSize: '12px', fontWeight: '600' }}>
+                    BONOS
+                  </th>
+                  <th style={{ padding: '12px', textAlign: 'right', color: '#666', fontSize: '12px', fontWeight: '600' }}>
+                    DEDUCCIONES
+                  </th>
+                  <th style={{ padding: '12px', textAlign: 'right', color: '#666', fontSize: '12px', fontWeight: '600' }}>
+                    NETO
+                  </th>
+                  <th style={{ padding: '12px', textAlign: 'center', color: '#666', fontSize: '12px', fontWeight: '600' }}>
+                    ESTADO
+                  </th>
+                </tr>
+              </thead>
+              <tbody>
+                {dataToShow.map((record, index) => (
+                  <tr key={record.id || index} style={{ borderBottom: '1px solid #f0f0f0' }}>
+                    <td style={{ padding: '12px', fontWeight: '500' }}>
+                      {record.employeeName}
+                    </td>
+                    <td style={{ padding: '12px', color: '#666', fontSize: '14px' }}>
+                      {record.employeeRole}
+                    </td>
+                    <td style={{ padding: '12px', textAlign: 'right' }}>
+                      ${(record.baseSalary / 100).toLocaleString('es-MX')}
+                    </td>
+                    <td style={{ padding: '12px', textAlign: 'right', color: '#4CAF50' }}>
+                      +${(record.bonuses / 100).toLocaleString('es-MX')}
+                    </td>
+                    <td style={{ padding: '12px', textAlign: 'right', color: '#f44336' }}>
+                      -${(record.deductions / 100).toLocaleString('es-MX')}
+                    </td>
+                    <td style={{ padding: '12px', textAlign: 'right', fontWeight: '600', fontSize: '15px' }}>
+                      ${(record.netAmount / 100).toLocaleString('es-MX')}
+                    </td>
+                    <td style={{ padding: '12px', textAlign: 'center' }}>
+                      <span style={{
+                        padding: '4px 12px',
+                        borderRadius: '12px',
+                        fontSize: '11px',
+                        fontWeight: '500',
+                        background: record.status === 'paid' ? '#e8f5e9' : '#fff3e0',
+                        color: record.status === 'paid' ? '#2e7d32' : '#f57c00'
+                      }}>
+                        {record.status === 'paid' ? 'Pagado' : 'Pendiente'}
+                      </span>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </div>
+    </div>
+  )
+}

@@ -1,0 +1,204 @@
+import { NextRequest, NextResponse } from 'next/server'
+import { requireStaffAuth } from '@/lib/auth/actions'
+import { prisma } from '@/lib/config/prisma'
+import { z } from 'zod'
+
+const UpdateCommissionSchema = z.object({
+  rate: z.number().min(0).max(1000), // Rate in basis points (0-10%)
+})
+
+// GET - Get commission information for the club
+export async function GET(request: NextRequest) {
+  try {
+    const session = await requireStaffAuth()
+
+    const club = await prisma.Club.findUnique({
+      where: { id: session.clubId },
+      select: {
+        id: true,
+        name: true,
+        stripeCommissionRate: true,
+        stripeAccountId: true,
+        stripeOnboardingCompleted: true
+      }
+    })
+
+    if (!club) {
+      return NextResponse.json(
+        { error: 'Club no encontrado' },
+        { status: 404 }
+      )
+    }
+
+    // Get commission summary for current month
+    const now = new Date()
+    const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1)
+    const endOfMonth = new Date(now.getFullYear(), now.getMonth() + 1, 0, 23, 59, 59)
+
+    const monthlyTransactions = await prisma.transaction.findMany({
+      where: {
+        clubId: session.clubId,
+        type: 'INCOME',
+        category: 'BOOKING',
+        date: {
+          gte: startOfMonth,
+          lte: endOfMonth
+        }
+      },
+      select: {
+        amount: true,
+        date: true,
+        description: true
+      }
+    })
+
+    const totalRevenue = monthlyTransactions.reduce((sum: number, t) => sum + t.amount, 0)
+    const platformCommission = Math.round(totalRevenue * (club.stripeCommissionRate / 10000))
+
+    // Get commission history for last 6 months
+    const sixMonthsAgo = new Date()
+    sixMonthsAgo.setMonth(sixMonthsAgo.getMonth() - 6)
+
+    const historicalTransactions = await prisma.transaction.findMany({
+      where: {
+        clubId: session.clubId,
+        type: 'INCOME',
+        category: 'BOOKING',
+        date: {
+          gte: sixMonthsAgo
+        }
+      },
+      select: {
+        amount: true,
+        date: true
+      },
+      orderBy: {
+        date: 'asc'
+      }
+    })
+
+    // Group by month
+    const monthlyStats = new Map()
+    historicalTransactions.forEach(transaction => {
+      const month = transaction.date.toISOString().slice(0, 7) // YYYY-MM
+      if (!monthlyStats.has(month)) {
+        monthlyStats.set(month, { revenue: 0, commission: 0 })
+      }
+      const stats = monthlyStats.get(month)
+      stats.revenue += transaction.amount
+      stats.commission += Math.round(transaction.amount * (club.stripeCommissionRate / 10000))
+    })
+
+    const monthlyData = Array.from(monthlyStats.entries()).map(([month, stats]) => ({
+      month,
+      revenue: stats.revenue,
+      commission: stats.commission,
+      commissionRate: club.stripeCommissionRate / 100, // Convert to percentage
+    }))
+
+    return NextResponse.json({
+      success: true,
+      data: {
+        club: {
+          id: club.id,
+          name: club.name,
+          commissionRate: club.stripeCommissionRate, // basis points
+          commissionPercentage: club.stripeCommissionRate / 100, // percentage
+          hasStripeConfigured: club.stripeAccountId && club.stripeOnboardingCompleted
+        },
+        currentMonth: {
+          revenue: totalRevenue,
+          commission: platformCommission,
+          transactionCount: monthlyTransactions.length,
+          netRevenue: totalRevenue - platformCommission
+        },
+        history: monthlyData
+      }
+    })
+
+  } catch (error) {
+    console.error('Error fetching commission data:', error)
+    return NextResponse.json(
+      { error: 'Error interno del servidor' },
+      { status: 500 }
+    )
+  }
+}
+
+// PUT - Update commission rate (admin only)
+export async function PUT(request: NextRequest) {
+  try {
+    const session = await requireStaffAuth()
+    
+    // Only SUPER_ADMIN can update commission rates
+    if (session.role !== 'SUPER_ADMIN') {
+      return NextResponse.json(
+        { error: 'Solo administradores pueden modificar las comisiones' },
+        { status: 403 }
+      )
+    }
+
+    const body = await request.json()
+    const parsed = UpdateCommissionSchema.safeParse(body)
+
+    if (!parsed.success) {
+      return NextResponse.json(
+        { error: 'Datos inválidos', details: parsed.error.errors },
+        { status: 400 }
+      )
+    }
+
+    const { rate } = parsed.data
+    const { clubId } = body
+
+    if (!clubId) {
+      return NextResponse.json(
+        { error: 'clubId es requerido' },
+        { status: 400 }
+      )
+    }
+
+    const club = await prisma.Club.findUnique({
+      where: { id: clubId },
+      select: { id: true, name: true, stripeCommissionRate: true }
+    })
+
+    if (!club) {
+      return NextResponse.json(
+        { error: 'Club no encontrado' },
+        { status: 404 }
+      )
+    }
+
+    const oldRate = club.stripeCommissionRate
+    
+    await prisma.Club.update({
+      where: { id: clubId },
+      data: {
+        stripeCommissionRate: rate
+      }
+    })
+
+    // Log the commission rate change
+    console.log(`Commission rate updated for club ${club.name} (${clubId}): ${oldRate}bp -> ${rate}bp by admin ${session.userId}`)
+
+    return NextResponse.json({
+      success: true,
+      message: `Comisión actualizada para ${club.name}`,
+      data: {
+        clubId,
+        clubName: club.name,
+        oldRate: oldRate / 100, // percentage
+        newRate: rate / 100, // percentage
+        updatedBy: session.userId.toISOString()
+      }
+    })
+
+  } catch (error) {
+    console.error('Error updating commission rate:', error)
+    return NextResponse.json(
+      { error: 'Error interno del servidor' },
+      { status: 500 }
+    )
+  }
+}

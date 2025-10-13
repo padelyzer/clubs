@@ -1,0 +1,204 @@
+import { requireSuperAdmin } from '@/lib/auth/actions'
+import { prisma } from '@/lib/config/prisma'
+import DashboardMetrics from './components/dashboard-metrics'
+import DashboardCharts from './components/dashboard-charts'
+import RecentActivity from './components/recent-activity'
+import QuickActions from './components/quick-actions'
+
+export const dynamic = 'force-dynamic'
+
+export default async function AdminDashboardPage() {
+  const session = await requireSuperAdmin()
+
+  // Obtener datos para métricas
+  const today = new Date()
+  const startOfWeek = new Date(today.setDate(today.getDate() - today.getDay()))
+  const startOfMonth = new Date(today.getFullYear(), today.getMonth(), 1)
+  const lastMonth = new Date(today.getFullYear(), today.getMonth() - 1, 1)
+  const endOfLastMonth = new Date(today.getFullYear(), today.getMonth(), 0)
+
+  const [metricsData, chartData, recentClubs, pendingClubs, recentBookings] = await Promise.all([
+    // Métricas principales
+    Promise.all([
+      prisma.club.count(),
+      prisma.club.count({ where: { status: 'APPROVED' } }),
+      prisma.club.count({ where: { status: 'PENDING' } }),
+      prisma.club.count({ where: { status: 'REJECTED' } }),
+      prisma.user.count(),
+      prisma.booking.count(),
+      prisma.booking.count({ where: { date: { gte: new Date() } } }),
+      prisma.booking.count({ where: { date: { gte: startOfWeek } } }),
+      prisma.booking.count({ where: { date: { gte: startOfMonth } } }),
+      prisma.booking.aggregate({
+        where: { status: 'COMPLETED' },
+        _sum: { price: true }
+      }),
+      prisma.booking.aggregate({
+        where: { 
+          status: 'COMPLETED',
+          createdAt: { gte: startOfMonth }
+        },
+        _sum: { price: true }
+      }),
+      prisma.booking.aggregate({
+        where: { 
+          status: 'COMPLETED',
+          createdAt: { gte: lastMonth, lte: endOfLastMonth }
+        },
+        _sum: { price: true }
+      })
+    ]),
+    // Datos para gráficas (últimos 7 días)
+    Promise.all(
+      Array.from({ length: 7 }, (_, i) => {
+        const date = new Date()
+        date.setDate(date.getDate() - i)
+        date.setHours(0, 0, 0, 0)
+        const nextDate = new Date(date)
+        nextDate.setDate(nextDate.getDate() + 1)
+        
+        return Promise.all([
+          prisma.booking.count({
+            where: {
+              createdAt: { gte: date, lt: nextDate }
+            }
+          }),
+          prisma.booking.aggregate({
+            where: {
+              status: 'COMPLETED',
+              createdAt: { gte: date, lt: nextDate }
+            },
+            _sum: { price: true }
+          }),
+          prisma.club.count({
+            where: {
+              createdAt: { gte: date, lt: nextDate }
+            }
+          })
+        ])
+      })
+    ),
+    // Clubes recientes
+    prisma.club.findMany({
+      take: 5,
+      orderBy: { createdAt: 'desc' },
+      include: {
+        _count: {
+          select: {
+            User: true,
+            Court: true,
+            Booking: true
+          }
+        }
+      }
+    }),
+    // Clubes pendientes
+    prisma.club.count({ where: { status: 'PENDING' } }),
+    // Reservas recientes
+    prisma.booking.findMany({
+      take: 5,
+      orderBy: { createdAt: 'desc' },
+      include: {
+        Club: { select: { name: true } },
+        Court: { select: { name: true } }
+      }
+    })
+  ])
+
+  const [
+    totalClubs,
+    approvedClubs,
+    pendingClubsCount,
+    rejectedClubs,
+    totalUsers,
+    totalBookings,
+    todayBookings,
+    weekBookings,
+    monthBookings,
+    totalRevenue,
+    monthRevenue,
+    lastMonthRevenue
+  ] = metricsData
+
+  const metrics = {
+    clubs: {
+      total: totalClubs,
+      approved: approvedClubs,
+      pending: pendingClubsCount,
+      rejected: rejectedClubs,
+      growthRate: totalClubs > 0 ? ((approvedClubs - rejectedClubs) / totalClubs * 100) : 0
+    },
+    users: {
+      total: totalUsers,
+      growthRate: 8.2 // Placeholder - calcular con datos históricos
+    },
+    bookings: {
+      total: totalBookings,
+      today: todayBookings,
+      week: weekBookings,
+      month: monthBookings,
+      growthRate: 25.4 // Placeholder
+    },
+    revenue: {
+      total: (totalRevenue._sum.price || 0) / 100,
+      month: (monthRevenue._sum.price || 0) / 100,
+      lastMonth: (lastMonthRevenue._sum.price || 0) / 100,
+      growthRate: lastMonthRevenue._sum.price ? 
+        (((monthRevenue._sum.price || 0) - (lastMonthRevenue._sum.price || 0)) / (lastMonthRevenue._sum.price || 1) * 100) : 0
+    }
+  }
+
+  const charts = {
+    bookings: chartData.map((day, index) => ({
+      date: new Date(Date.now() - index * 24 * 60 * 60 * 1000).toLocaleDateString('es-MX', { weekday: 'short' }),
+      count: day[0]
+    })).reverse(),
+    revenue: chartData.map((day, index) => ({
+      date: new Date(Date.now() - index * 24 * 60 * 60 * 1000).toLocaleDateString('es-MX', { weekday: 'short' }),
+      amount: (day[1]._sum.price || 0) / 100
+    })).reverse(),
+    clubs: chartData.map((day, index) => ({
+      date: new Date(Date.now() - index * 24 * 60 * 60 * 1000).toLocaleDateString('es-MX', { weekday: 'short' }),
+      count: day[2]
+    })).reverse()
+  }
+
+  return (
+    <div style={{ 
+      padding: '24px', 
+      background: '#f5f5f5', 
+      minHeight: '100vh',
+      width: '100%'
+    }}>
+      <div style={{
+        maxWidth: '1400px',
+        margin: '0 auto',
+        background: 'white',
+        borderRadius: '12px',
+        padding: '32px',
+        boxShadow: '0 1px 3px rgba(0,0,0,0.1)'
+      }}>
+        <div className="space-y-6">
+          <div className="flex items-center justify-between">
+            <h1 className="text-3xl font-bold">Dashboard Super Admin</h1>
+            <div className="text-sm text-gray-500">
+              Última actualización: {new Date().toLocaleString('es-MX')}
+            </div>
+          </div>
+
+          <DashboardMetrics metrics={metrics} />
+          <DashboardCharts charts={charts} />
+          
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+            <RecentActivity 
+              recentClubs={recentClubs}
+              recentBookings={recentBookings}
+              pendingClubs={pendingClubs}
+            />
+            <QuickActions />
+          </div>
+        </div>
+      </div>
+    </div>
+  )
+}

@@ -1,0 +1,73 @@
+import { NextRequest, NextResponse } from 'next/server'
+import { requireAuthAPI } from '@/lib/auth/actions'
+import { updateClubCommissionRate } from '@/lib/payments/commission-system'
+import { prisma } from '@/lib/config/prisma'
+
+export async function POST(request: NextRequest) {
+  try {
+    const session = await requireAuthAPI()
+    
+    if (!session) {
+      return NextResponse.json(
+        { success: false, error: 'No autorizado' },
+        { status: 401 }
+      )
+    }
+
+    // Get user and club information using session
+    const user = await prisma.user.findUnique({
+      where: { id: session.userId },
+      include: { Club: true }
+    })
+
+    if (!user || !user.Club || user.Club.id !== session.clubId) {
+      return NextResponse.json(
+        { error: 'Club no encontrado' },
+        { status: 404 }
+      )
+    }
+
+    if (user.role !== 'CLUB_OWNER') {
+      return NextResponse.json(
+        { error: 'Solo el propietario del club puede cambiar la comisión' },
+        { status: 403 }
+      )
+    }
+
+    const body = await request.json()
+    const { commissionRate } = body
+
+    if (typeof commissionRate !== 'number') {
+      return NextResponse.json(
+        { error: 'Tasa de comisión inválida' },
+        { status: 400 }
+      )
+    }
+
+    // Note: This would typically be restricted to admin users only
+    // For demo purposes, we'll allow club owners to see different rates
+    // but in production, commission rates would be set by Padelyzer admin
+    
+    const result = await updateClubCommissionRate(session.clubId, commissionRate * 100) // Convert to basis points
+
+    if (!result.success) {
+      return NextResponse.json(
+        { error: result.error },
+        { status: 400 }
+      )
+    }
+
+    return NextResponse.json({
+      success: true,
+      message: 'Tasa de comisión actualizada exitosamente',
+      newRate: commissionRate
+    })
+
+  } catch (error) {
+    console.error('Error updating commission rate:', error)
+    return NextResponse.json(
+      { error: 'Error interno del servidor' },
+      { status: 500 }
+    )
+  }
+}

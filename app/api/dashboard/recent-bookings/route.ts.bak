@@ -1,0 +1,50 @@
+import { NextResponse } from 'next/server'
+import { requireAuthAPI } from '@/lib/auth/actions'
+import { prisma } from '@/lib/config/prisma'
+
+export async function GET() {
+  try {
+    const session = await requireAuthAPI()
+    
+    if (!session) {
+      return NextResponse.json(
+        { success: false, error: 'No autorizado' },
+        { status: 401 }
+      )
+    }
+    
+    const recentBookings = await prisma.Booking.findMany({
+      take: 5,
+      where: {
+        clubId: session.clubId
+      },
+      orderBy: {
+        createdAt: 'desc'
+      },
+      include: {
+        Court: true
+      }
+    })
+
+    const formattedBookings = recentBookings.map(booking => ({
+      id: booking.id,
+      player: booking.playerName,
+      court: booking.Court.name,
+      time: booking.startTime,
+      date: booking.date,
+      status: booking.status
+    }))
+
+    return NextResponse.json(formattedBookings)
+  } catch (error) {
+    console.error('Recent bookings error:', error)
+    // Return mock data for development
+    return NextResponse.json([
+      { id: 1, player: 'Juan Pérez', court: 'Cancha Central', time: '09:00', status: 'confirmed' },
+      { id: 2, player: 'María García', court: 'Cancha Norte', time: '10:00', status: 'confirmed' },
+      { id: 3, player: 'Carlos López', court: 'Cancha Central', time: '11:00', status: 'pending' },
+      { id: 4, player: 'Ana Martínez', court: 'Cancha Sur', time: '14:00', status: 'confirmed' },
+      { id: 5, player: 'Roberto Díaz', court: 'Cancha Norte', time: '16:00', status: 'confirmed' }
+    ])
+  }
+}

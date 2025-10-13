@@ -1,0 +1,188 @@
+import { NextRequest, NextResponse } from 'next/server'
+import { prisma } from '@/lib/config/prisma'
+import { z } from 'zod'
+
+// Schema para check-in masivo simplificado
+const bulkCheckInSchema = z.object({
+  paymentMethod: z.enum(['CASH', 'CARD', 'TRANSFER', 'ONLINE']).optional(),
+  paymentAmount: z.number().positive().optional(),
+  markAllPresent: z.boolean().default(true),
+  notes: z.string().optional()
+})
+
+// POST - Check-in masivo de todos los estudiantes de una clase
+export async function POST(
+  request: NextRequest,
+  { params }: { params: Promise<{ id: string }> }
+) {
+  try {
+    const paramData = await params
+    const { id: classId } = paramData
+    const body = await request.json().catch(() => ({}))
+    const validatedData = bulkCheckInSchema.parse(body)
+
+    // Get class with all bookings
+    const classItem = await prisma.class.findUnique({
+      where: { id: classId },
+      include: {
+        bookings: {
+          where: {
+            status: { not: 'CANCELLED' }
+          }
+        },
+        instructor: true,
+        court: true
+      }
+    })
+
+    if (!classItem) {
+      return NextResponse.json(
+        { success: false, error: 'Clase no encontrada' },
+        { status: 404 }
+      )
+    }
+
+    if (classItem.bookings.length === 0) {
+      return NextResponse.json(
+        { success: false, error: 'No hay estudiantes inscritos en esta clase' },
+        { status: 400 }
+      )
+    }
+
+    // Start transaction for bulk check-in
+    const result = await prisma.$transaction(async (tx) => {
+      const checkedInStudents = []
+      let totalPaymentProcessed = 0
+      
+      // Process each student enrollment
+      for (const booking of classItem.bookings) {
+        // Skip if already checked in
+        if (booking.attended) {
+          continue
+        }
+
+        // Calculate payment amount per student if provided
+        const studentPayment = validatedData.paymentAmount 
+          ? Math.round(validatedData.paymentAmount / classItem.bookings.length)
+          : booking.dueAmount
+
+        // Update booking attendance and payment
+        const updated = await tx.classBooking.update({
+          where: { id: booking.id },
+          data: {
+            attended: true,
+            attendanceStatus: 'PRESENT',
+            attendanceTime: new Date(),
+            status: 'CHECKED_IN',
+            ...(validatedData.paymentMethod && {
+              paymentStatus: 'completed',
+              paymentMethod: 'onsite',
+              paidAmount: studentPayment
+            })
+          }
+        })
+
+        checkedInStudents.push({
+          id: updated.id,
+          name: updated.studentName,
+          paid: studentPayment
+        })
+
+        // Record payment transaction if payment was made
+        if (validatedData.paymentMethod && studentPayment > 0) {
+          await tx.transaction.create({
+            data: {
+              clubId: classItem.clubId,
+              type: 'INCOME',
+              category: 'CLASS',
+              amount: studentPayment,
+              currency: 'MXN',
+              description: `Pago de clase: ${classItem.name} - ${updated.studentName}`,
+              date: new Date(),
+              reference: `CLASS_${classId}_${updated.id}`,
+              notes: JSON.stringify({
+                classId,
+                classBookingId: updated.id,
+                studentName: updated.studentName,
+                paymentMethod: validatedData.paymentMethod,
+                className: classItem.name,
+                bulkCheckIn: true
+              })
+            }
+          })
+          totalPaymentProcessed += studentPayment
+        }
+      }
+
+      // Register instructor payment if this is the first check-in and instructor is paid hourly
+      const hasAnyCheckIn = await tx.classBooking.findFirst({
+        where: {
+          classId,
+          attended: true,
+          id: { notIn: checkedInStudents.map(s => s.id) }
+        }
+      })
+
+      if (!hasAnyCheckIn && classItem.instructorId?.paymentType === 'HOURLY') {
+        const hours = classItem.duration / 60
+        const instructorPayment = Math.round((classItem.instructorId.hourlyRate || 0) * hours)
+        
+        if (instructorPayment > 0) {
+          await tx.transaction.create({
+            data: {
+              clubId: classItem.clubId,
+              type: 'EXPENSE',
+              category: 'SALARY',
+              amount: instructorPayment,
+              currency: 'MXN',
+              description: `Pago a instructor ${classItem.instructorId.name} - Clase: ${classItem.name}`,
+              date: new Date(),
+              reference: `INSTRUCTOR_${classId}`,
+              notes: JSON.stringify({
+                classId,
+                instructorId: classItem.instructorId,
+                instructorName: classItem.instructorId.name,
+                className: classItem.name,
+                hours,
+                hourlyRate: classItem.instructorId.hourlyRate,
+                bulkCheckInTriggered: true
+              })
+            }
+          })
+        }
+      }
+
+      return {
+        checkedInStudents,
+        totalPaymentProcessed,
+        instructorPaymentRegistered: !hasAnyCheckIn && classItem.instructorId?.paymentType === 'HOURLY'
+      }
+    })
+
+    return NextResponse.json({
+      success: true,
+      message: `Check-in masivo completado: ${result.checkedInStudents.length} estudiantes registrados`,
+      data: {
+        studentsCheckedIn: result.checkedInStudents.length,
+        totalPayment: result.totalPaymentProcessed,
+        instructorPaymentRegistered: result.instructorPaymentRegistered,
+        students: result.checkedInStudents
+      }
+    })
+
+  } catch (error) {
+    console.error('Error in bulk check-in:', error)
+    
+    if (error instanceof z.ZodError) {
+      return NextResponse.json(
+        { success: false, error: 'Datos inválidos', details: error.errors },
+        { status: 400 }
+      )
+    }
+    
+    return NextResponse.json(
+      { success: false, error: 'Error al realizar check-in masivo' },
+      { status: 500 }
+    )
+  }
+}

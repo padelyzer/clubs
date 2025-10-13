@@ -1,0 +1,77 @@
+import { NextRequest, NextResponse } from 'next/server'
+import { requireAuthAPI } from '@/lib/auth/actions'
+import { prisma } from '@/lib/config/prisma'
+
+// GET - Get club package information
+export async function GET(request: NextRequest) {
+  try {
+    const session = await requireAuthAPI()
+    
+    if (!session) {
+      return NextResponse.json(
+        { success: false, error: 'No autorizado' },
+        { status: 401 }
+      )
+    }
+    
+    // Get club package with details
+    const clubPackage = await prisma.clubPackage.findFirst({
+      where: { 
+        clubId: session.clubId,
+        isActive: true
+      },
+      include: {
+        package: true
+      }
+    })
+    
+    if (!clubPackage) {
+      return NextResponse.json({
+        success: false,
+        message: 'No package assigned'
+      })
+    }
+    
+    // Get current usage stats
+    const [activeCourtCount, activeUserCount] = await Promise.all([
+      prisma.Court.count({
+        where: {
+          clubId: session.clubId,
+          active: true
+        }
+      }),
+      prisma.user.count({
+        where: {
+          clubId: session.clubId,
+          active: true
+        }
+      })
+    ])
+    
+    return NextResponse.json({
+      success: true,
+      package: {
+        id: clubPackage.package.id,
+        name: clubPackage.package.name,
+        displayName: clubPackage.package.displayName,
+        description: clubPackage.package.description,
+        maxCourts: clubPackage.package.maxCourts,
+        maxUsers: clubPackage.package.maxUsers,
+        maxBookingsMonth: clubPackage.package.maxBookingsMonth
+      },
+      usage: {
+        courts: activeCourtCount,
+        users: activeUserCount,
+        courtsLimit: clubPackage.package.maxCourts,
+        usersLimit: clubPackage.package.maxUsers
+      }
+    })
+    
+  } catch (error) {
+    console.error('Error fetching club package info:', error)
+    return NextResponse.json(
+      { success: false, error: 'Error al obtener información del paquete' },
+      { status: 500 }
+    )
+  }
+}

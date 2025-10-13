@@ -1,0 +1,110 @@
+import { NextRequest, NextResponse } from 'next/server'
+import { requireAuthAPI } from '@/lib/auth/actions'
+import { prisma } from '@/lib/config/prisma'
+import { z } from 'zod'
+import { addMinutes, format, parse, parseISO } from 'date-fns'
+
+// Simplified schema without complex validations
+const createBookingSchema = z.object({
+  courtId: z.string().min(1),
+  date: z.string(),
+  startTime: z.string().regex(/^\d{2}:\d{2}$/),
+  duration: z.number().min(30).max(240),
+  playerName: z.string().min(1),
+  playerEmail: z.string().optional().nullable(),
+  playerPhone: z.string().min(10),
+  totalPlayers: z.number().min(1).max(8).default(4),
+  notes: z.string().optional().nullable()
+})
+
+// Emergency endpoint for booking creation
+export async function POST(request: NextRequest) {
+  try {
+    console.log('[Emergency Bookings] Starting request...')
+    
+    const session = await requireAuthAPI()
+    
+    if (!session) {
+      return NextResponse.json(
+        { success: false, error: 'No autorizado' },
+        { status: 401 }
+      )
+    }
+    
+    const body = await request.json()
+    console.log('[Emergency Bookings] Request body:', body)
+    
+    // Clean phone number
+    if (body.playerPhone) {
+      body.playerPhone = body.playerPhone.replace(/\s/g, '')
+    }
+    
+    const validatedData = createBookingSchema.parse(body)
+    console.log('[Emergency Bookings] Validation successful')
+    
+    // Calculate end time
+    const startTimeDate = parse(validatedData.startTime, 'HH:mm', new Date())
+    const endTimeDate = addMinutes(startTimeDate, validatedData.duration)
+    const endTime = format(endTimeDate, 'HH:mm')
+    
+    const bookingDate = parseISO(validatedData.date)
+    
+    // Simple price calculation - default 500 pesos
+    const price = 50000 // 500 pesos in centavos
+    
+    // Generate booking ID
+    const bookingId = `booking_emergency_${session.clubId}_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`
+    
+    console.log('[Emergency Bookings] Creating booking...')
+    
+    // Create booking WITHOUT player relationship for now
+    const booking = await prisma.Booking.create({
+      data: {
+        id: bookingId,
+        clubId: session.clubId,
+        courtId: validatedData.courtId,
+        date: bookingDate,
+        startTime: validatedData.startTime,
+        endTime,
+        duration: validatedData.duration,
+        playerId: null, // Skip player relationship for now
+        playerName: validatedData.playerName,
+        playerEmail: validatedData.playerEmail || null,
+        playerPhone: validatedData.playerPhone,
+        totalPlayers: validatedData.totalPlayers,
+        price,
+        currency: 'MXN',
+        splitPaymentEnabled: false,
+        splitPaymentCount: 4,
+        notes: validatedData.notes || null,
+        status: 'PENDING',
+        paymentStatus: 'pending'},
+      include: {
+        Court: true
+      }
+    })
+    
+    console.log('[Emergency Bookings] Booking created successfully:', booking.id)
+    
+    return NextResponse.json({ 
+      success: true, 
+      booking,
+      message: 'Reserva creada exitosamente (modo emergencia)'
+    })
+
+  } catch (error) {
+    console.error('[Emergency Bookings] Error:', error)
+    
+    if (error instanceof z.ZodError) {
+      return NextResponse.json(
+        { success: false, error: 'Datos inválidos', details: error.issues },
+        { status: 400 }
+      )
+    }
+    
+    return NextResponse.json(
+      { success: false, error: 'Error al crear reserva (emergencia)', details: error instanceof Error ? error.message : 'Unknown error' },
+      { status: 500 }
+    )
+  }
+}

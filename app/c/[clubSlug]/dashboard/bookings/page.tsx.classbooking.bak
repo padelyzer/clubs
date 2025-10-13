@@ -1,0 +1,1657 @@
+'use client'
+
+import React, { useState, useEffect } from 'react'
+import { useRouter, usePathname, useParams } from 'next/navigation'
+// Removed DashboardWithNotifications - layout is handled by parent layout.tsx
+import { CardModern, CardModernHeader, CardModernTitle, CardModernDescription, CardModernContent } from '@/components/design-system/CardModern'
+import { ButtonModern } from '@/components/design-system/ButtonModern'
+import { InputModern } from '@/components/design-system/InputModern'
+import { BookingModal } from '@/components/bookings/booking-modal'
+import { CheckInModal } from '@/components/bookings/checkin-modal'
+import { PaymentModal } from '@/components/modals/PaymentModal'
+import { SplitPaymentManager } from '@/components/bookings/split-payment-manager'
+import {
+  Calendar, Plus, Search, Filter, ChevronLeft, ChevronRight,
+  Clock, MapPin, User, Phone, Mail, CreditCard, CheckCircle,
+  X, Check, AlertCircle, Users, DollarSign, Loader2, Share2,
+  Copy, Send, Link, MessageCircle, List, CalendarDays
+} from 'lucide-react'
+import { formatCurrency } from '@/lib/design-system/localization'
+import { useNotify } from '@/contexts/NotificationContext'
+import { BookingWithCourt } from '@/lib/types/prisma-helpers'
+
+/**
+ * Tipo extendido de Booking con campos computados para la UI
+ * Basado en el tipo generado por Prisma
+ */
+type Booking = BookingWithCourt & {
+  // Campos computados para BookingGroups
+  isGroup?: boolean
+  courtNames?: string
+  // Campos computados para Classes
+  isClass?: boolean
+  type?: 'REGULAR' | 'CLASS' | 'TOURNAMENT'
+  // Aliases de compatibilidad (para código legacy)
+  court?: BookingWithCourt['Court']
+  splitPayments?: BookingWithCourt['SplitPayment']
+}
+
+/**
+ * Tipo para Split Payments en la UI
+ */
+type SplitPayment = {
+  id: string
+  playerName: string
+  playerPhone?: string
+  playerEmail?: string
+  amount: number
+  status: 'pending' | 'processing' | 'completed'
+  stripePaymentIntentId?: string
+  completedAt?: string
+}
+
+const timeSlots = [
+  '08:00', '09:00', '10:00', '11:00', '12:00', '13:00',
+  '14:00', '15:00', '16:00', '17:00', '18:00', '19:00',
+  '20:00', '21:00'
+]
+
+function BookingsPageContent() {
+  const router = useRouter()
+  const pathname = usePathname()
+  const params = useParams()
+  const clubSlug = params.clubSlug as string
+  // FIXED: Use current date instead of hardcoded August date
+  const [selectedDate, setSelectedDate] = useState(new Date())
+  const [bookings, setBookings] = useState<Booking[]>([])
+  const [isCreating, setIsCreating] = useState(false)
+  const [isLoading, setIsLoading] = useState(false)
+  const [checkInModal, setCheckInModal] = useState<Booking | null>(null)
+  const [paymentModal, setPaymentModal] = useState<Booking | null>(null)
+  const [selectedBooking, setSelectedBooking] = useState<Booking | null>(null)
+  const [copySuccess, setCopySuccess] = useState(false)
+  const [checkInBooking, setCheckInBooking] = useState<Booking | null>(null)
+  const [splitPaymentModal, setSplitPaymentModal] = useState<Booking | null>(null)
+  const [searchQuery, setSearchQuery] = useState('')
+  const [whatsappLink, setWhatsappLink] = useState<string | null>(null)
+  const [paymentSettings, setPaymentSettings] = useState({
+    stripeEnabled: true, // Habilitado temporalmente para pruebas
+    terminalEnabled: false,
+    transferEnabled: false,
+    cashEnabled: true,
+    bankName: '',
+    accountNumber: '',
+    clabe: '',
+    accountHolder: ''
+  })
+  const [courts, setCourts] = useState<Array<{ id: string; name: string; type: string; active: boolean }>>([])
+  const [hasExistingPaymentIntent, setHasExistingPaymentIntent] = useState(false)
+  const [operatingHours, setOperatingHours] = useState({ start: '08:00', end: '22:00' })
+  const notify = useNotify()
+  
+  // Load bookings from API
+  useEffect(() => {
+    fetchBookings()
+  }, [selectedDate])
+
+  useEffect(() => {
+    fetchSettings()
+    fetchCourts()
+  }, [])
+
+  const fetchSettings = async () => {
+    try {
+      const response = await fetch('/api/settings/club')
+      const data = await response.json()
+      if (data.success && data.settings) {
+        setPaymentSettings(prev => ({
+          ...prev, // Mantener valores anteriores
+          terminalEnabled: data.settings.terminalEnabled || false,
+          transferEnabled: data.settings.transferEnabled || false,
+          cashEnabled: data.settings.acceptCash !== false,
+          bankName: data.settings.bankName || '',
+          accountNumber: data.settings.accountNumber || '',
+          clabe: data.settings.clabe || '',
+          accountHolder: data.settings.accountHolder || ''
+        }))
+      }
+
+      // Also fetch payment providers to check Stripe
+      const providersResponse = await fetch('/api/settings/payments')
+      const providersData = await providersResponse.json()
+      console.log('Payment providers response:', providersData)
+      
+      if (providersData.success && providersData.data?.paymentProviders) {
+        const stripeProvider = providersData.data.paymentProviders.find((p: any) => p.providerId === 'stripe')
+        console.log('Stripe provider found:', stripeProvider)
+        if (stripeProvider?.enabled) {
+          setPaymentSettings(prev => ({ ...prev, stripeEnabled: true }))
+        }
+      }
+    } catch (error) {
+      console.error('Error fetching settings:', error)
+    }
+  }
+
+  const fetchCourts = async () => {
+    try {
+      const response = await fetch('/api/settings/courts')
+      const data = await response.json()
+      if (data.success && data.courts) {
+        setCourts(data.courts)
+      }
+    } catch (error) {
+      console.error('Error fetching courts:', error)
+      // Fallback to default courts
+      setCourts([
+        { id: '1', name: 'Cancha Central', type: 'indoor', active: true },
+        { id: '2', name: 'Cancha Norte', type: 'outdoor', active: true },
+        { id: '3', name: 'Cancha Sur', type: 'outdoor', active: true }
+      ])
+    }
+  }
+
+  const fetchBookings = async () => {
+    setIsLoading(true)
+    try {
+      const dateStr = selectedDate.getFullYear() + '-' + 
+                      String(selectedDate.getMonth() + 1).padStart(2, '0') + '-' + 
+                      String(selectedDate.getDate()).padStart(2, '0')
+      
+      // Use the same approach as calendar - fetch with date range if needed
+      // For now, we'll use single date but ensure proper format
+      const response = await fetch(`/api/bookings?date=${dateStr}`)
+      const data = await response.json()
+      
+      console.log('[Lista] Fetching bookings for date:', dateStr)
+      console.log('[Lista] Response:', data)
+      
+      if (data.success) {
+        setBookings(data.bookings)
+      }
+    } catch (error) {
+      console.error('Error fetching bookings:', error)
+      // Use mock data if API fails
+      setBookings([
+        {
+          id: '1',
+          playerName: 'Juan Pérez',
+          playerEmail: 'juan@example.com',
+          playerPhone: '555-1234',
+          court: { id: '1', name: 'Cancha Central' },
+          date: selectedDate.toISOString(),
+          startTime: '09:00',
+          endTime: '10:30',
+          duration: 90,
+          price: 75000,
+          status: 'CONFIRMED',
+          paymentStatus: 'paid',
+          totalPlayers: 4
+        }
+      ])
+    } finally {
+      setIsLoading(false)
+    }
+  }
+
+  const handleCreateBooking = async (bookingData: any) => {
+    try {
+      const response = await fetch('/api/bookings', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(bookingData)
+      })
+      
+      const data = await response.json()
+      
+      if (data.success) {
+        await fetchBookings()
+        setIsCreating(false)
+        
+        // Show success message with payment link if applicable
+        if (data.paymentLink) {
+          notify.success({
+            title: 'Reserva creada exitosamente',
+            message: 'Se ha enviado el link de pago por WhatsApp',
+            duration: 8000,
+            action: {
+              label: 'Abrir link de pago',
+              onClick: () => window.open(data.paymentLink, '_blank')
+            }
+          })
+        } else if (bookingData.paymentMethod === 'onsite') {
+          const paymentType = bookingData.paymentType === 'cash' ? 'efectivo' : 
+                             bookingData.paymentType === 'terminal' ? 'terminal' : 'transferencia'
+          notify.success({
+            title: 'Reserva creada exitosamente',
+            message: `Recuerda realizar el pago en ${paymentType} al llegar`,
+            duration: 6000
+          })
+        } else {
+          notify.success({
+            title: 'Reserva creada exitosamente',
+            message: `Nueva reserva para ${bookingData.playerName}`,
+            duration: 5000
+          })
+        }
+      } else {
+        notify.error({
+          title: 'Error al crear la reserva',
+          message: data.error || 'Error desconocido',
+          duration: 8000,
+          action: {
+            label: 'Reintentar',
+            onClick: () => setIsCreating(true)
+          }
+        })
+      }
+    } catch (error) {
+      console.error('Error creating booking:', error)
+      notify.error({
+        title: 'Error al crear la reserva',
+        message: 'Ocurrió un problema inesperado',
+        duration: 8000,
+        action: {
+          label: 'Reintentar',
+          onClick: () => setIsCreating(true)
+        }
+      })
+    }
+  }
+
+  const getSplitPaymentProgress = (booking: Booking) => {
+    if (!booking.splitPaymentEnabled || !booking.splitPayments) return null
+    const completed = booking.splitPayments.filter(p => p.status === 'completed').length
+    return { completed, total: booking.splitPayments.length }
+  }
+
+  const copyPaymentLink = async (bookingId: string) => {
+    try {
+      const response = await fetch(`/api/bookings/${bookingId}/payment-link`)
+      const data = await response.json()
+      
+      if (data.success && data.paymentLink) {
+        await navigator.clipboard.writeText(data.paymentLink)
+        setCopySuccess(true)
+        setTimeout(() => setCopySuccess(false), 3000)
+        
+        notify.success({
+          title: 'Link copiado',
+          message: 'Link de pago copiado al portapapeles',
+          duration: 3000
+        })
+      }
+    } catch (error) {
+      console.error('Error copying payment link:', error)
+      notify.error({
+        title: 'Error al copiar link',
+        message: 'No se pudo copiar el link de pago',
+        duration: 5000
+      })
+    }
+  }
+
+  const sendPaymentLink = async (bookingId: string) => {
+    try {
+      const response = await fetch(`/api/bookings/${bookingId}/payment-link`, {
+        method: 'POST'
+      })
+      const data = await response.json()
+      
+      if (data.success) {
+        notify.success({
+          title: 'Link enviado',
+          message: 'Link de pago enviado por WhatsApp',
+          duration: 5000
+        })
+      }
+    } catch (error) {
+      console.error('Error sending payment link:', error)
+      notify.error({
+        title: 'Error al enviar link',
+        message: 'No se pudo enviar el link por WhatsApp',
+        duration: 5000
+      })
+    }
+  }
+
+  const fetchClassStudents = async (classId: string) => {
+    try {
+      const response = await fetch(`/api/classes/${classId}/quick-checkin`)
+      const data = await response.json()
+      
+      if (data.success && data.students) {
+        // Map the students data to the expected format
+        return data.students.map((student: any) => ({
+          classBookingId: student.classBookingId,
+          studentName: student.studentName,
+          studentPhone: student.studentPhone,
+          studentEmail: student.studentEmail,
+          attendanceStatus: student.currentStatus?.attendanceStatus || 'PENDING',
+          paymentStatus: student.currentStatus?.paymentStatus || 'pending',
+          paymentMethod: undefined,
+          paymentAmount: student.currentStatus?.dueAmount || 0,
+          dueAmount: student.currentStatus?.dueAmount || 0,
+          paidAmount: student.currentStatus?.paidAmount || 0
+        }))
+      }
+      return []
+    } catch (error) {
+      console.error('Error fetching class students:', error)
+      return []
+    }
+  }
+
+  const fetchWhatsAppLink = async (bookingId: string) => {
+    try {
+      const response = await fetch(`/api/notifications/whatsapp/booking-link?bookingId=${bookingId}`)
+      if (response.ok) {
+        const data = await response.json()
+        if (data.whatsappLink) {
+          setWhatsappLink(data.whatsappLink)
+          window.open(data.whatsappLink, '_blank')
+        } else {
+          notify.info({
+            title: 'Sin link de WhatsApp',
+            description: 'No hay notificación de WhatsApp para esta reserva'
+          })
+        }
+      }
+    } catch (error) {
+      console.error('Error fetching WhatsApp link:', error)
+    }
+  }
+
+  const handleCancelBooking = async (bookingId: string) => {
+    if (!confirm('¿Estás seguro de que deseas cancelar esta reserva?')) {
+      return
+    }
+
+    try {
+      // Find the booking in our local state
+      const booking = bookings.find((b: any) => b.id === bookingId)
+      
+      // Check multiple ways to determine if it's a group booking:
+      // 1. Check if it has the isGroup flag
+      // 2. Check if it has courtNames (groups have concatenated court names)
+      // 3. Check if the booking object has multiple courts listed
+      const isGroupBooking = booking?.isGroup || 
+                            (booking?.courtNames && booking.courtNames.includes(',')) ||
+                            false
+
+      console.log('Canceling booking:')
+      console.log('- Booking ID:', bookingId)
+      console.log('- Is Group:', isGroupBooking)
+      console.log('- Booking object:', booking)
+      console.log('- Has courtNames:', booking?.courtNames)
+      console.log('- Court names includes comma:', booking?.courtNames?.includes(','))
+
+      let response
+      if (isGroupBooking) {
+        // For group bookings, use the DELETE method on booking-groups endpoint
+        response = await fetch(`/api/booking-groups/${bookingId}`, {
+          method: 'DELETE',
+          headers: {
+            'Content-Type': 'application/json'
+          }
+        })
+      } else {
+        // For individual bookings, use the POST method on bookings cancel endpoint
+        response = await fetch(`/api/bookings/${bookingId}/cancel`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify({
+            reason: 'Cancelado desde dashboard administrativo'
+          })
+        })
+      }
+
+      let data = { success: false, error: 'Error desconocido' }
+      
+      try {
+        const responseText = await response.text()
+        console.log('Raw response:', responseText)
+        
+        if (responseText) {
+          try {
+            data = JSON.parse(responseText)
+          } catch (parseError) {
+            console.error('Failed to parse response as JSON:', parseError)
+            data = { success: false, error: responseText }
+          }
+        }
+      } catch (error) {
+        console.error('Error reading response:', error)
+      }
+
+      if (!response.ok) {
+        console.error('Cancel response error:')
+        console.error('- Status:', response.status)
+        console.error('- Status Text:', response.statusText)
+        console.error('- URL:', response.url)
+        console.error('- Is Group Booking:', isGroupBooking)
+        console.error('- Booking ID:', bookingId)
+        console.error('- Response Data:', data)
+      }
+
+      if (data.success) {
+        notify.success({
+          title: isGroupBooking ? 'Grupo cancelado' : 'Reserva cancelada',
+          message: isGroupBooking 
+            ? 'El grupo de reservas ha sido cancelado exitosamente' 
+            : 'La reserva ha sido cancelada exitosamente',
+          duration: 5000
+        })
+        setSelectedBooking(null)
+        fetchBookings() // Refresh the bookings list
+      } else {
+        notify.error({
+          title: 'Error al cancelar',
+          message: data.error || 'No se pudo cancelar la reserva',
+          duration: 6000
+        })
+      }
+    } catch (error) {
+      console.error('Error canceling booking:', error)
+      notify.error({
+        title: 'Error al cancelar',
+        message: 'Ocurrió un problema inesperado',
+        duration: 6000
+      })
+    }
+  }
+
+  const handleCheckIn = async (bookingId: string, checkInData: any) => {
+    try {
+      // Convert payment method to uppercase if present
+      if (checkInData.paymentMethod) {
+        const methodMap: { [key: string]: string } = {
+          'cash': 'CASH',
+          'terminal': 'CARD',
+          'transfer': 'TRANSFER',
+          'online': 'ONLINE'
+        }
+        checkInData.paymentMethod = methodMap[checkInData.paymentMethod] || checkInData.paymentMethod.toUpperCase()
+      }
+
+      // Check if this is a class booking and use the appropriate endpoint
+      let endpoint = `/api/bookings/${bookingId}/checkin`
+      let requestBody = checkInData
+      
+      if (bookingId.startsWith('class-')) {
+        const classId = bookingId.replace('class-', '')
+        
+        // Check if this is a quick check-in with individual student data
+        if (checkInData.isQuickCheckIn && checkInData.students) {
+          endpoint = `/api/classes/${classId}/quick-checkin`
+          requestBody = {
+            students: checkInData.students
+          }
+        } else {
+          endpoint = `/api/classes/${classId}/bulk-checkin`
+          // For classes, adapt the check-in data format
+          requestBody = {
+            paymentMethod: checkInData.paymentMethod,
+            paymentAmount: checkInData.paymentAmount || checkInData.price,
+            markAllPresent: true,
+            notes: checkInData.notes || 'Check-in masivo desde reservas'
+          }
+        }
+      }
+
+      const response = await fetch(endpoint, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(requestBody)
+      })
+      
+      const data = await response.json()
+      
+      if (data.success) {
+        await fetchBookings()
+        notify.success({
+          title: 'Check-in exitoso',
+          message: data.message || 'El check-in ha sido registrado correctamente',
+          duration: 5000
+        })
+      } else {
+        notify.error({
+          title: 'Error en check-in',
+          message: data.error || 'No se pudo realizar el check-in',
+          duration: 6000
+        })
+      }
+    } catch (error) {
+      console.error('Error during check-in:', error)
+      notify.error({
+        title: 'Error al realizar check-in',
+        message: 'Ocurrió un problema al procesar el check-in. Por favor, intenta nuevamente.',
+        duration: 6000
+      })
+    }
+  }
+
+  const monthNames = ['Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio', 
+                      'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre']
+  const dayNames = ['Dom', 'Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb']
+
+  // Filter bookings based on search query and remove duplicates
+  const filteredBookings = bookings
+    .filter((booking, index, self) => 
+      // Remove duplicates based on booking ID
+      index === self.findIndex(b => b.id === booking.id)
+    )
+    .filter(booking => {
+      if (!searchQuery) return true
+      const query = searchQuery.toLowerCase()
+      return (
+        (booking.playerName?.toLowerCase().includes(query)) ||
+        (booking.name?.toLowerCase().includes(query)) ||
+        (booking.playerPhone?.includes(query)) ||
+        (booking.court?.name?.toLowerCase().includes(query)) ||
+        (booking.courtNames?.toLowerCase().includes(query))
+      )
+    })
+
+  return (
+      <div style={{ padding: '32px' }}>
+        {/* Header */}
+        <div style={{ marginBottom: '32px' }}>
+          <h1 style={{
+            fontSize: '32px',
+            fontWeight: 700,
+            color: '#182A01',
+            margin: '0 0 16px 0',
+            letterSpacing: '-0.02em'
+          }}>
+            Reservaciones
+          </h1>
+          
+          {/* Navigation Tabs */}
+          <div style={{ 
+            display: 'flex',
+            gap: '8px',
+            marginBottom: '16px',
+            borderBottom: '1px solid rgba(0, 0, 0, 0.08)',
+            paddingBottom: '0'
+          }}>
+            <button
+              onClick={() => router.push(`/c/${clubSlug}/dashboard/bookings`)}
+              style={{
+                padding: '12px 20px',
+                background: 'transparent',
+                border: 'none',
+                borderBottom: '3px solid #10B981',
+                color: '#182A01',
+                fontSize: '14px',
+                fontWeight: 600,
+                cursor: 'pointer',
+                display: 'flex',
+                alignItems: 'center',
+                gap: '8px',
+                transition: 'all 0.2s',
+                marginBottom: '-1px'
+              }}
+            >
+              <List size={16} />
+              Vista Lista
+            </button>
+            <button
+              onClick={() => router.push(`/c/${clubSlug}/dashboard/bookings/calendar`)}
+              style={{
+                padding: '12px 20px',
+                background: 'transparent',
+                border: 'none',
+                borderBottom: '3px solid transparent',
+                color: '#6B7280',
+                fontSize: '14px',
+                fontWeight: 500,
+                cursor: 'pointer',
+                display: 'flex',
+                alignItems: 'center',
+                gap: '8px',
+                transition: 'all 0.2s',
+                marginBottom: '-1px'
+              }}
+              onMouseEnter={(e) => {
+                e.currentTarget.style.color = '#374151'
+                e.currentTarget.style.borderBottomColor = 'rgba(16, 185, 129, 0.3)'
+              }}
+              onMouseLeave={(e) => {
+                e.currentTarget.style.color = '#6B7280'
+                e.currentTarget.style.borderBottomColor = 'transparent'
+              }}
+            >
+              <CalendarDays size={16} />
+              Vista Calendario
+            </button>
+          </div>
+          
+          <p style={{
+            fontSize: '16px',
+            color: '#516640',
+            fontWeight: 400,
+            margin: 0
+          }}>
+            Gestiona las reservas de canchas y pagos divididos
+          </p>
+        </div>
+
+        {/* Main Grid */}
+        <div style={{
+          display: 'grid',
+          gridTemplateColumns: '400px 1fr',
+          gap: '24px',
+          height: 'calc(100vh - 200px)'
+        }}>
+          {/* Calendar */}
+          <CardModern variant="glass">
+            <div style={{ padding: '24px' }}>
+              <div style={{
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'space-between',
+                marginBottom: '20px'
+              }}>
+                <h3 style={{
+                  fontSize: '16px',
+                  fontWeight: 600,
+                  color: '#182A01',
+                  whiteSpace: 'nowrap'
+                }}>
+                  {monthNames[selectedDate.getMonth()]} {selectedDate.getFullYear()}
+                </h3>
+                <div style={{ display: 'flex', gap: '8px' }}>
+                  <button
+                    onClick={() => {
+                      const newDate = new Date(selectedDate)
+                      newDate.setMonth(newDate.getMonth() - 1)
+                      setSelectedDate(newDate)
+                    }}
+                    style={{
+                      padding: '6px',
+                      background: 'transparent',
+                      border: 'none',
+                      cursor: 'pointer',
+                      color: '#516640'
+                    }}
+                  >
+                    <ChevronLeft size={16} />
+                  </button>
+                  <button
+                    onClick={() => {
+                      const newDate = new Date(selectedDate)
+                      newDate.setMonth(newDate.getMonth() + 1)
+                      setSelectedDate(newDate)
+                    }}
+                    style={{
+                      padding: '6px',
+                      background: 'transparent',
+                      border: 'none',
+                      cursor: 'pointer',
+                      color: '#516640'
+                    }}
+                  >
+                    <ChevronRight size={16} />
+                  </button>
+                </div>
+              </div>
+
+              {/* Calendar Grid */}
+              <div style={{
+                display: 'grid',
+                gridTemplateColumns: 'repeat(7, 1fr)',
+                gap: '4px',
+                marginBottom: '20px'
+              }}>
+                {dayNames.map(day => (
+                  <div key={day} style={{
+                    textAlign: 'center',
+                    fontSize: '11px',
+                    fontWeight: 600,
+                    color: '#829F65',
+                    padding: '8px 0'
+                  }}>
+                    {day}
+                  </div>
+                ))}
+                {(() => {
+                  const firstDay = new Date(selectedDate.getFullYear(), selectedDate.getMonth(), 1).getDay()
+                  const daysInMonth = new Date(selectedDate.getFullYear(), selectedDate.getMonth() + 1, 0).getDate()
+                  const totalCells = Math.ceil((firstDay + daysInMonth) / 7) * 7 // Calcular semanas completas necesarias
+                  
+                  return Array.from({ length: totalCells }, (_, i) => {
+                    const dayNum = i - firstDay + 1
+                    const isCurrentMonth = dayNum > 0 && dayNum <= daysInMonth
+                  const isSelected = dayNum === selectedDate.getDate()
+                  const isToday = isCurrentMonth && 
+                    dayNum === new Date().getDate() && 
+                    selectedDate.getMonth() === new Date().getMonth() &&
+                    selectedDate.getFullYear() === new Date().getFullYear()
+
+                  return (
+                    <button
+                      key={i}
+                      onClick={() => {
+                        if (isCurrentMonth) {
+                          const newDate = new Date(selectedDate.getFullYear(), selectedDate.getMonth(), dayNum)
+                          setSelectedDate(newDate)
+                        }
+                      }}
+                      disabled={!isCurrentMonth}
+                      style={{
+                        aspectRatio: '1',
+                        border: 'none',
+                        borderRadius: '8px',
+                        background: isSelected 
+                          ? 'linear-gradient(135deg, #A4DF4E, #66E7AA)'
+                          : isToday
+                          ? 'rgba(164, 223, 78, 0.1)'
+                          : 'transparent',
+                        color: isSelected
+                          ? '#182A01'
+                          : isCurrentMonth
+                          ? '#182A01'
+                          : '#C1CEB8',
+                        fontWeight: isSelected || isToday ? 600 : 400,
+                        fontSize: '14px',
+                        cursor: isCurrentMonth ? 'pointer' : 'default',
+                        transition: 'all 0.2s'
+                      }}
+                    >
+                      {isCurrentMonth ? dayNum : ''}
+                    </button>
+                  )
+                  })
+                })()}
+              </div>
+
+              {/* Quick Actions */}
+              <div style={{
+                borderTop: '1px solid rgba(164, 223, 78, 0.1)',
+                paddingTop: '20px'
+              }}>
+                <button
+                  onClick={() => setIsCreating(true)}
+                  style={{
+                    width: '100%',
+                    padding: '12px 24px',
+                    borderRadius: '12px',
+                    border: 'none',
+                    background: 'linear-gradient(135deg, #66E7AA 0%, #A4DF4E 100%)',
+                    color: '#182A01',
+                    fontSize: '14px',
+                    fontWeight: 600,
+                    cursor: 'pointer',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    gap: '8px',
+                    transition: 'all 0.2s ease',
+                    boxShadow: '0 2px 8px rgba(102, 231, 170, 0.15)'
+                  }}
+                  onMouseEnter={(e) => {
+                    e.currentTarget.style.transform = 'translateY(-1px)'
+                    e.currentTarget.style.boxShadow = '0 4px 12px rgba(102, 231, 170, 0.25)'
+                  }}
+                  onMouseLeave={(e) => {
+                    e.currentTarget.style.transform = 'translateY(0)'
+                    e.currentTarget.style.boxShadow = '0 2px 8px rgba(102, 231, 170, 0.15)'
+                  }}
+                >
+                  <Plus size={16} />
+                  Nueva Reserva
+                </button>
+              </div>
+
+              {/* Stats */}
+              <div style={{
+                marginTop: '20px',
+                display: 'grid',
+                gridTemplateColumns: '1fr 1fr',
+                gap: '12px'
+              }}>
+                <div style={{
+                  padding: '16px',
+                  background: 'rgba(164, 223, 78, 0.05)',
+                  borderRadius: '12px',
+                  border: '1px solid rgba(164, 223, 78, 0.1)'
+                }}>
+                  <div style={{
+                    fontSize: '24px',
+                    fontWeight: 700,
+                    color: '#182A01',
+                    marginBottom: '4px'
+                  }}>
+                    {filteredBookings.length}
+                  </div>
+                  <div style={{
+                    fontSize: '12px',
+                    color: '#516640',
+                    fontWeight: 500
+                  }}>
+                    Reservas hoy
+                  </div>
+                </div>
+                <div style={{
+                  padding: '16px',
+                  background: 'rgba(102, 231, 170, 0.05)',
+                  borderRadius: '12px',
+                  border: '1px solid rgba(102, 231, 170, 0.1)'
+                }}>
+                  <div style={{
+                    fontSize: '24px',
+                    fontWeight: 700,
+                    color: '#182A01',
+                    marginBottom: '4px'
+                  }}>
+                    {formatCurrency(filteredBookings.reduce((sum: number, b) => sum + (b.price || 0), 0) / 100)}
+                  </div>
+                  <div style={{
+                    fontSize: '12px',
+                    color: '#516640',
+                    fontWeight: 500
+                  }}>
+                    Ingresos
+                  </div>
+                </div>
+              </div>
+            </div>
+          </CardModern>
+
+          {/* Bookings List */}
+          <CardModern variant="glass">
+            <div style={{ padding: '24px', height: '100%', overflow: 'auto' }}>
+              <div style={{
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'space-between',
+                marginBottom: '24px'
+              }}>
+                <h3 style={{
+                  fontSize: '18px',
+                  fontWeight: 600,
+                  color: '#182A01'
+                }}>
+                  Reservas del {selectedDate.toLocaleDateString('es-MX', { 
+                    day: 'numeric', 
+                    month: 'long' 
+                  })}
+                </h3>
+                <div style={{ 
+                  position: 'relative',
+                  width: '250px'
+                }}>
+                  <Search size={16} style={{
+                    position: 'absolute',
+                    left: '12px',
+                    top: '50%',
+                    transform: 'translateY(-50%)',
+                    color: '#516640'
+                  }} />
+                  <input
+                    type="text"
+                    placeholder="Buscar por nombre, teléfono o cancha..."
+                    value={searchQuery}
+                    onChange={(e) => setSearchQuery(e.target.value)}
+                    style={{
+                      width: '100%',
+                      padding: '8px 12px 8px 36px',
+                      borderRadius: '8px',
+                      border: '1px solid rgba(164, 223, 78, 0.2)',
+                      background: 'rgba(255, 255, 255, 0.5)',
+                      fontSize: '13px',
+                      color: '#182A01',
+                      outline: 'none',
+                      transition: 'all 0.2s ease'
+                    }}
+                    onFocus={(e) => {
+                      e.target.style.border = '1px solid rgba(164, 223, 78, 0.4)'
+                      e.target.style.background = 'rgba(255, 255, 255, 0.8)'
+                    }}
+                    onBlur={(e) => {
+                      e.target.style.border = '1px solid rgba(164, 223, 78, 0.2)'
+                      e.target.style.background = 'rgba(255, 255, 255, 0.5)'
+                    }}
+                  />
+                </div>
+              </div>
+
+              {isLoading ? (
+                <div style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  height: '200px',
+                  color: '#829F65'
+                }}>
+                  <Loader2 size={32} className="animate-spin" />
+                </div>
+              ) : filteredBookings.length === 0 ? (
+                <div style={{
+                  textAlign: 'center',
+                  padding: '60px 20px',
+                  color: '#829F65'
+                }}>
+                  <Calendar size={48} style={{ opacity: 0.5, marginBottom: '16px', margin: '0 auto' }} />
+                  <p style={{ fontSize: '16px', fontWeight: 500, marginBottom: '8px' }}>
+                    No hay reservas para esta fecha
+                  </p>
+                  <p style={{ fontSize: '14px', color: '#829F65' }}>
+                    Crea una nueva reserva usando el botón de arriba
+                  </p>
+                </div>
+              ) : (
+                <div style={{
+                  display: 'flex',
+                  flexDirection: 'column',
+                  gap: '0'
+                }}>
+                  {filteredBookings.map((booking, index) => {
+                    const splitProgress = getSplitPaymentProgress(booking)
+                    const isNearStart = new Date(`${booking.date}T${booking.startTime}`) <= new Date(Date.now() + 30 * 60 * 1000)
+                    const showPlayers = (booking.totalPlayers && booking.totalPlayers !== 4) || booking.splitPaymentEnabled
+                    
+                    return (
+                      <div
+                        key={booking.id}
+                        style={{
+                          padding: '24px 20px',
+                          background: 'white',
+                          borderBottom: index < filteredBookings.length - 1 ? '1px solid rgba(0, 0, 0, 0.06)' : 'none',
+                          cursor: 'pointer',
+                          transition: 'all 0.2s',
+                          position: 'relative'
+                        }}
+                        onClick={async () => {
+                          setSelectedBooking(booking)
+                          
+                          // Check if booking has existing payment intent for indicator
+                          if (booking.paymentStatus === 'pending' || booking.paymentStatus === 'processing') {
+                            try {
+                              const response = await fetch(`/api/bookings/${booking.id}/check-payment`)
+                              const data = await response.json()
+                              setHasExistingPaymentIntent(data.hasPaymentIntent || false)
+                            } catch (error) {
+                              console.error('Error checking payment:', error)
+                              setHasExistingPaymentIntent(false)
+                            }
+                          } else {
+                            setHasExistingPaymentIntent(false)
+                          }
+                        }}
+                        onMouseEnter={(e) => {
+                          e.currentTarget.style.background = 'rgba(164, 223, 78, 0.02)'
+                        }}
+                        onMouseLeave={(e) => {
+                          e.currentTarget.style.background = 'white'
+                        }}
+                      >
+                        {/* Single Line Layout */}
+                        <div style={{
+                          display: 'flex',
+                          alignItems: 'center',
+                          gap: '16px'
+                        }}>
+                          {/* Time and Group Badge */}
+                          <div style={{
+                            display: 'flex',
+                            flexDirection: 'column',
+                            alignItems: 'flex-start',
+                            gap: '4px',
+                            minWidth: '55px'
+                          }}>
+                            <div style={{
+                              fontSize: '18px',
+                              fontWeight: 700,
+                              color: '#182A01'
+                            }}>
+                              {booking.startTime}
+                            </div>
+                            {/* Group Badge */}
+                            {booking.isGroup && (
+                              <div style={{
+                                background: 'linear-gradient(135deg, #A4DF4E, #66E7AA)',
+                                color: 'white',
+                                fontSize: '10px',
+                                fontWeight: 600,
+                                padding: '2px 8px',
+                                borderRadius: '10px',
+                                textTransform: 'uppercase',
+                                letterSpacing: '0.5px'
+                              }}>
+                                Grupo
+                              </div>
+                            )}
+                            {/* Class Badge */}
+                            {booking.type === 'CLASS' && (
+                              <div style={{
+                                background: 'linear-gradient(135deg, #FFD93D, #FFB344)',
+                                color: 'white',
+                                fontSize: '10px',
+                                fontWeight: 600,
+                                padding: '2px 8px',
+                                borderRadius: '10px',
+                                textTransform: 'uppercase',
+                                letterSpacing: '0.5px',
+                                boxShadow: '0 1px 3px rgba(255, 179, 68, 0.3)'
+                              }}>
+                                Clase
+                              </div>
+                            )}
+                          </div>
+                          
+                          {/* Player/Event Name */}
+                          <div style={{
+                            fontSize: '16px',
+                            fontWeight: 600,
+                            color: '#182A01',
+                            flex: 1,
+                            minWidth: 0,
+                            overflow: 'hidden',
+                            textOverflow: 'ellipsis',
+                            whiteSpace: 'nowrap'
+                          }}>
+                            {booking.isGroup ? booking.name : booking.playerName}
+                          </div>
+
+                          {/* Indicators between name and button */}
+                          <div style={{
+                            display: 'flex',
+                            alignItems: 'center',
+                            gap: '12px',
+                            marginLeft: 'auto',
+                            marginRight: '16px'
+                          }}>
+                            {/* Court indicator */}
+                            <div style={{
+                              display: 'flex',
+                              alignItems: 'center',
+                              gap: '4px',
+                              color: '#829F65',
+                              fontSize: '13px',
+                              fontWeight: 500
+                            }}>
+                              <MapPin size={14} style={{ opacity: 0.7 }} />
+                              <span>{booking.isGroup ? booking.courtNames : booking.court?.name}</span>
+                            </div>
+
+                            {/* Separator dot */}
+                            <div style={{
+                              width: '4px',
+                              height: '4px',
+                              borderRadius: '50%',
+                              background: 'rgba(130, 159, 101, 0.3)'
+                            }} />
+
+                            {/* End time */}
+                            <div style={{
+                              display: 'flex',
+                              alignItems: 'center',
+                              gap: '4px',
+                              color: '#829F65',
+                              fontSize: '13px',
+                              fontWeight: 500
+                            }}>
+                              <span>hasta {booking.endTime}</span>
+                            </div>
+
+                            {/* Players indicator (if needed) */}
+                            {showPlayers && (
+                              <>
+                                <div style={{
+                                  width: '4px',
+                                  height: '4px',
+                                  borderRadius: '50%',
+                                  background: 'rgba(130, 159, 101, 0.3)'
+                                }} />
+                                <div style={{
+                                  display: 'flex',
+                                  alignItems: 'center',
+                                  gap: '4px',
+                                  color: '#829F65',
+                                  fontSize: '13px'
+                                }}>
+                                  <Users size={14} style={{ opacity: 0.7 }} />
+                                  <span>{booking.totalPlayers}</span>
+                                </div>
+                              </>
+                            )}
+                          </div>
+
+                          {/* Action Button */}
+                          <div onClick={(e) => e.stopPropagation()}>
+                            {booking.checkedIn ? (
+                              <div style={{
+                                display: 'flex',
+                                alignItems: 'center',
+                                gap: '6px',
+                                padding: '8px 16px',
+                                background: 'rgba(164, 223, 78, 0.1)',
+                                borderRadius: '8px',
+                                fontSize: '14px',
+                                fontWeight: 600,
+                                color: '#516640'
+                              }}>
+                                <Check size={16} />
+                                Listo
+                              </div>
+                            ) : (
+                              <ButtonModern
+                                variant="primary"
+                                size="sm"
+                                onClick={async (e) => {
+                                  e.stopPropagation()
+                                  
+                                  // If it's a class, fetch students first
+                                  if (booking.type === 'CLASS' && booking.id.startsWith('class-')) {
+                                    const classId = booking.id.replace('class-', '')
+                                    
+                                    // Fetch both students and class info
+                                    const response = await fetch(`/api/classes/${classId}/quick-checkin`)
+                                    const data = await response.json()
+                                    
+                                    if (data.success) {
+                                      const students = data.students?.map((student: any) => ({
+                                        classBookingId: student.classBookingId,
+                                        studentName: student.studentName,
+                                        studentPhone: student.studentPhone,
+                                        studentEmail: student.studentEmail,
+                                        attendanceStatus: student.currentStatus?.attendanceStatus || 'PENDING',
+                                        paymentStatus: student.currentStatus?.paymentStatus || 'pending',
+                                        paymentMethod: undefined,
+                                        paymentAmount: student.currentStatus?.dueAmount || data.class?.price || 0,
+                                        dueAmount: student.currentStatus?.dueAmount || data.class?.price || 0,
+                                        paidAmount: student.currentStatus?.paidAmount || 0
+                                      })) || []
+                                      
+                                      // Add students data to booking object
+                                      const bookingWithStudents = {
+                                        ...booking,
+                                        isClass: true,
+                                        className: booking.playerName || booking.name,
+                                        students: students,
+                                        price: data.class?.price || booking.price
+                                      }
+                                      setCheckInBooking(bookingWithStudents)
+                                    } else {
+                                      setCheckInBooking(booking)
+                                    }
+                                  } else {
+                                    setCheckInBooking(booking)
+                                  }
+                                }}
+                                style={{
+                                  background: (booking.paymentStatus === 'completed')
+                                    ? 'linear-gradient(135deg, #A4DF4E, #66E7AA)'
+                                    : 'linear-gradient(135deg, #FFC107, #FFA000)',
+                                  color: (booking.paymentStatus === 'completed')
+                                    ? '#182A01'
+                                    : '#FFFFFF',
+                                  border: 'none',
+                                  padding: '8px 20px',
+                                  fontSize: '14px',
+                                  fontWeight: 600,
+                                  minWidth: '110px'
+                                }}
+                              >
+                                {(booking.paymentStatus === 'completed')
+                                  ? 'Check-in'
+                                  : `Pagar $${((booking.price || 0) / 100).toFixed(0)}`}
+                              </ButtonModern>
+                            )}
+                          </div>
+                        </div>
+
+                        {/* Split Payment Info (if applicable) */}
+                        {booking.splitPaymentEnabled && splitProgress && (
+                          <div style={{
+                            marginTop: '12px',
+                            paddingTop: '12px',
+                            borderTop: '1px solid rgba(164, 223, 78, 0.1)',
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'space-between',
+                            fontSize: '12px',
+                            color: '#516640'
+                          }}>
+                            <div style={{
+                              display: 'flex',
+                              alignItems: 'center',
+                              gap: '6px',
+                              cursor: 'pointer'
+                            }}
+                            onClick={() => setSplitPaymentModal(booking)}>
+                              <Share2 size={12} />
+                              Pago dividido: {splitProgress.completed}/{splitProgress.total} completados
+                            </div>
+                            <ButtonModern
+                              variant="ghost"
+                              size="sm"
+                              onClick={() => setSplitPaymentModal(booking)}
+                              style={{
+                                padding: '4px 12px',
+                                fontSize: '12px',
+                                height: 'auto'
+                              }}
+                            >
+                              Gestionar
+                            </ButtonModern>
+                          </div>
+                        )}
+                      </div>
+                    )
+                  })}
+                </div>
+              )}
+            </div>
+          </CardModern>
+        </div>
+
+        {/* Create Booking Modal with Payment Options */}
+        <BookingModal
+          isOpen={isCreating}
+          onClose={() => setIsCreating(false)}
+          onSubmit={handleCreateBooking}
+          courts={courts}
+          existingBookings={bookings}
+          operatingHours={operatingHours}
+          mode="create"
+          paymentSettings={paymentSettings}
+        />
+
+        {/* Check-in Modal */}
+        {checkInBooking && (
+          <CheckInModal
+            isOpen={!!checkInBooking}
+            onClose={() => setCheckInBooking(null)}
+            booking={checkInBooking}
+            onCheckIn={handleCheckIn}
+            onRefreshBooking={async () => {
+              // Refresh all bookings first
+              await fetchBookings()
+              
+              // Get fresh booking data for the current modal
+              try {
+                const response = await fetch(`/api/bookings?date=${selectedDate.getFullYear()}-${String(selectedDate.getMonth() + 1).padStart(2, '0')}-${String(selectedDate.getDate()).padStart(2, '0')}`)
+                const data = await response.json()
+                if (data.success) {
+                  const updatedBooking = data.bookings.find((b: Booking) => b.id === checkInBooking.id)
+                  if (updatedBooking) {
+                    setCheckInBooking(updatedBooking)
+                  }
+                }
+              } catch (error) {
+                console.error('Error refreshing booking:', error)
+              }
+            }}
+          />
+        )}
+
+        {/* Details Modal */}
+        {selectedBooking && (
+          <div style={{
+            position: 'fixed',
+            top: 0,
+            left: 0,
+            right: 0,
+            bottom: 0,
+            background: 'rgba(0, 0, 0, 0.5)',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            zIndex: 1000
+          }}
+          onClick={() => {
+            setSelectedBooking(null)
+            setHasExistingPaymentIntent(false)
+          }}
+          >
+            <CardModern variant="glow" style={{
+              width: '90%',
+              maxWidth: '500px',
+              maxHeight: '90vh',
+              overflow: 'auto'
+            }}
+            onClick={(e) => e.stopPropagation()}
+            >
+              <CardModernHeader>
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                  <div>
+                    <CardModernTitle>Detalles de Reserva</CardModernTitle>
+                    <CardModernDescription>
+                      {selectedBooking.isGroup ? selectedBooking.name : selectedBooking.playerName}
+                    </CardModernDescription>
+                  </div>
+                  <ButtonModern
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => {
+            setSelectedBooking(null)
+            setHasExistingPaymentIntent(false)
+          }}
+                    icon={<X size={16} />}
+                  />
+                </div>
+              </CardModernHeader>
+              <CardModernContent>
+                <div style={{
+                  display: 'flex',
+                  flexDirection: 'column',
+                  gap: '20px'
+                }}>
+                  <div style={{
+                    display: 'grid',
+                    gridTemplateColumns: '1fr 1fr',
+                    gap: '16px'
+                  }}>
+                    <div>
+                      <div style={{ fontSize: '12px', color: '#516640', marginBottom: '4px' }}>
+                        Fecha
+                      </div>
+                      <div style={{ fontSize: '14px', fontWeight: 600, color: '#182A01' }}>
+                        {new Date(selectedBooking.date).toLocaleDateString('es-MX', {
+                          weekday: 'long',
+                          year: 'numeric',
+                          month: 'long',
+                          day: 'numeric'
+                        })}
+                      </div>
+                    </div>
+                    <div>
+                      <div style={{ fontSize: '12px', color: '#516640', marginBottom: '4px' }}>
+                        Estado
+                      </div>
+                      <div style={{
+                        display: 'inline-block',
+                        padding: '4px 8px',
+                        background: selectedBooking.status === 'CONFIRMED' ? 'rgba(164, 223, 78, 0.1)' : 'rgba(251, 191, 36, 0.1)',
+                        borderRadius: '4px',
+                        fontSize: '12px',
+                        fontWeight: 600,
+                        color: selectedBooking.status === 'CONFIRMED' ? '#516640' : '#92400e'
+                      }}>
+                        {selectedBooking.status === 'CONFIRMED' ? 'Confirmada' : 'Pendiente'}
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Customer Contact Info */}
+                  <div style={{
+                    padding: '16px',
+                    background: 'linear-gradient(135deg, rgba(102, 231, 170, 0.05), rgba(164, 223, 78, 0.02))',
+                    borderRadius: '12px',
+                    border: '1px solid rgba(102, 231, 170, 0.15)'
+                  }}>
+                    <div style={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'space-between',
+                      marginBottom: '12px'
+                    }}>
+                      <div style={{
+                        fontSize: '12px',
+                        color: '#516640',
+                        fontWeight: 600,
+                        textTransform: 'uppercase',
+                        letterSpacing: '0.5px'
+                      }}>
+                        Información de Contacto
+                      </div>
+                      <ButtonModern
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => fetchWhatsAppLink(selectedBooking.id)}
+                        icon={<MessageCircle size={14} />}
+                        style={{
+                          background: 'linear-gradient(135deg, #25D366, #128C7E)',
+                          color: 'white',
+                          border: 'none',
+                          padding: '6px 12px',
+                          fontSize: '12px'
+                        }}
+                      >
+                        WhatsApp
+                      </ButtonModern>
+                    </div>
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                        <User size={14} color="#516640" />
+                        <span style={{ fontSize: '14px', color: '#182A01' }}>
+                          {selectedBooking.playerName}
+                        </span>
+                      </div>
+                      {selectedBooking.playerPhone && (
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                          <Phone size={14} color="#516640" />
+                          <span style={{ fontSize: '14px', color: '#182A01' }}>
+                            {selectedBooking.playerPhone}
+                          </span>
+                        </div>
+                      )}
+                      {selectedBooking.playerEmail && (
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                          <Mail size={14} color="#516640" />
+                          <span style={{ fontSize: '14px', color: '#182A01' }}>
+                            {selectedBooking.playerEmail}
+                          </span>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+
+                  <div style={{
+                    display: 'grid',
+                    gridTemplateColumns: '1fr 1fr 1fr',
+                    gap: '16px'
+                  }}>
+                    <div>
+                      <div style={{ fontSize: '12px', color: '#516640', marginBottom: '4px' }}>
+                        Cancha
+                      </div>
+                      <div style={{ fontSize: '14px', fontWeight: 600, color: '#182A01' }}>
+                        {selectedBooking.isGroup ? selectedBooking.courtNames : selectedBooking.court?.name}
+                      </div>
+                    </div>
+                    <div>
+                      <div style={{ fontSize: '12px', color: '#516640', marginBottom: '4px' }}>
+                        Horario
+                      </div>
+                      <div style={{ fontSize: '14px', fontWeight: 600, color: '#182A01' }}>
+                        {selectedBooking.startTime} - {selectedBooking.endTime}
+                      </div>
+                    </div>
+                    <div>
+                      <div style={{ fontSize: '12px', color: '#516640', marginBottom: '4px' }}>
+                        Total
+                      </div>
+                      <div style={{ fontSize: '18px', fontWeight: 700, color: '#182A01' }}>
+                        {formatCurrency((selectedBooking.price || 0) / 100)}
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Payment Actions */}
+                  {(selectedBooking.paymentStatus === 'pending' || selectedBooking.paymentStatus === 'processing') && (
+                    <div style={{
+                      padding: '16px',
+                      background: 'linear-gradient(135deg, rgba(164, 223, 78, 0.05), rgba(102, 231, 170, 0.02))',
+                      borderRadius: '12px',
+                      border: '1px solid rgba(164, 223, 78, 0.15)'
+                    }}>
+                      <div style={{
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: '8px',
+                        marginBottom: '12px'
+                      }}>
+                        <Link size={16} color="#516640" />
+                        <span style={{
+                          fontSize: '14px',
+                          fontWeight: 600,
+                          color: '#182A01'
+                        }}>
+                          Link de Pago
+                        </span>
+                        {copySuccess && (
+                          <span style={{
+                            fontSize: '11px',
+                            color: '#34C759',
+                            marginLeft: 'auto',
+                            fontWeight: 500
+                          }}>
+                            ¡Copiado!
+                          </span>
+                        )}
+                      </div>
+                      
+                      <div style={{
+                        display: 'flex',
+                        gap: '8px'
+                      }}>
+                        <ButtonModern
+                          variant="primary"
+                          size="sm"
+                          onClick={() => copyPaymentLink(selectedBooking.id)}
+                          icon={<Copy size={14} />}
+                          style={{
+                            flex: 1,
+                            justifyContent: 'center'
+                          }}
+                        >
+                          Copiar Link
+                        </ButtonModern>
+                        
+                        <ButtonModern
+                          variant="secondary"
+                          size="sm"
+                          onClick={() => {
+                            const link = `${window.location.origin}/pay/${selectedBooking.id}`
+                            window.open(link, '_blank')
+                          }}
+                          icon={<CreditCard size={14} />}
+                          style={{
+                            flex: 1,
+                            justifyContent: 'center'
+                          }}
+                        >
+                          Ver Pago
+                        </ButtonModern>
+                      </div>
+
+                      <div style={{
+                        marginTop: '8px',
+                        padding: '8px',
+                        background: 'rgba(0, 0, 0, 0.02)',
+                        borderRadius: '8px',
+                        fontSize: '11px',
+                        color: '#516640',
+                        wordBreak: 'break-all',
+                        fontFamily: 'monospace'
+                      }}>
+                        {window.location.origin}/pay/{selectedBooking.id}
+                      </div>
+                      
+                      {hasExistingPaymentIntent && (
+                        <div style={{
+                          marginTop: '8px',
+                          padding: '8px 12px',
+                          background: 'linear-gradient(135deg, rgba(52, 199, 89, 0.1), rgba(52, 199, 89, 0.05))',
+                          borderRadius: '8px',
+                          fontSize: '12px',
+                          color: '#34C759',
+                          display: 'flex',
+                          alignItems: 'center',
+                          gap: '6px'
+                        }}>
+                          <div style={{
+                            width: '6px',
+                            height: '6px',
+                            borderRadius: '50%',
+                            background: '#34C759'
+                          }} />
+                          Intento de pago activo
+                        </div>
+                      )}
+                    </div>
+                  )}
+
+                  {/* Payment Status */}
+                  {selectedBooking.paymentStatus === 'completed' && (
+                    <div style={{
+                      padding: '12px',
+                      background: 'linear-gradient(135deg, rgba(52, 199, 89, 0.1), rgba(52, 199, 89, 0.05))',
+                      borderRadius: '12px',
+                      border: '1px solid rgba(52, 199, 89, 0.2)',
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: '12px'
+                    }}>
+                      <CheckCircle size={20} color="#34C759" />
+                      <div>
+                        <div style={{
+                          fontSize: '14px',
+                          fontWeight: 600,
+                          color: '#182A01'
+                        }}>
+                          Pago Completado
+                        </div>
+                        <div style={{
+                          fontSize: '12px',
+                          color: '#516640'
+                        }}>
+                          La reserva ha sido pagada en su totalidad
+                        </div>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Cancel Booking Button - Only show if not cancelled, not checked in, and payment not completed */}
+                  {selectedBooking.status !== 'CANCELLED' && 
+                   !selectedBooking.checkedIn && 
+                   selectedBooking.paymentStatus !== 'completed' && (
+                    <div style={{
+                      paddingTop: '16px',
+                      borderTop: '1px solid rgba(164, 223, 78, 0.1)',
+                      textAlign: 'center'
+                    }}>
+                      <ButtonModern
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => handleCancelBooking(selectedBooking.id)}
+                        style={{
+                          color: '#DC2626',
+                          border: '1px solid rgba(220, 38, 38, 0.2)',
+                          padding: '8px 16px'
+                        }}
+                      >
+                        Cancelar Reserva
+                      </ButtonModern>
+                    </div>
+                  )}
+                </div>
+              </CardModernContent>
+            </CardModern>
+          </div>
+        )}
+
+        {/* Split Payment Manager Modal */}
+        {splitPaymentModal && (
+          <SplitPaymentManager
+            bookingId={splitPaymentModal.id}
+            onClose={() => {
+              setSplitPaymentModal(null)
+              // Refresh bookings to update split payment status
+              fetchBookings()
+            }}
+          />
+        )}
+      </div>
+  )
+}
+
+export default function BookingsPageEnhanced() {
+  return <BookingsPageContent />
+}

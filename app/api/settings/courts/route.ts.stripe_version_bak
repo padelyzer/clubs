@@ -1,0 +1,324 @@
+import { NextRequest, NextResponse } from 'next/server'
+import { requireAuthAPI } from '@/lib/auth/actions'
+import { prisma } from '@/lib/config/prisma'
+import { z } from 'zod'
+
+// Validation schema for court
+const courtSchema = z.object({
+  name: z.string().min(1).max(100),
+  // type removed - all courts are PADEL
+  indoor: z.boolean().default(false),
+  order: z.number().min(1).default(1),
+  active: z.boolean().default(true)
+})
+
+// GET - Retrieve club courts
+export async function GET(request: NextRequest) {
+  try {
+    const session = await requireAuthAPI()
+    
+    if (!session) {
+      return NextResponse.json(
+        { success: false, error: 'No autorizado' },
+        { status: 401 }
+      )
+    }
+    
+    console.log('[GET Courts] Fetching courts for clubId:', session.clubId)
+    
+    const courts = await prisma.court.findMany({
+      where: { clubId: session.clubId },
+      orderBy: { order: 'asc' }
+    })
+
+    console.log('[GET Courts] Found courts:', courts.length)
+
+    // Simplified version without stats for now (to avoid complex queries)
+    const courtsWithBasicData = courts.map(court => ({
+      ...court,
+      stats: {
+        totalBookings: 0,
+        activeBookings: 0
+      }
+    }))
+
+    console.log('[GET Courts] Processed courts successfully')
+
+    return NextResponse.json({
+      success: true,
+      courts: courtsWithBasicData
+    })
+
+  } catch (error) {
+    console.error('Error fetching courts:', error)
+    return NextResponse.json(
+      { success: false, error: 'Error al obtener canchas' },
+      { status: 500 }
+    )
+  }
+}
+
+// POST - Create new court
+export async function POST(request: NextRequest) {
+  try {
+    const session = await requireAuthAPI()
+    
+    if (!session) {
+      return NextResponse.json(
+        { success: false, error: 'No autorizado' },
+        { status: 401 }
+      )
+    }
+    const body = await request.json()
+    
+    const validatedData = courtSchema.parse(body)
+    
+    // Check club package limits
+    const clubPackage = await prisma.clubPackage.findFirst({
+      where: { 
+        clubId: session.clubId,
+        isActive: true
+      },
+      include: {
+        package: true
+      }
+    })
+    
+    if (clubPackage?.package?.maxCourts) {
+      const currentCourtCount = await prisma.court.count({
+        where: {
+          clubId: session.clubId,
+          active: true
+        }
+      })
+      
+      if (currentCourtCount >= clubPackage.package.maxCourts) {
+        return NextResponse.json(
+          { 
+            success: false, 
+            error: `Has alcanzado el límite de ${clubPackage.package.maxCourts} canchas para tu plan ${clubPackage.package.displayName}. Para agregar más canchas, actualiza tu plan.` 
+          },
+          { status: 403 }
+        )
+      }
+    }
+    
+    // Check if court name already exists
+    const existingCourt = await prisma.court.findFirst({
+      where: {
+        clubId: session.clubId,
+        name: validatedData.name
+      }
+    })
+
+    if (existingCourt) {
+      return NextResponse.json(
+        { 
+          success: false, 
+          error: 'Ya existe una cancha con este nombre' 
+        },
+        { status: 409 }
+      )
+    }
+
+    // Get next order number if not provided
+    if (!body.order) {
+      const maxOrder = await prisma.court.aggregate({
+        where: { clubId: session.clubId },
+        _max: { order: true }
+      })
+      validatedData.order = (maxOrder._max.order || 0) + 1
+    }
+
+    // Generate unique court ID
+    const courtId = `court_${session.clubId}_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`
+    
+    // Create court
+    const court = await prisma.court.create({
+      data: {
+        id: courtId,
+        clubId: session.clubId,
+        ...validatedData}
+    })
+
+    return NextResponse.json({ 
+      success: true, 
+      court,
+      message: 'Cancha creada exitosamente' 
+    })
+
+  } catch (error) {
+    console.error('Error creating court:', error)
+    
+    if (error instanceof z.ZodError) {
+      return NextResponse.json(
+        { success: false, error: 'Datos inválidos', details: error.issues },
+        { status: 400 }
+      )
+    }
+    
+    return NextResponse.json(
+      { success: false, error: 'Error al crear cancha' },
+      { status: 500 }
+    )
+  }
+}
+
+// PUT - Update court
+export async function PUT(request: NextRequest) {
+  try {
+    const session = await requireAuthAPI()
+    
+    if (!session) {
+      return NextResponse.json(
+        { success: false, error: 'No autorizado' },
+        { status: 401 }
+      )
+    }
+    const body = await request.json()
+    const { id, ...updateData } = body
+    
+    if (!id) {
+      return NextResponse.json(
+        { success: false, error: 'ID de cancha requerido' },
+        { status: 400 }
+      )
+    }
+
+    const validatedData = courtSchema.partial().parse(updateData)
+    
+    // Check if court exists and belongs to club
+    const existingCourt = await prisma.court.findFirst({
+      where: {
+        id,
+        clubId: session.clubId
+      }
+    })
+
+    if (!existingCourt) {
+      return NextResponse.json(
+        { success: false, error: 'Cancha no encontrada' },
+        { status: 404 }
+      )
+    }
+
+    // Check name uniqueness if being updated
+    if (validatedData.name && validatedData.name !== existingCourt.name) {
+      const nameExists = await prisma.court.findFirst({
+        where: {
+          clubId: session.clubId,
+          name: validatedData.name,
+          id: { not: id }
+        }
+      })
+
+      if (nameExists) {
+        return NextResponse.json(
+          { success: false, error: 'Ya existe otra cancha con este nombre' },
+          { status: 409 }
+        )
+      }
+    }
+
+    // Update court
+    const updatedCourt = await prisma.court.update({
+      where: { id },
+      data: validatedData
+    })
+
+    return NextResponse.json({
+      success: true,
+      court: updatedCourt,
+      message: 'Cancha actualizada exitosamente'
+    })
+
+  } catch (error) {
+    console.error('Error updating court:', error)
+    
+    if (error instanceof z.ZodError) {
+      return NextResponse.json(
+        { success: false, error: 'Datos inválidos', details: error.issues },
+        { status: 400 }
+      )
+    }
+    
+    return NextResponse.json(
+      { success: false, error: 'Error al actualizar cancha' },
+      { status: 500 }
+    )
+  }
+}
+
+// DELETE - Delete court (hard delete if no active bookings)
+export async function DELETE(request: NextRequest) {
+  try {
+    const session = await requireAuthAPI()
+    
+    if (!session) {
+      return NextResponse.json(
+        { success: false, error: 'No autorizado' },
+        { status: 401 }
+      )
+    }
+    const { searchParams } = new URL(request.url)
+    const id = searchParams.get('id')
+    
+    if (!id) {
+      return NextResponse.json(
+        { success: false, error: 'ID de cancha requerido' },
+        { status: 400 }
+      )
+    }
+
+    // Check if court exists and belongs to club
+    const court = await prisma.court.findFirst({
+      where: {
+        id,
+        clubId: session.clubId
+      }
+    })
+
+    if (!court) {
+      return NextResponse.json(
+        { success: false, error: 'Cancha no encontrada' },
+        { status: 404 }
+      )
+    }
+
+    // Check for active bookings
+    const activeBookings = await prisma.booking.count({
+      where: {
+        courtId: id,
+        date: { gte: new Date() },
+        status: { in: ['PENDING', 'CONFIRMED'] }
+      }
+    })
+
+    if (activeBookings > 0) {
+      return NextResponse.json(
+        { 
+          success: false, 
+          error: `No se puede eliminar la cancha porque tiene ${activeBookings} reservas activas` 
+        },
+        { status: 400 }
+      )
+    }
+
+    // Hard delete - completely remove the court
+    await prisma.court.delete({
+      where: { id }
+    })
+
+    return NextResponse.json({
+      success: true,
+      message: 'Cancha eliminada exitosamente'
+    })
+
+  } catch (error) {
+    console.error('Error deleting court:', error)
+    return NextResponse.json(
+      { success: false, error: 'Error al eliminar cancha' },
+      { status: 500 }
+    )
+  }
+}

@@ -1,0 +1,216 @@
+import { requireSuperAdmin } from '@/lib/auth/actions'
+import { prisma } from '@/lib/config/prisma'
+import FinanceManagement from './components/finance-management'
+
+export const dynamic = 'force-dynamic'
+
+export default async function AdminFinancePage() {
+  await requireSuperAdmin()
+
+  const today = new Date()
+  const startOfMonth = new Date(today.getFullYear(), today.getMonth(), 1)
+  const lastMonth = new Date(today.getFullYear(), today.getMonth() - 1, 1)
+  const endOfLastMonth = new Date(today.getFullYear(), today.getMonth(), 0)
+  const startOfYear = new Date(today.getFullYear(), 0, 1)
+
+  // Obtener datos financieros
+  const [
+    totalRevenue,
+    monthRevenue,
+    lastMonthRevenue,
+    yearRevenue,
+    totalCommission,
+    monthCommission,
+    pendingPayouts,
+    completedBookings,
+    monthlyTrends,
+    clubRevenues,
+    paymentMethods
+  ] = await Promise.all([
+    // Ingresos totales
+    prisma.booking.aggregate({
+      where: { status: 'COMPLETED' },
+      _sum: { amount: true },
+      _count: true
+    }),
+    // Ingresos del mes
+    prisma.booking.aggregate({
+      where: { 
+        status: 'COMPLETED',
+        createdAt: { gte: startOfMonth }
+      },
+      _sum: { amount: true },
+      _count: true
+    }),
+    // Ingresos del mes pasado
+    prisma.booking.aggregate({
+      where: { 
+        status: 'COMPLETED',
+        createdAt: { gte: lastMonth, lte: endOfLastMonth }
+      },
+      _sum: { amount: true },
+      _count: true
+    }),
+    // Ingresos del año
+    prisma.booking.aggregate({
+      where: { 
+        status: 'COMPLETED',
+        createdAt: { gte: startOfYear }
+      },
+      _sum: { amount: true },
+      _count: true
+    }),
+    // Comisiones totales (estimado 2.5%)
+    prisma.booking.aggregate({
+      where: { status: 'COMPLETED' },
+      _sum: { amount: true }
+    }),
+    // Comisiones del mes
+    prisma.booking.aggregate({
+      where: { 
+        status: 'COMPLETED',
+        createdAt: { gte: startOfMonth }
+      },
+      _sum: { amount: true }
+    }),
+    // Pagos pendientes a clubes
+    prisma.club.findMany({
+      where: { 
+        status: 'APPROVED',
+        status: 'APPROVED'
+      },
+      include: {
+        Booking: {
+          where: {
+            status: 'COMPLETED',
+            createdAt: { gte: startOfMonth }
+          },
+          select: {
+            amount: true,
+            createdAt: true
+          }
+        }
+      }
+    }),
+    // Reservas completadas
+    prisma.booking.count({
+      where: { status: 'COMPLETED' }
+    }),
+    // Tendencias mensuales (últimos 12 meses)
+    Promise.all(
+      Array.from({ length: 12 }, (_, i) => {
+        const date = new Date(today.getFullYear(), today.getMonth() - i, 1)
+        const nextMonth = new Date(today.getFullYear(), today.getMonth() - i + 1, 1)
+        
+        return prisma.booking.aggregate({
+          where: {
+            status: 'COMPLETED',
+            createdAt: { gte: date, lt: nextMonth }
+          },
+          _sum: { amount: true },
+          _count: true
+        })
+      })
+    ).then(results => results.reverse()),
+    // Ingresos por club (top 10)
+    prisma.club.findMany({
+      where: { status: 'APPROVED' },
+      include: {
+        Booking: {
+          where: { status: 'COMPLETED' },
+          select: { amount: true }
+        }
+      },
+      take: 10
+    }),
+    // Total de reservas completadas (para estadísticas)
+    prisma.booking.count({
+      where: { status: 'COMPLETED' }
+    })
+  ])
+
+  // Calcular métricas
+  const stats = {
+    revenue: {
+      total: (totalRevenue._sum.amount || 0) / 100,
+      month: (monthRevenue._sum.amount || 0) / 100,
+      lastMonth: (lastMonthRevenue._sum.amount || 0) / 100,
+      year: (yearRevenue._sum.amount || 0) / 100,
+      growth: lastMonthRevenue._sum.amount ? 
+        (((monthRevenue._sum.amount || 0) - (lastMonthRevenue._sum.amount || 0)) / (lastMonthRevenue._sum.amount || 1) * 100) : 0
+    },
+    commission: {
+      total: ((totalCommission._sum.amount || 0) * 0.025) / 100,
+      month: ((monthCommission._sum.amount || 0) * 0.025) / 100,
+      estimated: ((monthRevenue._sum.amount || 0) * 0.025) / 100 // 2.5% promedio
+    },
+    bookings: {
+      total: totalRevenue._count,
+      month: monthRevenue._count,
+      lastMonth: lastMonthRevenue._count,
+      year: yearRevenue._count
+    }
+  }
+
+  // Procesar tendencias mensuales
+  const trends = monthlyTrends.map((month, index) => {
+    const date = new Date(today.getFullYear(), today.getMonth() - 11 + index, 1)
+    return {
+      month: date.toLocaleDateString('es-MX', { month: 'short' }),
+      revenue: (month._sum.amount || 0) / 100,
+      bookings: month._count,
+      commission: ((month._sum.amount || 0) * 0.025) / 100
+    }
+  })
+
+  // Procesar ingresos por club
+  const clubRevenueData = clubRevenues.map(club => ({
+    id: club.id,
+    name: club.name,
+    revenue: club.Booking.reduce((sum: number, booking) => sum + booking.amount, 0) / 100,
+    bookings: club.Booking.length,
+    commission: (club.Booking.reduce((sum: number, booking) => sum + booking.amount, 0) * 0.025) / 100
+  })).sort((a, b) => b.revenue - a.revenue)
+
+  // Procesar pagos pendientes
+  const pendingPayoutsData = pendingPayouts.map(club => {
+    const clubRevenue = club.Booking.reduce((sum: number, booking) => sum + booking.amount, 0) / 100
+    const commission = (clubRevenue * 0.025)
+    const netAmount = clubRevenue - commission
+    
+    return {
+      clubId: club.id,
+      clubName: club.name,
+      grossAmount: clubRevenue,
+      commission,
+      netAmount,
+      bookingsCount: club.Booking.length
+    }
+  }).filter(payout => payout.grossAmount > 0)
+
+  // Procesar métodos de pago (simplificado por ahora)
+  const paymentMethodsData = [
+    {
+      type: 'online',
+      revenue: (totalRevenue._sum.amount || 0) / 100,
+      count: totalRevenue._count,
+      percentage: 100
+    }
+  ]
+
+  return (
+    <div className="space-y-6">
+      <div className="flex items-center justify-between">
+        <h1 className="text-3xl font-bold">Gestión Financiera</h1>
+      </div>
+
+      <FinanceManagement 
+        stats={stats}
+        trends={trends}
+        clubRevenues={clubRevenueData}
+        pendingPayouts={pendingPayoutsData}
+        paymentMethods={paymentMethodsData}
+      />
+    </div>
+  )
+}

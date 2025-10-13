@@ -1,0 +1,79 @@
+import { NextRequest, NextResponse } from 'next/server'
+import { prisma } from '@/lib/config/prisma'
+
+export async function GET(request: NextRequest) {
+  try {
+    console.log('🏆 Dev tournaments API called')
+
+    // Verificar si hay cookie de bypass
+    const authCookie = request.cookies.get('auth-session')
+    
+    if (!authCookie || authCookie.value !== 'mock-session-token') {
+      return NextResponse.json(
+        { 
+          success: false, 
+          error: 'No autorizado',
+          details: 'Sesión de desarrollo no válida'
+        },
+        { status: 401 }
+      )
+    }
+
+    // Usar club demo para desarrollo
+    const club = await prisma.Club.findFirst({
+      where: { slug: 'club-demo-padelyzer' }
+    })
+
+    if (!club) {
+      return NextResponse.json(
+        { 
+          success: false, 
+          error: 'Club no encontrado',
+          details: 'No se encontró el club demo'
+        },
+        { status: 404 }
+      )
+    }
+
+    console.log('✅ Club encontrado:', club.name)
+
+    // Obtener torneos del club
+    const tournaments = await prisma.Tournament.findMany({
+      where: { clubId: club.id },
+      include: {
+        _count: {
+          select: {
+            TournamentRegistration: true,
+            TournamentMatch: true,
+            TournamentRound: true
+          }
+        }
+      },
+      orderBy: { createdAt: 'desc' }
+    })
+
+    console.log(`✅ ${tournaments.length} torneos encontrados`)
+
+    return NextResponse.json({
+      success: true,
+      tournaments,
+      club: {
+        id: club.id,
+        name: club.name,
+        slug: club.slug
+      }
+    })
+
+  } catch (error) {
+    console.error('❌ Error en dev tournaments API:', error)
+    return NextResponse.json(
+      { 
+        success: false, 
+        error: 'Error interno del servidor',
+        details: error instanceof Error ? error.message : 'Error desconocido'
+      },
+      { status: 500 }
+    )
+  }
+}
+

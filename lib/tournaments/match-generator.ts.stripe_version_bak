@@ -1,0 +1,312 @@
+import { prisma } from '@/lib/config/prisma'
+
+export type TournamentFormat = 'SINGLE_ELIMINATION' | 'DOUBLE_ELIMINATION' | 'ROUND_ROBIN' | 'SWISS' | 'GROUP_STAGE'
+
+interface MatchScheduleConfig {
+  startDate: Date
+  endDate: Date | null
+  matchDuration: number // minutes
+  breakBetweenMatches: number // minutes buffer
+}
+
+interface Court {
+  id: string
+  name: string
+  active: boolean
+}
+
+export class TournamentMatchGenerator {
+  private tournamentId: string
+  private format: TournamentFormat
+  private maxPlayers: number
+  private config: MatchScheduleConfig
+  private courts: Court[]
+
+  constructor(
+    tournamentId: string,
+    format: TournamentFormat,
+    maxPlayers: number,
+    config: MatchScheduleConfig,
+    courts: Court[]
+  ) {
+    this.tournamentId = tournamentId
+    this.format = format
+    this.maxPlayers = maxPlayers
+    this.config = config
+    this.courts = courts.filter(c => c.active)
+  }
+
+  /**
+   * Generate all tournament matches based on format
+   */
+  async generateMatches(): Promise<void> {
+    switch (this.format) {
+      case 'SINGLE_ELIMINATION':
+        await this.generateSingleEliminationMatches()
+        break
+      case 'DOUBLE_ELIMINATION':
+        await this.generateDoubleEliminationMatches()
+        break
+      case 'ROUND_ROBIN':
+        await this.generateRoundRobinMatches()
+        break
+      case 'SWISS':
+        await this.generateSwissMatches()
+        break
+      case 'GROUP_STAGE':
+        await this.generateGroupStageMatches()
+        break
+      default:
+        throw new Error(`Unsupported tournament format: ${this.format}`)
+    }
+  }
+
+  /**
+   * Generate single elimination bracket
+   */
+  private async generateSingleEliminationMatches(): Promise<void> {
+    const totalMatches = this.maxPlayers - 1 // Single elimination needs n-1 matches
+    const rounds = Math.ceil(Math.log2(this.maxPlayers))
+    
+    let matchNumber = 1
+    let currentScheduleTime = new Date(this.config.startDate)
+    let courtIndex = 0
+
+    // Generate matches for each round
+    for (let round = 1; round <= rounds; round++) {
+      const matchesInRound = Math.pow(2, rounds - round)
+      const roundName = this.getRoundName(round, rounds)
+      
+      for (let matchInRound = 1; matchInRound <= matchesInRound; matchInRound++) {
+        const court = this.courts[courtIndex % this.courts.length]
+        
+        // Calculate match time slot
+        const startTime = this.formatTime(currentScheduleTime)
+        const endTime = this.formatTime(new Date(currentScheduleTime.getTime() + this.config.matchDuration * 60000))
+        
+        // Create match
+        await prisma.tournamentMatch.create({
+          data: {
+            id: `match_${Date.now()}_${matchNumber}_${Math.random().toString(36).substr(2, 9)}`,
+            tournamentId: this.tournamentId,
+            round: roundName,
+            matchNumber: matchNumber,
+            courtId: court.id,
+            scheduledAt: currentScheduleTime,
+            startTime: startTime,
+            endTime: endTime,
+            status: 'SCHEDULED'
+          }
+        })
+
+        matchNumber++
+        
+        // Move to next time slot
+        currentScheduleTime = new Date(
+          currentScheduleTime.getTime() + 
+          (this.config.matchDuration + this.config.breakBetweenMatches) * 60000
+        )
+        
+        // Move to next court
+        courtIndex++
+        
+        // If we've used all courts for this time slot, move to next time slot
+        if (courtIndex % this.courts.length === 0 && matchInRound < matchesInRound) {
+          courtIndex = 0
+        }
+      }
+      
+      // Add break between rounds
+      currentScheduleTime = new Date(currentScheduleTime.getTime() + 30 * 60000) // 30 min break
+      courtIndex = 0 // Reset court assignment for new round
+    }
+  }
+
+  /**
+   * Generate double elimination bracket (more complex)
+   */
+  private async generateDoubleEliminationMatches(): Promise<void> {
+    // For now, fallback to single elimination
+    // TODO: Implement proper double elimination logic
+    await this.generateSingleEliminationMatches()
+  }
+
+  /**
+   * Generate round robin matches (everyone plays everyone)
+   */
+  private async generateRoundRobinMatches(): Promise<void> {
+    const totalMatches = (this.maxPlayers * (this.maxPlayers - 1)) / 2
+    let matchNumber = 1
+    let currentScheduleTime = new Date(this.config.startDate)
+    let courtIndex = 0
+
+    // Generate all possible pairings
+    for (let player1 = 1; player1 <= this.maxPlayers; player1++) {
+      for (let player2 = player1 + 1; player2 <= this.maxPlayers; player2++) {
+        const court = this.courts[courtIndex % this.courts.length]
+        
+        const startTime = this.formatTime(currentScheduleTime)
+        const endTime = this.formatTime(new Date(currentScheduleTime.getTime() + this.config.matchDuration * 60000))
+        
+        await prisma.tournamentMatch.create({
+          data: {
+            id: `match_${Date.now()}_${matchNumber}_${Math.random().toString(36).substr(2, 9)}`,
+            tournamentId: this.tournamentId,
+            round: `Round ${Math.ceil(matchNumber / (this.maxPlayers / 2))}`,
+            matchNumber: matchNumber,
+            courtId: court.id,
+            scheduledAt: currentScheduleTime,
+            startTime: startTime,
+            endTime: endTime,
+            status: 'SCHEDULED'
+          }
+        })
+
+        matchNumber++
+        
+        // Move to next time slot
+        currentScheduleTime = new Date(
+          currentScheduleTime.getTime() + 
+          (this.config.matchDuration + this.config.breakBetweenMatches) * 60000
+        )
+        
+        courtIndex++
+        
+        // Reset court index when all courts used
+        if (courtIndex % this.courts.length === 0) {
+          courtIndex = 0
+        }
+      }
+    }
+  }
+
+  /**
+   * Generate Swiss system matches
+   */
+  private async generateSwissMatches(): Promise<void> {
+    // Swiss system typically has log2(n) rounds
+    const rounds = Math.ceil(Math.log2(this.maxPlayers))
+    let matchNumber = 1
+    let currentScheduleTime = new Date(this.config.startDate)
+    let courtIndex = 0
+
+    for (let round = 1; round <= rounds; round++) {
+      const matchesInRound = Math.floor(this.maxPlayers / 2)
+      
+      for (let matchInRound = 1; matchInRound <= matchesInRound; matchInRound++) {
+        const court = this.courts[courtIndex % this.courts.length]
+        
+        const startTime = this.formatTime(currentScheduleTime)
+        const endTime = this.formatTime(new Date(currentScheduleTime.getTime() + this.config.matchDuration * 60000))
+        
+        await prisma.tournamentMatch.create({
+          data: {
+            id: `match_${Date.now()}_${matchNumber}_${Math.random().toString(36).substr(2, 9)}`,
+            tournamentId: this.tournamentId,
+            round: `Round ${round}`,
+            matchNumber: matchNumber,
+            courtId: court.id,
+            scheduledAt: currentScheduleTime,
+            startTime: startTime,
+            endTime: endTime,
+            status: 'SCHEDULED'
+          }
+        })
+
+        matchNumber++
+        
+        // Move to next time slot
+        currentScheduleTime = new Date(
+          currentScheduleTime.getTime() + 
+          (this.config.matchDuration + this.config.breakBetweenMatches) * 60000
+        )
+        
+        courtIndex++
+        
+        if (courtIndex % this.courts.length === 0) {
+          courtIndex = 0
+        }
+      }
+      
+      // Add break between rounds
+      currentScheduleTime = new Date(currentScheduleTime.getTime() + 60 * 60000) // 1 hour break between rounds
+      courtIndex = 0
+    }
+  }
+
+  /**
+   * Generate group stage matches
+   */
+  private async generateGroupStageMatches(): Promise<void> {
+    // For now, implement as round robin
+    // TODO: Add proper group stage logic with multiple groups
+    await this.generateRoundRobinMatches()
+  }
+
+  /**
+   * Get human-readable round name
+   */
+  private getRoundName(round: number, totalRounds: number): string {
+    if (round === totalRounds) return 'Final'
+    if (round === totalRounds - 1) return 'Semifinal'
+    if (round === totalRounds - 2) return 'Cuartos de Final'
+    if (round === totalRounds - 3) return 'Octavos de Final'
+    return `Ronda ${round}`
+  }
+
+  /**
+   * Format time as HH:mm string
+   */
+  private formatTime(date: Date): string {
+    return date.toTimeString().slice(0, 5)
+  }
+}
+
+/**
+ * Generate tournament matches and schedule courts
+ */
+export async function generateTournamentSchedule(
+  tournamentId: string,
+  format: TournamentFormat,
+  maxPlayers: number,
+  startDate: Date,
+  endDate: Date | null,
+  matchDuration: number,
+  clubId: string
+): Promise<void> {
+  // Get available courts
+  const courts = await prisma.court.findMany({
+    where: {
+      clubId: clubId,
+      active: true
+    },
+    select: {
+      id: true,
+      name: true,
+      active: true
+    }
+  })
+
+  if (courts.length === 0) {
+    throw new Error('No active courts available for tournament scheduling')
+  }
+
+  // Create match generator
+  const generator = new TournamentMatchGenerator(
+    tournamentId,
+    format,
+    maxPlayers,
+    {
+      startDate,
+      endDate,
+      matchDuration,
+      breakBetweenMatches: 15 // 15 minutes between matches
+    },
+    courts
+  )
+
+  // Generate all matches
+  await generator.generateMatches()
+
+  console.log(`✅ Generated tournament schedule for ${tournamentId} with ${courts.length} courts`)
+}

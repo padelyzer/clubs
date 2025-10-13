@@ -1,0 +1,319 @@
+import { NextRequest, NextResponse } from 'next/server'
+import { requireAuthAPI } from '@/lib/auth/actions'
+import { prisma } from '@/lib/config/prisma'
+
+// GET - Get split payment status for booking group
+export async function GET(
+  request: NextRequest,
+  { params }: { params: Promise<{ id: string }> }
+) {
+  try {
+    const session = await requireAuthAPI()
+    
+    if (!session) {
+      return NextResponse.json(
+        { success: false, error: 'No autorizado' },
+        { status: 401 }
+      )
+    }
+    const paramData = await params
+    const { id: bookingGroupId } = paramData
+
+    // Get booking group with split payments
+    const bookingGroup = await prisma.bookingGroup.findUnique({
+      where: {
+        id: bookingGroupId,
+        clubId: session.clubId
+      },
+      include: {
+        SplitPayment: {
+          orderBy: { createdAt: 'asc' }
+        },
+        Booking: {
+          include: {
+            Court: true
+          }
+        }
+      }
+    })
+
+    if (!bookingGroup) {
+      return NextResponse.json(
+        { success: false, error: 'Grupo de reservas no encontrado' },
+        { status: 404 }
+      )
+    }
+
+    const status = {
+      groupName: bookingGroup.name,
+      totalAmount: bookingGroup.totalPrice,
+      splitPaymentEnabled: bookingGroup.splitPaymentEnabled,
+      splitPaymentCount: bookingGroup.splitPaymentCount,
+      courts: bookingGroup.Booking.map((b: any) => ({
+        id: b.courtId,
+        name: b.Court.name,
+        price: b.price
+      })),
+      payments: bookingGroup.SplitPayment.map((sp: any) => ({
+        id: sp.id,
+        playerName: sp.playerName,
+        playerEmail: sp.playerEmail,
+        playerPhone: sp.playerPhone,
+        amount: sp.amount,
+        status: sp.status,
+        completedAt: sp.completedAt,
+        stripePaymentIntentId: sp.stripePaymentIntentId
+      })),
+      completedPayments: bookingGroup.SplitPayment.filter((sp: any) => sp.status === 'completed').length,
+      pendingPayments: bookingGroup.SplitPayment.filter((sp: any) => sp.status === 'pending').length,
+      totalPaid: bookingGroup.SplitPayment
+        .filter((sp: any) => sp.status === 'completed')
+        .reduce((sum: number, sp: any) => sum + sp.amount, 0),
+      isComplete: bookingGroup.SplitPayment.every((sp: any) => sp.status === 'completed')
+    }
+
+    return NextResponse.json({ 
+      success: true, 
+      status 
+    })
+
+  } catch (error) {
+    console.error('Error fetching booking group split payment status:', error)
+    return NextResponse.json(
+      { success: false, error: error instanceof Error ? error.message : 'Error al obtener estado de pagos' },
+      { status: 500 }
+    )
+  }
+}
+
+// PUT - Mark split payment as complete or regenerate payment intent
+export async function PUT(
+  request: NextRequest,
+  { params }: { params: Promise<{ id: string }> }
+) {
+  try {
+    const session = await requireAuthAPI()
+    
+    if (!session) {
+      return NextResponse.json(
+        { success: false, error: 'No autorizado' },
+        { status: 401 }
+      )
+    }
+    const paramData = await params
+    const { id: bookingGroupId } = paramData
+    const body = await request.json()
+    const { splitPaymentId, action, paymentMethod, transactionId, referenceNumber } = body
+
+    if (!splitPaymentId) {
+      return NextResponse.json(
+        { success: false, error: 'splitPaymentId es requerido' },
+        { status: 400 }
+      )
+    }
+
+    // Handle marking payment as complete
+    if (action === 'complete') {
+      // Verify the split payment exists and belongs to this booking group
+      const splitPayment = await prisma.splitPayment.findFirst({
+        where: {
+          id: splitPaymentId,
+          bookingGroupId
+        },
+        include: {
+          bookingGroup: {
+            include: {
+              bookings: {
+                include: {
+                  court: true
+                }
+              }
+            }
+          }
+        }
+      })
+
+      if (!splitPayment) {
+        return NextResponse.json(
+          { success: false, error: 'Pago dividido no encontrado' },
+          { status: 404 }
+        )
+      }
+
+      if (splitPayment.status === 'completed') {
+        return NextResponse.json(
+          { success: false, error: 'Este pago ya fue completado' },
+          { status: 400 }
+        )
+      }
+
+      // Update the split payment
+      const chargeId = referenceNumber 
+        ? `${paymentMethod?.toUpperCase()}_${referenceNumber}`
+        : transactionId || `MANUAL_${Date.now()}`
+        
+      await prisma.splitPayment.update({
+        where: { id: splitPaymentId },
+        data: {
+          status: 'completed',
+          completedAt: new Date(),
+          stripeChargeId: chargeId}
+      })
+
+      // Check if all split payments are now complete
+      const allSplitPayments = await prisma.splitPayment.findMany({
+        where: { bookingGroupId }
+      })
+
+      // Create individual transaction for this split payment
+      const paymentMethodForTransaction = paymentMethod?.toLowerCase() || 'manual'
+      const courtNames = splitPayment.BookingGroup!.bookings.map((b: any) => b.Court.name).join(', ')
+      const transactionDescription = `Pago dividido grupal - ${splitPayment.playerName} - ${courtNames}`
+      const transactionReference = referenceNumber 
+        ? `${paymentMethod?.toUpperCase()}_${referenceNumber}`
+        : chargeId
+
+      const completedCount = allSplitPayments.filter((sp: any) => sp.status === 'completed').length
+
+      await prisma.transaction.create({
+        data: {
+          clubId: splitPayment.BookingGroup!.clubId,
+          type: 'INCOME',
+          category: 'BOOKING',
+          amount: splitPayment.amount,
+          currency: 'MXN',
+          description: transactionDescription,
+          reference: transactionReference,
+          bookingGroupId: bookingGroupId,
+          date: new Date(),
+          createdBy: 'SPLIT_PAYMENT_GROUP_SYSTEM',
+          notes: `Pago grupal ${paymentMethodForTransaction} - Jugador ${completedCount} de ${allSplitPayments.length}. Grupo: ${splitPayment.BookingGroup!.name}`
+        }
+      })
+
+      console.log(`💰 Group transaction created for split payment: ${splitPayment.playerName} - $${(splitPayment.amount / 100).toFixed(2)} MXN`)
+
+      const allComplete = completedCount === allSplitPayments.length
+
+      // If all payments are complete, update booking group payment status
+      if (allComplete) {
+        await prisma.bookingGroup.update({
+          where: { id: bookingGroupId },
+          data: {
+            paymentStatus: 'completed'}
+        })
+        
+        // Also update all individual bookings in the group
+        await prisma.Booking.updateMany({
+          where: { bookingGroupId },
+          data: {
+            paymentStatus: 'completed'}
+        })
+        
+        console.log(`✅ All ${allSplitPayments.length} group split payments completed for booking group ${bookingGroupId} - Payment status updated to completed`)
+      }
+
+      return NextResponse.json({
+        success: true,
+        message: allComplete 
+          ? `¡Todos los pagos del grupo completados! Las ${splitPayment.BookingGroup!.bookings.length} canchas están pagadas` 
+          : `Pago de ${splitPayment.playerName} registrado exitosamente`,
+        completedCount,
+        totalCount: allSplitPayments.length,
+        allComplete,
+        paymentCompleted: allComplete,
+        groupName: splitPayment.BookingGroup!.name
+      })
+    }
+
+    // Handle regenerating payment intent (similar to individual bookings)
+    // TODO: Implement payment intent regeneration for groups
+    return NextResponse.json({
+      success: false,
+      error: 'Regeneración de payment intent no implementada para grupos'
+    }, { status: 501 })
+
+  } catch (error) {
+    console.error('Error processing booking group split payment action:', error)
+    return NextResponse.json(
+      { success: false, error: error instanceof Error ? error.message : 'Error al procesar acción' },
+      { status: 500 }
+    )
+  }
+}
+
+// POST - Generate split payment links for booking group
+export async function POST(
+  request: NextRequest,
+  { params }: { params: Promise<{ id: string }> }
+) {
+  try {
+    const session = await requireAuthAPI()
+    
+    if (!session) {
+      return NextResponse.json(
+        { success: false, error: 'No autorizado' },
+        { status: 401 }
+      )
+    }
+    const paramData = await params
+    const { id: bookingGroupId } = paramData
+
+    // Get booking group
+    const bookingGroup = await prisma.bookingGroup.findUnique({
+      where: {
+        id: bookingGroupId,
+        clubId: session.clubId
+      },
+      include: {
+        splitPayments: true,
+        bookings: {
+          include: {
+            court: true
+          }
+        }
+      }
+    })
+
+    if (!bookingGroup) {
+      return NextResponse.json(
+        { success: false, error: 'Grupo de reservas no encontrado' },
+        { status: 404 }
+      )
+    }
+
+    if (!bookingGroup.splitPaymentEnabled) {
+      return NextResponse.json(
+        { success: false, error: 'Este grupo no tiene pagos divididos habilitados' },
+        { status: 400 }
+      )
+    }
+
+    // Generate payment links for each split payment
+    const paymentLinks = bookingGroup.splitPayments.map(splitPayment => ({
+      splitPaymentId: splitPayment.id,
+      playerName: splitPayment.playerName,
+      playerPhone: splitPayment.playerPhone,
+      amount: splitPayment.amount,
+      status: splitPayment.status,
+      paymentLink: `${process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000'}/pay/group/${bookingGroupId}?split=${splitPayment.id}`
+    }))
+
+    console.log(`🔗 Generated ${paymentLinks.length} payment links for booking group ${bookingGroupId}`)
+
+    return NextResponse.json({ 
+      success: true, 
+      paymentLinks,
+      groupName: bookingGroup.name,
+      totalAmount: bookingGroup.totalPrice,
+      message: `Links de pago generados para el grupo "${bookingGroup.name}"` 
+    })
+
+  } catch (error) {
+    console.error('Error generating booking group payment links:', error)
+    return NextResponse.json(
+      { success: false, error: error instanceof Error ? error.message : 'Error al generar links de pago' },
+      { status: 500 }
+    )
+  }
+}

@@ -1,0 +1,139 @@
+import { NextRequest } from 'next/server'
+import { prisma } from '@/lib/config/prisma'
+import { AuthService } from '@/lib/modules/shared/auth'
+import { ResponseBuilder } from '@/lib/modules/shared/response'
+import { WhatsAppLinkService } from '@/lib/services/whatsapp-link-service'
+
+export async function GET(request: NextRequest) {
+  try {
+    const session = await AuthService.requireClubStaff()
+
+    const club = await prisma.club.findUnique({
+      where: { id: session.clubId },
+      select: {
+        id: true,
+        name: true,
+        email: true,
+        phone: true,
+        address: true,
+        city: true,
+        state: true,
+        postalCode: true,
+        website: true,
+        description: true,
+        logo: true,
+        whatsappNumber: true,
+        stripeOnboardingCompleted: true,
+        stripePayoutsEnabled: true,
+        stripeChargesEnabled: true,
+        clubModules: true
+      }
+    })
+
+    if (!club) {
+      return ResponseBuilder.notFound('Club')
+    }
+
+    // Transform clubModules array to object for easier access
+    const moduleStatus = {
+      Booking: true, // Always enabled by default
+      Class: true,  // Default enabled
+      tournaments: false, // Default disabled
+      finance: true,  // Default enabled
+      whatsapp: true  // Default enabled
+    }
+
+    // Override with actual module settings if they exist
+    if (club.clubModules && club.clubModules.length > 0) {
+      club.clubModules.forEach((module: any) => {
+        if (module.moduleId === 'classes') {
+          moduleStatus.Class = module.isEnabled
+        } else if (module.moduleId === 'tournaments') {
+          moduleStatus.tournaments = module.isEnabled
+        } else if (module.moduleId === 'finance') {
+          moduleStatus.finance = module.isEnabled
+        } else if (module.moduleId === 'whatsapp') {
+          moduleStatus.whatsapp = module.isEnabled
+        }
+      })
+    }
+
+    return ResponseBuilder.success({
+      ...club,
+      clubModules: moduleStatus
+    })
+
+  } catch (error) {
+    if (error instanceof Response) {
+      return error
+    }
+    return ResponseBuilder.serverError(error)
+  }
+}
+
+export async function PATCH(request: NextRequest) {
+  try {
+    const session = await AuthService.requireClubStaff()
+    const body = await request.json()
+
+    const { 
+      name, 
+      email, 
+      phone, 
+      address, 
+      city, 
+      state, 
+      postalCode, 
+      website, 
+      description, 
+      whatsappNumber 
+    } = body
+
+    // Validate WhatsApp number if provided
+    if (whatsappNumber && !WhatsAppLinkService.validatePhoneNumber(whatsappNumber)) {
+      return ResponseBuilder.error('Formato de número de WhatsApp inválido. Use +52XXXXXXXXXX', 400)
+    }
+
+    // Update club settings
+    const updatedClub = await prisma.club.update({
+      where: { id: session.clubId },
+      data: {
+        name: name || undefined,
+        email: email || undefined,
+        phone: phone || undefined,
+        address: address || undefined,
+        city: city || undefined,
+        state: state || undefined,
+        postalCode: postalCode || undefined,
+        website: website || undefined,
+        description: description || undefined,
+        whatsappNumber: whatsappNumber || null
+      },
+      select: {
+        id: true,
+        name: true,
+        email: true,
+        phone: true,
+        address: true,
+        city: true,
+        state: true,
+        postalCode: true,
+        website: true,
+        description: true,
+        logo: true,
+        whatsappNumber: true,
+        stripeOnboardingCompleted: true,
+        stripePayoutsEnabled: true,
+        stripeChargesEnabled: true
+      }
+    })
+
+    return ResponseBuilder.success(updatedClub, 'Configuración actualizada exitosamente')
+
+  } catch (error) {
+    if (error instanceof Response) {
+      return error
+    }
+    return ResponseBuilder.serverError(error)
+  }
+}

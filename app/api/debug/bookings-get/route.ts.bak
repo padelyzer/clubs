@@ -1,0 +1,175 @@
+import { NextRequest, NextResponse } from 'next/server'
+import { requireAuthAPI } from '@/lib/auth/actions'
+import { prisma } from '@/lib/config/prisma'
+import { getDayBoundariesInTimezone } from '@/lib/utils/timezone'
+
+// Debug endpoint that captures exactly where the GET bookings fails
+export async function GET(request: NextRequest) {
+  const debugLog: any[] = []
+  
+  try {
+    debugLog.push({ step: 'START', message: 'Debug GET bookings started' })
+    
+    // Step 1: Authentication
+    debugLog.push({ step: 'AUTH_START', message: 'Checking authentication' })
+    const session = await requireAuthAPI()
+    
+    if (!session) {
+      debugLog.push({ step: 'AUTH_FAIL', message: 'No session found' })
+      return NextResponse.json({
+        success: false,
+        error: 'No autorizado',
+        debug: debugLog
+      }, { status: 401 })
+    }
+    
+    debugLog.push({ 
+      step: 'AUTH_SUCCESS', 
+      message: 'Authentication successful',
+      session: {
+        userId: session.userId,
+        clubId: session.clubId,
+        role: session.role
+      }
+    })
+    
+    // Step 2: Parse URL params
+    debugLog.push({ step: 'URL_PARSE_START', message: 'Parsing URL parameters' })
+    const { searchParams } = new URL(request.url)
+    const date = searchParams.get('date')
+    debugLog.push({ step: 'URL_PARSE_SUCCESS', message: 'URL parsed', params: { date } })
+    
+    // Step 3: Get club settings
+    debugLog.push({ step: 'CLUB_SETTINGS_START', message: 'Getting club settings' })
+    const clubSettings = await prisma.clubSettings.findUnique({
+      where: { clubId: session.clubId },
+      select: { timezone: true }
+    })
+    const clubTimezone = clubSettings?.timezone || 'America/Mexico_City'
+    debugLog.push({ step: 'CLUB_SETTINGS_SUCCESS', message: 'Club settings retrieved', clubTimezone })
+    
+    // Step 4: Build where clause
+    debugLog.push({ step: 'WHERE_BUILD_START', message: 'Building where clause' })
+    const where: any = {
+      clubId: session.clubId
+    }
+
+    if (date) {
+      const { start, end } = getDayBoundariesInTimezone(date, clubTimezone)
+      where.date = {
+        gte: start,
+        lt: end
+      }
+    }
+    
+    // Exclude cancelled bookings by default
+    where.status = { not: 'CANCELLED' }
+    
+    debugLog.push({ step: 'WHERE_BUILD_SUCCESS', message: 'Where clause built', where })
+    
+    // Step 5: Test database connection
+    debugLog.push({ step: 'DB_TEST_START', message: 'Testing database connection' })
+    const dbTest = await prisma.$queryRaw`SELECT 1 as test`
+    debugLog.push({ step: 'DB_TEST_SUCCESS', message: 'Database connected', dbTest })
+    
+    // Step 6: Try to get booking groups
+    debugLog.push({ step: 'BOOKING_GROUPS_START', message: 'Fetching booking groups' })
+    const bookingGroups = await prisma.bookingGroup.findMany({
+      where: {
+        clubId: session.clubId,
+        date: where.date,
+        status: where.status || { not: 'CANCELLED' }
+      },
+      include: {
+        bookings: {
+          include: {
+            Court: true
+          }
+        },
+        splitPayments: {
+          include: {
+            _count: {
+              select: {
+                Notification: true
+              }
+            }
+          }
+        },
+        _count: {
+          select: {
+            splitPayments: true,
+            Payment: true,
+            Booking: true
+          }
+        }
+      },
+      orderBy: [
+        { date: 'asc' },
+        { startTime: 'asc' }
+      ]
+    })
+    debugLog.push({ step: 'BOOKING_GROUPS_SUCCESS', message: 'Booking groups fetched', count: bookingGroups.length })
+    
+    // Step 7: Try to get individual bookings
+    debugLog.push({ step: 'INDIVIDUAL_BOOKINGS_START', message: 'Fetching individual bookings' })
+    const individualBookings = await prisma.Booking.findMany({
+      where: {
+        ...where,
+        bookingGroupId: null
+      },
+      include: {
+        Court: true,
+        SplitPayment: {
+          include: {
+            _count: {
+              select: {
+                Notification: true
+              }
+            }
+          }
+        },
+        _count: {
+          select: {
+            SplitPayment: true,
+            Payment: true
+          }
+        }
+      },
+      orderBy: [
+        { date: 'asc' },
+        { startTime: 'asc' }
+      ]
+    })
+    debugLog.push({ step: 'INDIVIDUAL_BOOKINGS_SUCCESS', message: 'Individual bookings fetched', count: individualBookings.length })
+    
+    return NextResponse.json({
+      success: true,
+      message: 'Debug GET bookings completed successfully',
+      debug: debugLog,
+      data: {
+        bookingGroups: bookingGroups.length,
+        individualBookings: individualBookings.length,
+        clubTimezone,
+        where
+      }
+    })
+    
+  } catch (error) {
+    debugLog.push({ 
+      step: 'ERROR', 
+      message: 'Error occurred',
+      error: error instanceof Error ? error.message : String(error),
+      stack: error instanceof Error ? error.stack : undefined
+    })
+    
+    return NextResponse.json({
+      success: false,
+      error: 'Debug GET bookings failed',
+      debug: debugLog,
+      errorDetails: {
+        message: error instanceof Error ? error.message : String(error),
+        stack: error instanceof Error ? error.stack : undefined
+      }
+    }, { status: 500 })
+  }
+}

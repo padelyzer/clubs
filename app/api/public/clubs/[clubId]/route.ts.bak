@@ -1,0 +1,68 @@
+import { NextRequest, NextResponse } from 'next/server'
+import { prisma } from '@/lib/config/prisma'
+
+// CORS headers for widget embedding
+const corsHeaders = {
+  'Access-Control-Allow-Origin': '*',
+  'Access-Control-Allow-Methods': 'GET, OPTIONS',
+  'Access-Control-Allow-Headers': 'Content-Type'
+}
+
+export async function OPTIONS() {
+  return new Response(null, {
+    status: 200,
+    headers: corsHeaders
+  })
+}
+
+export async function GET(
+  request: NextRequest,
+  { params }: { params: Promise<{ clubId: string }> }
+) {
+  try {
+    const paramData = await params
+    
+    const { clubId } = params
+    
+    // Get club basic info (public data only)
+    const club = await prisma.Club.findFirst({
+      where: {
+        OR: [
+          { id: clubId },
+          { slug: clubId }
+        ],
+        status: 'APPROVED',
+        active: true
+      },
+      select: {
+        id: true,
+        name: true,
+        slug: true,
+        email: true,
+        phone: true,
+        address: true,
+        city: true,
+        state: true,
+        website: true,
+        logo: true,
+        description: true
+      }
+    })
+
+    if (!club) {
+      return NextResponse.json(
+        { error: 'Club not found' },
+        { status: 404 }
+      )
+    }
+
+    return NextResponse.json({ club }, { headers: corsHeaders })
+
+  } catch (error) {
+    console.error('Public club API error:', error)
+    return NextResponse.json(
+      { error: 'Internal server error' },
+      { status: 500, headers: corsHeaders }
+    )
+  }
+}

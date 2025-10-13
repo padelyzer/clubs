@@ -1,0 +1,313 @@
+import { NextRequest, NextResponse } from 'next/server'
+import { prisma } from '@/lib/config/prisma'
+
+// GET - Get class bookings
+export async function GET(
+  request: NextRequest,
+  { params }: { params: Promise<{ id: string }> }
+) {
+  try {
+    const paramData = await params
+    const { id } = paramData
+    const classItem = await prisma.class.findUnique({
+      where: { id },
+      include: {
+        bookings: {
+          include: {
+            player: true
+          }
+        }
+      }
+    })
+    
+    if (!classItem) {
+      return NextResponse.json(
+        { success: false, error: 'Clase no encontrada' },
+        { status: 404 }
+      )
+    }
+    
+    return NextResponse.json({
+      success: true,
+      bookings: classItem.bookings
+    })
+  } catch (error) {
+    console.error('Error fetching class bookings:', error)
+    return NextResponse.json(
+      { success: false, error: 'Error al obtener inscripciones' },
+      { status: 500 }
+    )
+  }
+}
+
+// POST - Enroll student in class
+export async function POST(
+  request: NextRequest,
+  { params }: { params: Promise<{ id: string }> }
+) {
+  try {
+    const paramData = await params
+    const { id } = paramData
+    const body = await request.json()
+
+    // Validate required fields
+    if (!body.playerName || !body.playerPhone) {
+      return NextResponse.json(
+        { success: false, error: 'Nombre y teléfono son requeridos' },
+        { status: 400 }
+      )
+    }
+
+    // Get class details
+    const classItem = await prisma.class.findUnique({
+      where: { id },
+      include: {
+        _count: {
+          select: {
+            Booking: true
+          }
+        }
+      }
+    })
+    
+    if (!classItem) {
+      return NextResponse.json(
+        { success: false, error: 'Clase no encontrada' },
+        { status: 404 }
+      )
+    }
+    
+    // Check if class is full
+    if (classItem._count.bookings >= classItem.maxStudents) {
+      return NextResponse.json(
+        { success: false, error: 'La clase está llena' },
+        { status: 400 }
+      )
+    }
+    
+    // Check if student is already enrolled
+    const existingBooking = await prisma.classBooking.findFirst({
+      where: {
+        classId: id,
+        studentPhone: body.playerPhone
+      }
+    })
+    
+    if (existingBooking) {
+      return NextResponse.json(
+        { success: false, error: 'El estudiante ya está inscrito en esta clase' },
+        { status: 400 }
+      )
+    }
+    
+    // If player ID is provided, verify it exists
+    let playerId = body.playerId || null
+    if (playerId) {
+      const player = await prisma.player.findUnique({
+        where: { id: playerId }
+      })
+      
+      if (!player) {
+        playerId = null // Player not found, continue without linking
+      }
+    }
+    
+    // Create booking
+    const booking = await prisma.classBooking.create({
+      data: {
+        classId: id,
+        studentName: body.playerName,
+        studentEmail: body.playerEmail || null,
+        studentPhone: body.playerPhone,
+        playerId,
+        notes: body.notes || null,
+        paymentStatus: body.paymentMethod === 'CASH' ? 'pending' : 'pending',
+        paidAmount: 0, // Will be updated when payment is processed
+        confirmed: false,
+        attended: false
+      },
+      include: {
+        Player: true
+      }
+    })
+    
+    // Update current students count
+    await prisma.class.update({
+      where: { id: id },
+      data: {
+        currentStudents: classItem._count.bookings + 1
+      }
+    })
+    
+    // Generate payment link if needed (for future implementation)
+    let paymentLink = null
+    if (classItem.price > 0 && body.paymentMethod !== 'CASH') {
+      // TODO: Generate Stripe payment link
+      // paymentLink = await generateStripePaymentLink(booking.id, classItem.price)
+    }
+    
+    // Send WhatsApp notification (for future implementation)
+    if (body.sendNotification) {
+      // TODO: Send WhatsApp notification with class details and payment link
+      console.log('Would send WhatsApp to:', body.playerPhone)
+    }
+    
+    return NextResponse.json({
+      success: true,
+      message: 'Estudiante inscrito exitosamente',
+      booking,
+      paymentLink
+    })
+  } catch (error) {
+    console.error('Error enrolling student:', error)
+    return NextResponse.json(
+      { success: false, error: 'Error al inscribir estudiante' },
+      { status: 500 }
+    )
+  }
+}
+
+// PUT - Update booking (mark attendance, update payment)
+export async function PUT(
+  request: NextRequest,
+  { params }: { params: Promise<{ id: string }> }
+) {
+  try {
+    const paramData = await params
+    const { id } = paramData
+    const body = await request.json()
+    
+    if (!body.bookingId) {
+      return NextResponse.json(
+        { success: false, error: 'ID de inscripción es requerido' },
+        { status: 400 }
+      )
+    }
+    
+    const booking = await prisma.classBooking.findUnique({
+      where: { id: body.bookingId }
+    })
+    
+    if (!booking || booking.classId !== id) {
+      return NextResponse.json(
+        { success: false, error: 'Inscripción no encontrada' },
+        { status: 404 }
+      )
+    }
+    
+    const updateData: any = {}
+    
+    // Update attendance
+    if (body.checkedIn !== undefined) {
+      updateData.checkedIn = body.checkedIn
+    }
+    
+    // Update payment status
+    if (body.paymentStatus !== undefined) {
+      updateData.paymentStatus = body.paymentStatus
+      
+      if (body.paymentStatus === 'completed') {
+        const classItem = await prisma.class.findUnique({
+          where: { id: id }
+        })
+        updateData.paidAmount = classItem?.price || 0
+        updateData.confirmed = true
+      }
+    }
+    
+    const updatedBooking = await prisma.classBooking.update({
+      where: { id: body.bookingId },
+      data: updateData,
+      include: {
+        Player: true
+      }
+    })
+    
+    return NextResponse.json({
+      success: true,
+      booking: updatedBooking
+    })
+  } catch (error) {
+    console.error('Error updating booking:', error)
+    return NextResponse.json(
+      { success: false, error: 'Error al actualizar inscripción' },
+      { status: 500 }
+    )
+  }
+}
+
+// DELETE - Cancel enrollment
+export async function DELETE(
+  request: NextRequest,
+  { params }: { params: Promise<{ id: string }> }
+) {
+  try {
+    const paramData = await params
+    const { id } = paramData
+    const { searchParams } = new URL(request.url)
+    const bookingId = searchParams.get('bookingId')
+    
+    if (!bookingId) {
+      return NextResponse.json(
+        { success: false, error: 'ID de inscripción es requerido' },
+        { status: 400 }
+      )
+    }
+    
+    const booking = await prisma.classBooking.findUnique({
+      where: { id: bookingId }
+    })
+    
+    if (!booking || booking.classId !== id) {
+      return NextResponse.json(
+        { success: false, error: 'Inscripción no encontrada' },
+        { status: 404 }
+      )
+    }
+    
+    // Don't allow cancellation if payment is completed
+    if (booking.paymentStatus === 'completed') {
+      return NextResponse.json(
+        { success: false, error: 'No se puede cancelar una inscripción pagada' },
+        { status: 400 }
+      )
+    }
+    
+    // Delete booking
+    await prisma.classBooking.delete({
+      where: { id: bookingId }
+    })
+    
+    // Update current students count
+    const classItem = await prisma.class.findUnique({
+      where: { id: id },
+      include: {
+        _count: {
+          select: {
+            Booking: true
+          }
+        }
+      }
+    })
+    
+    if (classItem) {
+      await prisma.class.update({
+        where: { id: id },
+        data: {
+          currentStudents: classItem._count.bookings
+        }
+      })
+    }
+    
+    return NextResponse.json({
+      success: true,
+      message: 'Inscripción cancelada exitosamente'
+    })
+  } catch (error) {
+    console.error('Error canceling enrollment:', error)
+    return NextResponse.json(
+      { success: false, error: 'Error al cancelar inscripción' },
+      { status: 500 }
+    )
+  }
+}

@@ -1,0 +1,344 @@
+import { prisma } from '@/lib/config/prisma'
+
+/**
+ * Simple email service for booking confirmations
+ * In production, integrate with services like SendGrid, Mailgun, or AWS SES
+ */
+export class EmailService {
+  
+  /**
+   * Send booking confirmation email
+   */
+  static async sendBookingConfirmation(bookingId: string) {
+    try {
+      console.log(`[Email Service] Preparing booking confirmation email for: ${bookingId}`)
+
+      const booking = await prisma.booking.findUnique({
+        where: { id: bookingId },
+        include: {
+          Club: true,
+          Court: true
+        }
+      })
+
+      if (!booking) {
+        console.error(`[Email Service] Booking not found: ${bookingId}`)
+        return { success: false, error: 'Booking not found' }
+      }
+
+      // Email template data
+      const emailData = {
+        to: booking.playerEmail,
+        subject: `Confirmación de Reserva - ${booking.Club.name}`,
+        template: 'booking-confirmation',
+        data: {
+          playerName: booking.playerName,
+          clubName: booking.Club.name,
+          courtName: booking.Court?.name || 'Cancha',
+          date: booking.date.toLocaleDateString('es-MX', {
+            weekday: 'long',
+            year: 'numeric',
+            month: 'long',
+            day: 'numeric'
+          }),
+          startTime: booking.startTime,
+          endTime: booking.endTime,
+          duration: booking.duration,
+          price: booking.price,
+          currency: booking.currency,
+          bookingId: booking.id,
+          clubAddress: booking.Club.address,
+          clubPhone: booking.Club.phone,
+          // QR code will be attached separately if available
+          includeQR: true
+        }
+      }
+
+      // TODO: Integrate with actual email service
+      // For now, just log the email data
+      console.log('[Email Service] Email would be sent:', {
+        to: emailData.to,
+        subject: emailData.subject,
+        bookingDetails: emailData.data
+      })
+
+      // Store email notification in database for tracking
+      await prisma.notification.create({
+        data: {
+          type: 'EMAIL_CONFIRMATION',
+          status: 'pending',
+          recipientPhone: booking.playerPhone,
+          recipientEmail: booking.playerEmail,
+          message: `Confirmación de reserva para ${booking.playerName} en ${booking.Club.name}`,
+          metadata: {
+            bookingId: booking.id,
+            emailTemplate: 'booking-confirmation',
+            clubId: booking.clubId
+          },
+          bookingId: booking.id,
+          splitPaymentId: null,
+          expiresAt: new Date(Date.now() + 24 * 60 * 60 * 1000) // 24 hours
+        }
+      })
+
+      return {
+        success: true,
+        message: 'Email confirmation queued',
+        emailData
+      }
+
+    } catch (error) {
+      console.error('[Email Service] Error sending booking confirmation:', error)
+      return {
+        success: false,
+        error: error.message
+      }
+    }
+  }
+
+  /**
+   * Send class booking confirmation email
+   */
+  static async sendClassBookingConfirmation(classBookingId: string) {
+    try {
+      console.log(`[Email Service] Preparing class booking confirmation email for: ${classBookingId}`)
+
+      const classBooking = await prisma.classBooking.findUnique({
+        where: { id: classBookingId },
+        include: {
+          Class: {
+            include: {
+              Club: true,
+              Court: true,
+              Instructor: true
+            }
+          }
+        }
+      })
+
+      if (!classBooking) {
+        console.error(`[Email Service] Class booking not found: ${classBookingId}`)
+        return { success: false, error: 'Class booking not found' }
+      }
+
+      // Email template data for class booking
+      const emailData = {
+        to: classBooking.playerEmail,
+        subject: `Confirmación de Clase - ${classBooking.Class.Club.name}`,
+        template: 'class-booking-confirmation',
+        data: {
+          studentName: classBooking.playerName,
+          clubName: classBooking.Class.Club.name,
+          className: classBooking.Class.name,
+          instructorName: classBooking.Class.Instructor?.name || 'Por confirmar',
+          courtName: classBooking.Class.Court?.name || 'Cancha',
+          date: classBooking.Class.date.toLocaleDateString('es-MX', {
+            weekday: 'long',
+            year: 'numeric',
+            month: 'long',
+            day: 'numeric'
+          }),
+          startTime: classBooking.Class.startTime,
+          endTime: classBooking.Class.endTime,
+          price: classBooking.paidAmount || classBooking.Class.price,
+          currency: 'MXN',
+          classBookingId: classBooking.id,
+          clubAddress: classBooking.Class.Club.address,
+          clubPhone: classBooking.Class.Club.phone,
+          includeQR: true
+        }
+      }
+
+      // TODO: Integrate with actual email service
+      console.log('[Email Service] Class email would be sent:', {
+        to: emailData.to,
+        subject: emailData.subject,
+        classDetails: emailData.data
+      })
+
+      // Store email notification for tracking
+      await prisma.notification.create({
+        data: {
+          type: 'EMAIL_CONFIRMATION',
+          status: 'pending',
+          recipientPhone: classBooking.playerPhone,
+          recipientEmail: classBooking.playerEmail,
+          message: `Confirmación de clase para ${classBooking.playerName} en ${classBooking.Class.Club.name}`,
+          metadata: {
+            classBookingId: classBooking.id,
+            emailTemplate: 'class-booking-confirmation',
+            clubId: classBooking.Class.clubId
+          },
+          expiresAt: new Date(Date.now() + 24 * 60 * 60 * 1000)
+        }
+      })
+
+      return {
+        success: true,
+        message: 'Class confirmation email queued',
+        emailData
+      }
+
+    } catch (error) {
+      console.error('[Email Service] Error sending class booking confirmation:', error)
+      return {
+        success: false,
+        error: error.message
+      }
+    }
+  }
+
+  /**
+   * Send split payment completion email
+   */
+  static async sendSplitPaymentConfirmation(splitPaymentId: string) {
+    try {
+      console.log(`[Email Service] Preparing split payment confirmation email for: ${splitPaymentId}`)
+
+      const splitPayment = await prisma.splitPayment.findUnique({
+        where: { id: splitPaymentId },
+        include: {
+          Booking: {
+            include: {
+              Club: true,
+              Court: true
+            }
+          }
+        }
+      })
+
+      if (!splitPayment || !splitPayment.Booking) {
+        console.error(`[Email Service] Split payment or booking not found: ${splitPaymentId}`)
+        return { success: false, error: 'Split payment not found' }
+      }
+
+      const emailData = {
+        to: splitPayment.playerEmail,
+        subject: `Pago Confirmado - ${splitPayment.Booking.Club.name}`,
+        template: 'split-payment-confirmation',
+        data: {
+          playerName: splitPayment.playerName,
+          clubName: splitPayment.Booking.Club.name,
+          courtName: splitPayment.Booking.Court?.name || 'Cancha',
+          date: splitPayment.Booking.date.toLocaleDateString('es-MX', {
+            weekday: 'long',
+            year: 'numeric',
+            month: 'long',
+            day: 'numeric'
+          }),
+          startTime: splitPayment.Booking.startTime,
+          amountPaid: splitPayment.amount,
+          currency: 'MXN',
+          splitPaymentId: splitPayment.id,
+          bookingId: splitPayment.bookingId
+        }
+      }
+
+      console.log('[Email Service] Split payment email would be sent:', {
+        to: emailData.to,
+        subject: emailData.subject,
+        paymentDetails: emailData.data
+      })
+
+      return {
+        success: true,
+        message: 'Split payment confirmation email queued',
+        emailData
+      }
+
+    } catch (error) {
+      console.error('[Email Service] Error sending split payment confirmation:', error)
+      return {
+        success: false,
+        error: error.message
+      }
+    }
+  }
+
+  /**
+   * Send payment receipt email
+   */
+  static async sendPaymentReceipt(paymentId: string) {
+    try {
+      console.log(`[Email Service] Preparing payment receipt email for: ${paymentId}`)
+
+      const payment = await prisma.payment.findUnique({
+        where: { id: paymentId },
+        include: {
+          Booking: {
+            include: {
+              Club: true,
+              Court: true
+            }
+          },
+          BookingGroup: {
+            include: {
+              Club: true,
+              bookings: {
+                include: {
+                  Court: true
+                }
+              }
+            }
+          }
+        }
+      })
+
+      if (!payment) {
+        console.error(`[Email Service] Payment not found: ${paymentId}`)
+        return { success: false, error: 'Payment not found' }
+      }
+
+      const booking = payment.Booking || payment.BookingGroup
+      const isGroup = !!payment.BookingGroup
+
+      const emailData = {
+        to: booking.playerEmail || (isGroup ? booking.contactEmail : null),
+        subject: `Recibo de Pago - ${booking.Club.name}`,
+        template: 'payment-receipt',
+        data: {
+          playerName: booking.playerName || booking.name,
+          clubName: booking.Club.name,
+          paymentId: payment.id,
+          amount: payment.amount,
+          currency: payment.currency,
+          paymentMethod: payment.method,
+          paymentDate: payment.completedAt?.toLocaleDateString('es-MX') || new Date().toLocaleDateString('es-MX'),
+          bookingDetails: {
+            isGroup,
+            date: booking.date.toLocaleDateString('es-MX', {
+              weekday: 'long',
+              year: 'numeric',
+              month: 'long',
+              day: 'numeric'
+            }),
+            startTime: booking.startTime,
+            endTime: booking.endTime,
+            courts: isGroup 
+              ? booking.bookings.map(b => b.Court.name).join(', ')
+              : booking.court?.name || 'Cancha'
+          }
+        }
+      }
+
+      console.log('[Email Service] Payment receipt would be sent:', {
+        to: emailData.to,
+        subject: emailData.subject,
+        receiptDetails: emailData.data
+      })
+
+      return {
+        success: true,
+        message: 'Payment receipt email queued',
+        emailData
+      }
+
+    } catch (error) {
+      console.error('[Email Service] Error sending payment receipt:', error)
+      return {
+        success: false,
+        error: error.message
+      }
+    }
+  }
+}

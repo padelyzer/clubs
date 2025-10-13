@@ -1,0 +1,43 @@
+import type { Metadata } from 'next'
+
+export const metadata: Metadata = {
+  title: 'Reservas de Pádel | Padelyzer',
+  description: 'Reserva tu cancha de pádel en línea de forma rápida y sencilla',
+  robots: 'noindex, nofollow', // Don't index widget pages
+}
+
+export default function WidgetLayout({
+  children
+}: {
+  children: React.ReactNode
+}) {
+  return (
+    <>
+      <style dangerouslySetInnerHTML={{
+        __html: `
+          .widget-container {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+            line-height: 1.5;
+            color: #374151;
+          }
+          
+          .widget-container *,
+          .widget-container *::before,
+          .widget-container *::after {
+            box-sizing: border-box;
+          }
+          
+          .widget-container input,
+          .widget-container select,
+          .widget-container button,
+          .widget-container textarea {
+            font-family: inherit;
+          }
+        `
+      }} />
+      <div className="widget-container">
+        {children}
+      </div>
+    </>
+  )
+}

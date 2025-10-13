@@ -1,0 +1,816 @@
+'use client'
+
+import React, { useState } from 'react'
+import { ModernDashboardLayout } from '@/components/layouts/ModernDashboardLayout'
+import { CardModern, CardModernHeader, CardModernTitle, CardModernDescription, CardModernContent } from '@/components/design-system/CardModern'
+import { ButtonModern } from '@/components/design-system/ButtonModern'
+import { InputModern } from '@/components/design-system/InputModern'
+import { 
+  Grid3x3, Plus, Edit, Trash2, MapPin, Home, 
+  Hash, Check, X, Calendar, Users, Activity,
+  TrendingUp, Clock, Zap
+} from 'lucide-react'
+import { formatCurrency, formatNumber, t } from '@/lib/design-system/localization'
+
+// Mock data para diseño
+const mockClub = {
+  id: "club-1",
+  name: "Club Pádel México",
+  courts: [
+    {
+      id: "court-1",
+      name: "Cancha Central",
+      description: "Cancha principal con iluminación LED",
+      surface: "artificial_grass",
+      isIndoor: false,
+      hasLighting: true,
+      isActive: true,
+      order: 1,
+      hourlyRate: 250,
+      utilizationRate: 87,
+      todayBookings: 8,
+      monthlyRevenue: 12500
+    },
+    {
+      id: "court-2", 
+      name: "Cancha Norte",
+      description: "Cancha cubierta ideal para clima",
+      surface: "artificial_grass",
+      isIndoor: true,
+      hasLighting: true,
+      isActive: true,
+      order: 2,
+      hourlyRate: 300,
+      utilizationRate: 92,
+      todayBookings: 10,
+      monthlyRevenue: 18000
+    },
+    {
+      id: "court-3",
+      name: "Cancha Sur",
+      description: "En mantenimiento esta semana",
+      surface: "artificial_grass", 
+      isIndoor: false,
+      hasLighting: false,
+      isActive: false,
+      order: 3,
+      hourlyRate: 200,
+      utilizationRate: 0,
+      todayBookings: 0,
+      monthlyRevenue: 5200
+    }
+  ]
+}
+
+export default function CourtsDesignPreview() {
+  const [isCreating, setIsCreating] = useState(false)
+  const [editingCourt, setEditingCourt] = useState<any>(null)
+  const [loading, setLoading] = useState(false)
+
+  const handleCreateCourt = async (formData: any) => {
+    setLoading(true)
+    // Simular creación
+    setTimeout(() => {
+      setLoading(false)
+      setIsCreating(false)
+      alert('¡Cancha creada exitosamente!')
+    }, 1000)
+  }
+
+  const handleUpdateCourt = async (courtId: string, formData: any) => {
+    setLoading(true)
+    // Simular actualización
+    setTimeout(() => {
+      setLoading(false)
+      setEditingCourt(null)
+      alert('¡Cancha actualizada exitosamente!')
+    }, 1000)
+  }
+
+  const handleDeleteCourt = async (courtId: string) => {
+    if (!confirm('¿Estás seguro de eliminar esta cancha?')) return
+    
+    setLoading(true)
+    // Simular eliminación
+    setTimeout(() => {
+      setLoading(false)
+      alert('¡Cancha eliminada exitosamente!')
+    }, 1000)
+  }
+
+  const activeCourts = mockClub.courts.filter(court => court.isActive)
+  const totalRevenue = mockClub.courts.reduce((sum: number, court) => sum + court.monthlyRevenue, 0)
+  const avgUtilization = mockClub.courts.reduce((sum: number, court) => sum + court.utilizationRate, 0) / mockClub.courts.length
+
+  return (
+    <ModernDashboardLayout
+      clubName={mockClub.name}
+      userName="Administrador del Club"
+      userRole="Administrador"
+    >
+      <div style={{
+        display: 'flex',
+        flexDirection: 'column',
+        gap: '32px',
+        maxWidth: '1200px'
+      }}>
+        {/* Header */}
+        <div>
+          <h1 style={{
+            fontSize: '32px',
+            fontWeight: 700,
+            color: '#182A01',
+            marginBottom: '8px',
+            letterSpacing: '-0.02em'
+          }}>
+            Gestión de Canchas
+          </h1>
+          <p style={{
+            fontSize: '16px',
+            color: '#516640',
+            fontWeight: 400
+          }}>
+            Administra las canchas de pádel de tu club
+          </p>
+        </div>
+
+        {/* Stats Overview */}
+        <div style={{
+          display: 'grid',
+          gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))',
+          gap: '24px'
+        }}>
+          <CardModern variant="glow" interactive>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+              <div>
+                <p style={{ fontSize: '14px', color: '#516640', marginBottom: '8px' }}>
+                  Total de Canchas
+                </p>
+                <p style={{ fontSize: '32px', fontWeight: 700, color: '#182A01' }}>
+                  {formatNumber(mockClub.courts.length)}
+                </p>
+                <p style={{ fontSize: '13px', color: '#A4DF4E', marginTop: '8px' }}>
+                  {formatNumber(activeCourts.length)} activas
+                </p>
+              </div>
+              <div style={{
+                width: '56px',
+                height: '56px',
+                background: 'linear-gradient(135deg, #A4DF4E, #66E7AA)',
+                borderRadius: '16px',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center'
+              }}>
+                <Grid3x3 size={24} color="#182A01" />
+              </div>
+            </div>
+          </CardModern>
+
+          <CardModern variant="glass" interactive>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+              <div>
+                <p style={{ fontSize: '14px', color: '#516640', marginBottom: '8px' }}>
+                  Ingresos del Mes
+                </p>
+                <p style={{ fontSize: '32px', fontWeight: 700, color: '#182A01' }}>
+                  {formatCurrency(totalRevenue)}
+                </p>
+                <p style={{ fontSize: '13px', color: '#66E7AA', marginTop: '8px' }}>
+                  ↑ 12% vs mes anterior
+                </p>
+              </div>
+              <div style={{
+                width: '56px',
+                height: '56px',
+                background: 'rgba(164, 223, 78, 0.1)',
+                borderRadius: '16px',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center'
+              }}>
+                <TrendingUp size={24} color="#A4DF4E" />
+              </div>
+            </div>
+          </CardModern>
+
+          <CardModern variant="gradient" interactive>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+              <div>
+                <p style={{ fontSize: '14px', color: '#516640', marginBottom: '8px' }}>
+                  Utilización Promedio
+                </p>
+                <p style={{ fontSize: '32px', fontWeight: 700, color: '#182A01' }}>
+                  {Math.round(avgUtilization)}%
+                </p>
+                <p style={{ fontSize: '13px', color: '#516640', marginTop: '8px' }}>
+                  Últimos 30 días
+                </p>
+              </div>
+              <div style={{
+                width: '56px',
+                height: '56px',
+                background: 'linear-gradient(135deg, #66E7AA, #A4DF4E)',
+                borderRadius: '16px',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center'
+              }}>
+                <Activity size={24} color="#182A01" />
+              </div>
+            </div>
+          </CardModern>
+        </div>
+
+        {/* Add New Court Button */}
+        {!isCreating && (
+          <CardModern
+            variant="glass"
+            interactive
+            onClick={() => setIsCreating(true)}
+            style={{
+              cursor: 'pointer',
+              border: '2px dashed rgba(164, 223, 78, 0.3)',
+              background: 'linear-gradient(135deg, rgba(164, 223, 78, 0.05), rgba(102, 231, 170, 0.03))'
+            }}
+          >
+            <div style={{
+              padding: '40px',
+              textAlign: 'center'
+            }}>
+              <div style={{
+                width: '64px',
+                height: '64px',
+                background: 'rgba(164, 223, 78, 0.1)',
+                borderRadius: '20px',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                margin: '0 auto 16px'
+              }}>
+                <Plus size={32} color="#A4DF4E" />
+              </div>
+              <h3 style={{
+                fontSize: '20px',
+                fontWeight: 600,
+                color: '#182A01',
+                marginBottom: '8px'
+              }}>
+                Agregar Nueva Cancha
+              </h3>
+              <p style={{
+                fontSize: '14px',
+                color: '#516640'
+              }}>
+                Configura una nueva cancha para tu club de pádel
+              </p>
+            </div>
+          </CardModern>
+        )}
+
+        {/* Create Court Form */}
+        {isCreating && (
+          <CardModern variant="glow">
+            <CardModernHeader>
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                  <div style={{
+                    width: '40px',
+                    height: '40px',
+                    background: 'linear-gradient(135deg, #A4DF4E, #66E7AA)',
+                    borderRadius: '12px',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center'
+                  }}>
+                    <MapPin size={20} color="#182A01" />
+                  </div>
+                  <div>
+                    <CardModernTitle>Nueva Cancha</CardModernTitle>
+                    <CardModernDescription>Configura los detalles de la nueva cancha</CardModernDescription>
+                  </div>
+                </div>
+                <ButtonModern
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => setIsCreating(false)}
+                  icon={<X size={16} />}
+                />
+              </div>
+            </CardModernHeader>
+            <CardModernContent>
+              <CourtForm
+                onSubmit={handleCreateCourt}
+                loading={loading}
+                submitText="Crear Cancha"
+                onCancel={() => setIsCreating(false)}
+              />
+            </CardModernContent>
+          </CardModern>
+        )}
+
+        {/* Courts List */}
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '24px' }}>
+          {mockClub.courts.map((court) => (
+            <CardModern key={court.id} variant="glass" interactive>
+              {editingCourt?.id === court.id ? (
+                <div>
+                  <CardModernHeader>
+                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                        <div style={{
+                          width: '40px',
+                          height: '40px',
+                          background: 'linear-gradient(135deg, #66E7AA, #A4DF4E)',
+                          borderRadius: '12px',
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'center'
+                        }}>
+                          <Edit size={20} color="#182A01" />
+                        </div>
+                        <div>
+                          <CardModernTitle>Editando: {court.name}</CardModernTitle>
+                          <CardModernDescription>Modifica los detalles de la cancha</CardModernDescription>
+                        </div>
+                      </div>
+                      <ButtonModern
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => setEditingCourt(null)}
+                        icon={<X size={16} />}
+                      />
+                    </div>
+                  </CardModernHeader>
+                  <CardModernContent>
+                    <CourtForm
+                      court={court}
+                      onSubmit={(formData) => handleUpdateCourt(court.id, formData)}
+                      loading={loading}
+                      submitText="Guardar Cambios"
+                      onCancel={() => setEditingCourt(null)}
+                    />
+                  </CardModernContent>
+                </div>
+              ) : (
+                <div>
+                  {/* Court Header */}
+                  <div style={{
+                    display: 'flex',
+                    alignItems: 'flex-start',
+                    justifyContent: 'space-between',
+                    marginBottom: '24px'
+                  }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
+                      <div style={{
+                        width: '56px',
+                        height: '56px',
+                        background: court.isActive 
+                          ? 'linear-gradient(135deg, #A4DF4E, #66E7AA)' 
+                          : 'rgba(164, 223, 78, 0.2)',
+                        borderRadius: '16px',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center'
+                      }}>
+                        <MapPin size={24} color={court.isActive ? "#182A01" : "#516640"} />
+                      </div>
+                      <div>
+                        <h3 style={{
+                          fontSize: '24px',
+                          fontWeight: 700,
+                          color: '#182A01',
+                          marginBottom: '4px'
+                        }}>
+                          {court.name}
+                        </h3>
+                        <p style={{
+                          fontSize: '14px',
+                          color: '#516640'
+                        }}>
+                          {court.description || 'Sin descripción'}
+                        </p>
+                      </div>
+                    </div>
+                    <div style={{
+                      padding: '8px 16px',
+                      borderRadius: '12px',
+                      background: court.isActive 
+                        ? 'rgba(22, 163, 74, 0.1)' 
+                        : 'rgba(156, 163, 175, 0.1)',
+                      color: court.isActive ? '#16a34a' : '#6b7280',
+                      fontSize: '12px',
+                      fontWeight: 600,
+                      textTransform: 'uppercase',
+                      letterSpacing: '0.05em'
+                    }}>
+                      {court.isActive ? 'Activa' : 'Inactiva'}
+                    </div>
+                  </div>
+
+                  {/* Court Stats */}
+                  <div style={{
+                    display: 'grid',
+                    gridTemplateColumns: 'repeat(auto-fit, minmax(140px, 1fr))',
+                    gap: '16px',
+                    marginBottom: '24px'
+                  }}>
+                    <div style={{
+                      padding: '16px',
+                      borderRadius: '12px',
+                      background: 'rgba(164, 223, 78, 0.05)',
+                      border: '1px solid rgba(164, 223, 78, 0.1)',
+                      textAlign: 'center'
+                    }}>
+                      <div style={{ fontSize: '12px', color: '#516640', marginBottom: '4px' }}>
+                        Tarifa por Hora
+                      </div>
+                      <div style={{ fontSize: '18px', fontWeight: 600, color: '#182A01' }}>
+                        {formatCurrency(court.hourlyRate)}
+                      </div>
+                    </div>
+                    <div style={{
+                      padding: '16px',
+                      borderRadius: '12px',
+                      background: 'rgba(102, 231, 170, 0.05)',
+                      border: '1px solid rgba(102, 231, 170, 0.1)',
+                      textAlign: 'center'
+                    }}>
+                      <div style={{ fontSize: '12px', color: '#516640', marginBottom: '4px' }}>
+                        Utilización
+                      </div>
+                      <div style={{ fontSize: '18px', fontWeight: 600, color: '#182A01' }}>
+                        {court.utilizationRate}%
+                      </div>
+                    </div>
+                    <div style={{
+                      padding: '16px',
+                      borderRadius: '12px',
+                      background: 'rgba(164, 223, 78, 0.05)',
+                      border: '1px solid rgba(164, 223, 78, 0.1)',
+                      textAlign: 'center'
+                    }}>
+                      <div style={{ fontSize: '12px', color: '#516640', marginBottom: '4px' }}>
+                        Reservas Hoy
+                      </div>
+                      <div style={{ fontSize: '18px', fontWeight: 600, color: '#182A01' }}>
+                        {formatNumber(court.todayBookings)}
+                      </div>
+                    </div>
+                    <div style={{
+                      padding: '16px',
+                      borderRadius: '12px',
+                      background: 'rgba(102, 231, 170, 0.05)',
+                      border: '1px solid rgba(102, 231, 170, 0.1)',
+                      textAlign: 'center'
+                    }}>
+                      <div style={{ fontSize: '12px', color: '#516640', marginBottom: '4px' }}>
+                        Ingresos del Mes
+                      </div>
+                      <div style={{ fontSize: '18px', fontWeight: 600, color: '#182A01' }}>
+                        {formatCurrency(court.monthlyRevenue)}
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Court Details */}
+                  <div style={{
+                    display: 'grid',
+                    gridTemplateColumns: 'repeat(auto-fit, minmax(120px, 1fr))',
+                    gap: '12px',
+                    marginBottom: '24px'
+                  }}>
+                    <div style={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: '8px',
+                      fontSize: '14px',
+                      color: '#516640'
+                    }}>
+                      <Home size={16} />
+                      {court.isIndoor ? 'Interior' : 'Exterior'}
+                    </div>
+                    <div style={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: '8px',
+                      fontSize: '14px',
+                      color: '#516640'
+                    }}>
+                      <Zap size={16} />
+                      {court.hasLighting ? 'Con iluminación' : 'Sin iluminación'}
+                    </div>
+                    <div style={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: '8px',
+                      fontSize: '14px',
+                      color: '#516640'
+                    }}>
+                      <Hash size={16} />
+                      Orden: {court.order}
+                    </div>
+                  </div>
+
+                  {/* Action Buttons */}
+                  <div style={{
+                    display: 'flex',
+                    gap: '12px',
+                    flexWrap: 'wrap'
+                  }}>
+                    <ButtonModern
+                      variant="primary"
+                      size="md"
+                      onClick={() => setEditingCourt(court)}
+                      icon={<Edit size={16} />}
+                      style={{ flex: '1', minWidth: '140px' }}
+                    >
+                      Editar Cancha
+                    </ButtonModern>
+                    <ButtonModern
+                      variant="secondary"
+                      size="md"
+                      icon={<Calendar size={16} />}
+                      style={{ flex: '1', minWidth: '140px' }}
+                    >
+                      Ver Horarios
+                    </ButtonModern>
+                    <ButtonModern
+                      variant="ghost"
+                      size="md"
+                      onClick={() => handleDeleteCourt(court.id)}
+                      disabled={loading}
+                      icon={<Trash2 size={16} />}
+                      style={{ 
+                        color: '#dc2626',
+                        borderColor: '#dc2626'
+                      }}
+                    >
+                      Eliminar
+                    </ButtonModern>
+                  </div>
+                </div>
+              )}
+            </CardModern>
+          ))}
+        </div>
+
+        {/* Empty State */}
+        {mockClub.courts.length === 0 && !isCreating && (
+          <CardModern variant="glass">
+            <div style={{
+              padding: '80px 40px',
+              textAlign: 'center'
+            }}>
+              <div style={{
+                width: '80px',
+                height: '80px',
+                background: 'rgba(164, 223, 78, 0.1)',
+                borderRadius: '24px',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                margin: '0 auto 24px'
+              }}>
+                <MapPin size={40} color="#A4DF4E" />
+              </div>
+              <h3 style={{
+                fontSize: '24px',
+                fontWeight: 600,
+                color: '#182A01',
+                marginBottom: '12px'
+              }}>
+                ¡Configura tu primera cancha!
+              </h3>
+              <p style={{
+                fontSize: '16px',
+                color: '#516640',
+                marginBottom: '32px',
+                maxWidth: '400px',
+                margin: '0 auto 32px'
+              }}>
+                Necesitas al menos una cancha configurada para empezar a recibir reservas en tu club.
+              </p>
+              <ButtonModern
+                variant="primary"
+                size="lg"
+                onClick={() => setIsCreating(true)}
+                icon={<Plus size={20} />}
+              >
+                Crear Primera Cancha
+              </ButtonModern>
+            </div>
+          </CardModern>
+        )}
+      </div>
+    </ModernDashboardLayout>
+  )
+}
+
+// Form Component
+function CourtForm({ 
+  court, 
+  onSubmit, 
+  loading, 
+  submitText,
+  onCancel 
+}: {
+  court?: any
+  onSubmit: (formData: any) => void
+  loading: boolean
+  submitText: string
+  onCancel: () => void
+}) {
+  const [formData, setFormData] = useState({
+    name: court?.name || '',
+    description: court?.description || '',
+    order: court?.order || 1,
+    hourlyRate: court?.hourlyRate || 250,
+    isIndoor: court?.isIndoor || false,
+    hasLighting: court?.hasLighting || true,
+    isActive: court?.isActive !== false
+  })
+
+  const handleSubmit = (e: React.FormEvent) => {
+    e.preventDefault()
+    onSubmit(formData)
+  }
+
+  return (
+    <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '24px' }}>
+      <div style={{
+        display: 'grid',
+        gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))',
+        gap: '20px'
+      }}>
+        <InputModern
+          label="Nombre de la Cancha"
+          value={formData.name}
+          onChange={(e) => setFormData({...formData, name: e.target.value})}
+          placeholder="ej. Cancha Central"
+          required
+        />
+        
+        <InputModern
+          label="Orden de Visualización"
+          type="number"
+          value={formData.order}
+          onChange={(e) => setFormData({...formData, order: parseInt(e.target.value)})}
+          min="1"
+          required
+        />
+
+        <InputModern
+          label="Tarifa por Hora (MXN)"
+          type="number"
+          value={formData.hourlyRate}
+          onChange={(e) => setFormData({...formData, hourlyRate: parseInt(e.target.value)})}
+          min="0"
+          step="50"
+          required
+        />
+      </div>
+
+      <InputModern
+        label="Descripción"
+        value={formData.description}
+        onChange={(e) => setFormData({...formData, description: e.target.value})}
+        placeholder="Descripción opcional de la cancha..."
+      />
+
+      <div style={{
+        display: 'grid',
+        gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))',
+        gap: '20px'
+      }}>
+        <div style={{
+          padding: '16px',
+          borderRadius: '12px',
+          border: '1px solid rgba(164, 223, 78, 0.2)',
+          background: 'rgba(164, 223, 78, 0.05)'
+        }}>
+          <label style={{
+            display: 'flex',
+            alignItems: 'center',
+            gap: '12px',
+            cursor: 'pointer'
+          }}>
+            <input
+              type="checkbox"
+              checked={formData.isIndoor}
+              onChange={(e) => setFormData({...formData, isIndoor: e.target.checked})}
+              style={{ 
+                width: '18px', 
+                height: '18px',
+                accentColor: '#A4DF4E'
+              }}
+            />
+            <div>
+              <div style={{ fontSize: '14px', fontWeight: 600, color: '#182A01' }}>
+                Cancha Cubierta
+              </div>
+              <div style={{ fontSize: '12px', color: '#516640' }}>
+                Ideal para clima adverso
+              </div>
+            </div>
+          </label>
+        </div>
+
+        <div style={{
+          padding: '16px',
+          borderRadius: '12px',
+          border: '1px solid rgba(164, 223, 78, 0.2)',
+          background: 'rgba(164, 223, 78, 0.05)'
+        }}>
+          <label style={{
+            display: 'flex',
+            alignItems: 'center',
+            gap: '12px',
+            cursor: 'pointer'
+          }}>
+            <input
+              type="checkbox"
+              checked={formData.hasLighting}
+              onChange={(e) => setFormData({...formData, hasLighting: e.target.checked})}
+              style={{ 
+                width: '18px', 
+                height: '18px',
+                accentColor: '#A4DF4E'
+              }}
+            />
+            <div>
+              <div style={{ fontSize: '14px', fontWeight: 600, color: '#182A01' }}>
+                Iluminación
+              </div>
+              <div style={{ fontSize: '12px', color: '#516640' }}>
+                Para juegos nocturnos
+              </div>
+            </div>
+          </label>
+        </div>
+
+        <div style={{
+          padding: '16px',
+          borderRadius: '12px',
+          border: '1px solid rgba(164, 223, 78, 0.2)',
+          background: 'rgba(164, 223, 78, 0.05)'
+        }}>
+          <label style={{
+            display: 'flex',
+            alignItems: 'center',
+            gap: '12px',
+            cursor: 'pointer'
+          }}>
+            <input
+              type="checkbox"
+              checked={formData.isActive}
+              onChange={(e) => setFormData({...formData, isActive: e.target.checked})}
+              style={{ 
+                width: '18px', 
+                height: '18px',
+                accentColor: '#A4DF4E'
+              }}
+            />
+            <div>
+              <div style={{ fontSize: '14px', fontWeight: 600, color: '#182A01' }}>
+                Cancha Activa
+              </div>
+              <div style={{ fontSize: '12px', color: '#516640' }}>
+                Disponible para reservas
+              </div>
+            </div>
+          </label>
+        </div>
+      </div>
+
+      <div style={{
+        display: 'flex',
+        gap: '12px',
+        paddingTop: '24px',
+        borderTop: '1px solid rgba(164, 223, 78, 0.1)'
+      }}>
+        <ButtonModern
+          type="submit"
+          variant="primary"
+          size="lg"
+          loading={loading}
+          icon={<Check size={18} />}
+          style={{ flex: 1 }}
+        >
+          {submitText}
+        </ButtonModern>
+        <ButtonModern
+          type="button"
+          variant="secondary"
+          size="lg"
+          onClick={onCancel}
+          disabled={loading}
+          icon={<X size={18} />}
+          style={{ flex: 1 }}
+        >
+          Cancelar
+        </ButtonModern>
+      </div>
+    </form>
+  )
+}

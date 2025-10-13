@@ -1,0 +1,177 @@
+import { prisma } from '@/lib/config/prisma'
+
+/**
+ * Creates booking blocks for tournament matches to prevent regular bookings
+ * during tournament time slots
+ */
+export async function createTournamentCourtBlocks(
+  tournamentId: string,
+  clubId: string
+): Promise<void> {
+  // Get all tournament matches with their court assignments
+  const matches = await prisma.tournamentMatch.findMany({
+    where: {
+      tournamentId: tournamentId,
+      courtId: { not: null },
+      scheduledAt: { not: null }
+    },
+    include: {
+      tournament: {
+        select: {
+          name: true
+        }
+      }
+    }
+  })
+
+  if (matches.length === 0) {
+    console.log('No matches with court assignments found for tournament', tournamentId)
+    return
+  }
+
+  // Create blocking bookings for each match
+  const blockingBookings = []
+  
+  for (const match of matches) {
+    if (!match.courtId || !match.scheduledAt || !match.startTime || !match.endTime) {
+      continue
+    }
+
+    // Calculate start and end times for the booking block
+    const matchDate = match.scheduledAt.toISOString().split('T')[0] // YYYY-MM-DD
+    const startDateTime = new Date(`${matchDate}T${match.startTime}:00`)
+    const endDateTime = new Date(`${matchDate}T${match.endTime}:00`)
+    
+    // Calculate duration in minutes
+    const durationMinutes = Math.round((endDateTime.getTime() - startDateTime.getTime()) / (1000 * 60))
+
+    try {
+      const blockingBooking = await prisma.Booking.create({
+        data: {
+          clubId: clubId,
+          courtId: match.courtId,
+          date: new Date(matchDate), // Convert to proper DateTime
+          startTime: match.startTime,
+          endTime: match.endTime,
+          duration: durationMinutes,
+          playerName: `TORNEO: ${match.Tournament.name}`,
+          playerEmail: 'tournament@system.internal',
+          playerPhone: '0000000000',
+          totalPlayers: 4, // Standard padel
+          price: 0, // No charge for tournament blocks
+          currency: 'MXN',
+          paymentStatus: 'completed', // Mark as completed so it doesn't show in pending payments
+          paymentType: 'ONSITE', // Use correct PaymentType enum
+          type: 'TOURNAMENT', // Use proper BookingType enum
+          status: 'CONFIRMED', // Use correct BookingStatus enum
+          checkedIn: false,
+          splitPaymentEnabled: false,
+          splitPaymentCount: 1,
+          notes: `Bloqueo automático para torneo. Match ID: ${match.id}, Round: ${match.round}, Match #${match.matchNumber}`,
+          createdAt: new Date()}
+      })
+
+      blockingBookings.push(blockingBooking)
+      
+    } catch (error) {
+      console.error(`Error creating blocking booking for match ${match.id}:`, error)
+      // Continue with other matches even if one fails
+    }
+  }
+
+  console.log(`✅ Created ${blockingBookings.length} court blocks for tournament ${tournamentId}`)
+}
+
+/**
+ * Remove tournament court blocks when tournament is cancelled or deleted
+ */
+export async function removeTournamentCourtBlocks(
+  tournamentId: string
+): Promise<void> {
+  try {
+    // Find all blocking bookings for this tournament
+    const blockingBookings = await prisma.Booking.findMany({
+      where: {
+        playerEmail: 'tournament@system.internal',
+        notes: {
+          contains: tournamentId
+        }
+      }
+    })
+
+    // Delete the blocking bookings
+    if (blockingBookings.length > 0) {
+      await prisma.Booking.deleteMany({
+        where: {
+          id: {
+            in: blockingBookings.map(b => b.id)
+          }
+        }
+      })
+
+      console.log(`✅ Removed ${blockingBookings.length} court blocks for tournament ${tournamentId}`)
+    }
+  } catch (error) {
+    console.error(`Error removing court blocks for tournament ${tournamentId}:`, error)
+  }
+}
+
+/**
+ * Check if courts are available for tournament scheduling
+ */
+export async function checkCourtAvailability(
+  clubId: string,
+  startDate: Date,
+  endDate: Date,
+  courtIds: string[]
+): Promise<{
+  available: boolean
+  conflicts: Array<{
+    courtId: string
+    date: string
+    startTime: string
+    endTime: string
+    conflictWith: string
+  }>
+}> {
+  const conflicts = []
+  
+  // Check for existing bookings that would conflict
+  const existingBookings = await prisma.Booking.findMany({
+    where: {
+      clubId: clubId,
+      courtId: {
+        in: courtIds
+      },
+      date: {
+        gte: new Date(startDate.toISOString().split('T')[0]),
+        lte: new Date((endDate || startDate).toISOString().split('T')[0])
+      },
+      status: {
+        in: ['confirmed', 'checked_in', 'completed']
+      }
+    },
+    include: {
+      court: {
+        select: {
+          name: true
+        }
+      }
+    }
+  })
+
+  for (const booking of existingBookings) {
+    conflicts.push({
+      courtId: booking.courtId,
+      date: booking.date,
+      startTime: booking.startTime,
+      endTime: booking.endTime,
+      conflictWith: `Reserva de ${booking.playerName} en cancha ${booking.court?.name}`
+    })
+  }
+
+  return {
+    available: conflicts.length === 0,
+    conflicts
+  }
+}

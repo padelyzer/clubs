@@ -1,0 +1,262 @@
+import { NextRequest, NextResponse } from 'next/server'
+import { prisma } from '@/lib/config/prisma'
+import { z } from 'zod'
+
+const checkAvailabilitySchema = z.object({
+  courtId: z.string(),
+  date: z.string(),
+  startTime: z.string(),
+  endTime: z.string(),
+  excludeBookingId: z.string().optional(),
+  excludeClassId: z.string().optional()
+})
+
+export async function POST(request: NextRequest) {
+  try {
+    const body = await request.json()
+    const { courtId, date, startTime, endTime, excludeBookingId, excludeClassId } = checkAvailabilitySchema.parse(body)
+
+    // Convert date string to Date object for comparison
+    const checkDate = new Date(date)
+    checkDate.setHours(0, 0, 0, 0)
+
+    // Check for conflicting regular bookings
+    const conflictingBookings = await prisma.booking.findMany({
+      where: {
+        courtId,
+        date: checkDate,
+        id: excludeBookingId ? { not: excludeBookingId } : undefined,
+        status: {
+          not: 'CANCELLED'
+        },
+        OR: [
+          {
+            AND: [
+              { startTime: { lte: startTime } },
+              { endTime: { gt: startTime } }
+            ]
+          },
+          {
+            AND: [
+              { startTime: { lt: endTime } },
+              { endTime: { gte: endTime } }
+            ]
+          },
+          {
+            AND: [
+              { startTime: { gte: startTime } },
+              { endTime: { lte: endTime } }
+            ]
+          }
+        ]
+      },
+      include: {
+        Court: true
+      }
+    })
+
+    // Check for conflicting classes
+    const conflictingClasses = await prisma.class.findMany({
+      where: {
+        courtId,
+        date: checkDate,
+        id: excludeClassId ? { not: excludeClassId } : undefined,
+        status: 'SCHEDULED',
+        OR: [
+          {
+            AND: [
+              { startTime: { lte: startTime } },
+              { endTime: { gt: startTime } }
+            ]
+          },
+          {
+            AND: [
+              { startTime: { lt: endTime } },
+              { endTime: { gte: endTime } }
+            ]
+          },
+          {
+            AND: [
+              { startTime: { gte: startTime } },
+              { endTime: { lte: endTime } }
+            ]
+          }
+        ]
+      },
+      include: {
+        Court: true,
+        Instructor: true
+      }
+    })
+
+    const hasConflicts = conflictingBookings.length > 0 || conflictingClasses.length > 0
+    
+    // Find alternative slots if there are conflicts
+    let alternativeSlots = []
+    if (hasConflicts) {
+      alternativeSlots = await findAlternativeSlots(courtId, date, startTime, endTime)
+    }
+
+    return NextResponse.json({
+      available: !hasConflicts,
+      conflicts: {
+        bookings: conflictingBookings.map((b: any) => ({
+          id: b.id,
+          type: 'BOOKING',
+          courtName: b.Court.name,
+          startTime: b.startTime,
+          endTime: b.endTime,
+          playerName: b.playerName
+        })),
+        classes: conflictingClasses.map(c => ({
+          id: c.id,
+          type: 'CLASS',
+          courtName: c.Court.name,
+          startTime: c.startTime,
+          endTime: c.endTime,
+          className: c.name,
+          instructor: c.instructor?.name
+        }))
+      },
+      alternativeSlots,
+      message: hasConflicts 
+        ? `Este horario está ocupado por ${conflictingBookings.length + conflictingClasses.length} reserva(s)/clase(s)` 
+        : 'Horario disponible'
+    })
+
+  } catch (error) {
+    console.error('Error checking availability:', error)
+    return NextResponse.json(
+      { 
+        success: false, 
+        error: error instanceof Error ? error.message : 'Error al verificar disponibilidad' 
+      },
+      { status: 500 }
+    )
+  }
+}
+
+async function findAlternativeSlots(
+  courtId: string, 
+  date: string, 
+  startTime: string, 
+  endTime: string
+): Promise<Array<{ startTime: string; endTime: string; available: boolean }>> {
+  const checkDate = new Date(date)
+  checkDate.setHours(0, 0, 0, 0)
+  
+  // Get duration in minutes
+  const [startHour, startMin] = startTime.split(':').map(Number)
+  const [endHour, endMin] = endTime.split(':').map(Number)
+  const durationMinutes = (endHour * 60 + endMin) - (startHour * 60 + startMin)
+  
+  // Get all bookings and classes for the day
+  const [bookings, classes] = await Promise.all([
+    prisma.booking.findMany({
+      where: {
+        courtId,
+        date: checkDate,
+        status: { not: 'CANCELLED' }
+      },
+      orderBy: { startTime: 'asc' }
+    }),
+    prisma.class.findMany({
+      where: {
+        courtId,
+        date: checkDate,
+        status: 'SCHEDULED'
+      },
+      orderBy: { startTime: 'asc' }
+    })
+  ])
+
+  // Combine and sort all occupied slots
+  const occupiedSlots = [
+    ...bookings.map((b: any) => ({ start: b.startTime, end: b.endTime })),
+    ...classes.map(c => ({ start: c.startTime, end: c.endTime }))
+  ].sort((a, b) => a.start.localeCompare(b.start))
+
+  // Find available slots
+  const alternatives = []
+  const openTime = '07:00'
+  const closeTime = '22:00'
+  
+  // Check slot before requested time
+  const beforeStart = addMinutes(startTime, -durationMinutes)
+  if (beforeStart >= openTime) {
+    const isAvailable = !hasConflict(beforeStart, startTime, occupiedSlots)
+    if (isAvailable) {
+      alternatives.push({
+        startTime: beforeStart,
+        endTime: startTime,
+        available: true
+      })
+    }
+  }
+  
+  // Check slot after requested time
+  const afterEnd = addMinutes(endTime, durationMinutes)
+  if (afterEnd <= closeTime) {
+    const isAvailable = !hasConflict(endTime, afterEnd, occupiedSlots)
+    if (isAvailable) {
+      alternatives.push({
+        startTime: endTime,
+        endTime: afterEnd,
+        available: true
+      })
+    }
+  }
+  
+  // Find next available slot
+  let currentTime = openTime
+  for (const slot of occupiedSlots) {
+    const slotDuration = getMinutesBetween(currentTime, slot.start)
+    if (slotDuration >= durationMinutes) {
+      alternatives.push({
+        startTime: currentTime,
+        endTime: addMinutes(currentTime, durationMinutes),
+        available: true
+      })
+      break
+    }
+    currentTime = slot.end
+  }
+  
+  // Check if there's space after the last occupied slot
+  if (currentTime < closeTime) {
+    const remainingTime = getMinutesBetween(currentTime, closeTime)
+    if (remainingTime >= durationMinutes) {
+      alternatives.push({
+        startTime: currentTime,
+        endTime: addMinutes(currentTime, durationMinutes),
+        available: true
+      })
+    }
+  }
+  
+  return alternatives.slice(0, 3) // Return up to 3 alternatives
+}
+
+function hasConflict(
+  start: string, 
+  end: string, 
+  occupiedSlots: Array<{ start: string; end: string }>
+): boolean {
+  return occupiedSlots.some(slot => 
+    (start < slot.end && end > slot.start)
+  )
+}
+
+function addMinutes(time: string, minutes: number): string {
+  const [hours, mins] = time.split(':').map(Number)
+  const totalMinutes = hours * 60 + mins + minutes
+  const newHours = Math.floor(totalMinutes / 60)
+  const newMins = totalMinutes % 60
+  return `${String(newHours).padStart(2, '0')}:${String(newMins).padStart(2, '0')}`
+}
+
+function getMinutesBetween(start: string, end: string): number {
+  const [startHour, startMin] = start.split(':').map(Number)
+  const [endHour, endMin] = end.split(':').map(Number)
+  return (endHour * 60 + endMin) - (startHour * 60 + startMin)
+}

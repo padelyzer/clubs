@@ -1,0 +1,437 @@
+import { requireSuperAdmin } from '@/lib/auth/actions'
+import { prisma } from '@/lib/config/prisma'
+import { getBusinessMetrics } from '@/lib/admin/data'
+import AnalyticsDashboard from './components/analytics-dashboard'
+
+export const dynamic = 'force-dynamic'
+
+export default async function AdminAnalyticsPage() {
+  await requireSuperAdmin()
+
+  const today = new Date()
+  const startOfCurrentMonth = new Date(today.getFullYear(), today.getMonth(), 1)
+  const startOfLastMonth = new Date(today.getFullYear(), today.getMonth() - 1, 1)
+  const endOfLastMonth = new Date(today.getFullYear(), today.getMonth(), 0)
+  const startOfCurrentYear = new Date(today.getFullYear(), 0, 1)
+  const startOfLastYear = new Date(today.getFullYear() - 1, 0, 1)
+  const endOfLastYear = new Date(today.getFullYear() - 1, 11, 31)
+  const last30Days = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000)
+  const last60Days = new Date(Date.now() - 60 * 24 * 60 * 60 * 1000)
+
+  // SaaS Metrics Calculations
+  const [
+    // Core subscription metrics
+    activeSubscriptions,
+    lastMonthActiveSubscriptions,
+    totalRevenue,
+    currentMonthRevenue,
+    lastMonthRevenue,
+    currentYearRevenue,
+    lastYearRevenue,
+    
+    // Customer metrics
+    totalClubs,
+    activeClubs,
+    newClubsThisMonth,
+    newClubsLastMonth,
+    churnedClubsThisMonth,
+    
+    // Subscription plans data
+    subscriptionsByPlan,
+    monthlyGrowthData,
+    
+    // Usage metrics
+    clubUsageData,
+    bookingTrends,
+    
+    // Revenue by period for cohort analysis
+    revenueByMonths
+  ] = await Promise.all([
+    // Active subscriptions count
+    prisma.clubSubscription.count({
+      where: {
+        status: 'ACTIVE',
+        currentPeriodEnd: { gte: today }
+      }
+    }),
+    
+    // Last month active subscriptions
+    prisma.clubSubscription.count({
+      where: {
+        status: 'ACTIVE',
+        currentPeriodEnd: { gte: startOfLastMonth },
+        currentPeriodStart: { lt: endOfLastMonth }
+      }
+    }),
+    
+    // Total revenue from subscriptions (all time)
+    prisma.subscriptionInvoice.aggregate({
+      where: { status: 'PAID' },
+      _sum: { total: true }
+    }),
+    
+    // Current month subscription revenue
+    prisma.subscriptionInvoice.aggregate({
+      where: {
+        status: 'PAID',
+        paidAt: { gte: startOfCurrentMonth }
+      },
+      _sum: { total: true }
+    }),
+    
+    // Last month subscription revenue
+    prisma.subscriptionInvoice.aggregate({
+      where: {
+        status: 'PAID',
+        paidAt: { gte: startOfLastMonth, lt: startOfCurrentMonth }
+      },
+      _sum: { total: true }
+    }),
+    
+    // Current year revenue
+    prisma.subscriptionInvoice.aggregate({
+      where: {
+        status: 'PAID',
+        paidAt: { gte: startOfCurrentYear }
+      },
+      _sum: { total: true }
+    }),
+    
+    // Last year revenue
+    prisma.subscriptionInvoice.aggregate({
+      where: {
+        status: 'PAID',
+        paidAt: { gte: startOfLastYear, lt: startOfCurrentYear }
+      },
+      _sum: { total: true }
+    }),
+    
+    // Total clubs
+    prisma.club.count({ where: { status: 'APPROVED' } }),
+    
+    // Active clubs (with recent activity)
+    prisma.club.count({
+      where: {
+        status: 'APPROVED',
+        Booking: {
+          some: {
+            createdAt: { gte: last30Days }
+          }
+        }
+      }
+    }),
+    
+    // New clubs this month
+    prisma.club.count({
+      where: {
+        status: 'APPROVED',
+        createdAt: { gte: startOfCurrentMonth }
+      }
+    }),
+    
+    // New clubs last month
+    prisma.club.count({
+      where: {
+        status: 'APPROVED',
+        createdAt: { gte: startOfLastMonth, lt: startOfCurrentMonth }
+      }
+    }),
+    
+    // Churned clubs this month (cancelled subscriptions)
+    prisma.clubSubscription.count({
+      where: {
+        status: 'CANCELLED',
+        cancelledAt: { gte: startOfCurrentMonth }
+      }
+    }),
+    
+    // Subscriptions by plan
+    prisma.clubSubscription.groupBy({
+      by: ['planId'],
+      where: { status: 'ACTIVE' },
+      _count: { _all: true }
+    }),
+    
+    // Monthly growth data (last 12 months)
+    Promise.all(
+      Array.from({ length: 12 }, (_, i) => {
+        const date = new Date(today.getFullYear(), today.getMonth() - i, 1)
+        const nextMonth = new Date(today.getFullYear(), today.getMonth() - i + 1, 1)
+        
+        return Promise.all([
+          // New subscriptions in this month
+          prisma.clubSubscription.count({
+            where: {
+              createdAt: { gte: date, lt: nextMonth }
+            }
+          }),
+          // Churned subscriptions in this month
+          prisma.clubSubscription.count({
+            where: {
+              status: 'CANCELLED',
+              cancelledAt: { gte: date, lt: nextMonth }
+            }
+          }),
+          // Revenue in this month
+          prisma.subscriptionInvoice.aggregate({
+            where: {
+              status: 'PAID',
+              paidAt: { gte: date, lt: nextMonth }
+            },
+            _sum: { total: true }
+          }),
+          // Active subscriptions at end of month
+          prisma.clubSubscription.count({
+            where: {
+              status: 'ACTIVE',
+              createdAt: { lt: nextMonth },
+              OR: [
+                { cancelledAt: null },
+                { cancelledAt: { gte: nextMonth } }
+              ]
+            }
+          })
+        ])
+      })
+    ).then(results => results.reverse()),
+    
+    // Club usage data (top performing clubs)
+    prisma.club.findMany({
+      where: { status: 'APPROVED' },
+      select: {
+        id: true,
+        name: true,
+        city: true,
+        state: true,
+        createdAt: true,
+        subscription: {
+          select: {
+            plan: {
+              select: {
+                displayName: true,
+                price: true
+              }
+            },
+            status: true
+          }
+        },
+        Booking: {
+          where: { createdAt: { gte: last30Days } },
+          select: {
+            price: true,
+            paymentStatus: true,
+            createdAt: true
+          }
+        },
+        _count: {
+          select: {
+            User: true,
+            Court: true,
+            Booking: true
+          }
+        }
+      },
+      take: 20,
+      orderBy: {
+        Booking: {
+          _count: 'desc'
+        }
+      }
+    }),
+    
+    // Booking trends (last 30 days)
+    Promise.all(
+      Array.from({ length: 30 }, (_, i) => {
+        const date = new Date(Date.now() - i * 24 * 60 * 60 * 1000)
+        date.setHours(0, 0, 0, 0)
+        const nextDate = new Date(date)
+        nextDate.setDate(nextDate.getDate() + 1)
+        
+        return prisma.booking.count({
+          where: {
+            createdAt: { gte: date, lt: nextDate }
+          }
+        })
+      })
+    ).then(results => results.reverse()),
+    
+    // Revenue by months for trend analysis (last 12 months)
+    Promise.all(
+      Array.from({ length: 12 }, (_, i) => {
+        const date = new Date(today.getFullYear(), today.getMonth() - i, 1)
+        const nextMonth = new Date(today.getFullYear(), today.getMonth() - i + 1, 1)
+        
+        return Promise.all([
+          // Subscription revenue
+          prisma.subscriptionInvoice.aggregate({
+            where: {
+              status: 'PAID',
+              paidAt: { gte: date, lt: nextMonth }
+            },
+            _sum: { total: true }
+          }),
+          // Booking revenue
+          prisma.booking.aggregate({
+            where: {
+              paymentStatus: 'completed',
+              createdAt: { gte: date, lt: nextMonth }
+            },
+            _sum: { price: true }
+          })
+        ])
+      })
+    ).then(results => results.reverse())
+  ])
+
+  // Get business metrics configuration
+  const businessMetrics = await getBusinessMetrics()
+  
+  // Calculate SaaS Metrics
+  const currentMRR = (currentMonthRevenue._sum.total || 0) / 100
+  const lastMRR = (lastMonthRevenue._sum.total || 0) / 100
+  const currentARR = currentMRR * 12
+  
+  // MRR Growth Rate
+  const mrrGrowthRate = lastMRR > 0 ? ((currentMRR - lastMRR) / lastMRR) * 100 : 0
+  
+  // Customer metrics
+  const customerGrowthRate = newClubsLastMonth > 0 
+    ? ((newClubsThisMonth - newClubsLastMonth) / newClubsLastMonth) * 100 
+    : 0
+  
+  // Churn Rate (monthly)
+  const churnRate = activeSubscriptions > 0 
+    ? (churnedClubsThisMonth / activeSubscriptions) * 100 
+    : 0
+  
+  // ARPU (Average Revenue Per User)
+  const arpu = activeSubscriptions > 0 ? currentMRR / activeSubscriptions : 0
+  
+  // LTV estimation (simplified: ARPU / churn rate * 12 months)
+  const ltv = churnRate > 0 ? (arpu / (churnRate / 100)) : arpu * 24
+  
+  // CAC estimation (using configurable multiplier)
+  const cac = newClubsThisMonth > 0 ? (currentMRR * businessMetrics.cacMultiplier) / newClubsThisMonth : 0
+
+  // Process data for components
+  const analyticsData = {
+    // Key SaaS Metrics
+    saasMetrics: {
+      mrr: currentMRR,
+      mrrGrowth: mrrGrowthRate,
+      arr: currentARR,
+      churnRate,
+      ltv,
+      cac,
+      arpu,
+      activeSubscriptions,
+      totalRevenue: (totalRevenue._sum.total || 0) / 100
+    },
+    
+    // Growth Metrics
+    growth: {
+      newCustomers: newClubsThisMonth,
+      customerGrowthRate,
+      churnedCustomers: churnedClubsThisMonth,
+      netGrowth: newClubsThisMonth - churnedClubsThisMonth,
+      revenueGrowth: lastYearRevenue._sum.total > 0 
+        ? (((currentYearRevenue._sum.total || 0) - (lastYearRevenue._sum.total || 0)) / (lastYearRevenue._sum.total || 1)) * 100 
+        : 0
+    },
+    
+    // Monthly trends
+    monthlyData: monthlyGrowthData.map((month, index) => {
+      const date = new Date(today.getFullYear(), today.getMonth() - 11 + index, 1)
+      const [newSubs, churnedSubs, revenue, activeSubs] = month
+      return {
+        month: date.toLocaleDateString('es-MX', { month: 'short', year: '2-digit' }),
+        newSubscriptions: newSubs,
+        churnedSubscriptions: churnedSubs,
+        revenue: (revenue._sum.total || 0) / 100,
+        activeSubscriptions: activeSubs,
+        netGrowth: newSubs - churnedSubs
+      }
+    }),
+    
+    // Usage Analytics
+    usage: {
+      totalClubs,
+      activeClubs,
+      utilizationRate: totalClubs > 0 ? (activeClubs / totalClubs) * 100 : 0,
+      topClubs: clubUsageData.map(club => ({
+        id: club.id,
+        name: club.name,
+        location: `${club.city}, ${club.state}`,
+        planName: club.subscription?.plan?.displayName || 'No Plan',
+        monthlyRevenue: club.Booking
+          .filter((b: any) => b.paymentStatus === 'completed')
+          .reduce((sum: number, b) => sum + b.price, 0) / 100,
+        bookingsCount: club.Booking.length,
+        usersCount: club._count.User,
+        courtsCount: club._count.Court,
+        subscriptionStatus: club.subscription?.status || 'INACTIVE'
+      })),
+      dailyBookings: bookingTrends
+    },
+    
+    // Revenue Analysis
+    revenueAnalysis: revenueByMonths.map((month, index) => {
+      const date = new Date(today.getFullYear(), today.getMonth() - 11 + index, 1)
+      const [subscriptionRev, bookingRev] = month
+      return {
+        month: date.toLocaleDateString('es-MX', { month: 'short' }),
+        subscriptionRevenue: (subscriptionRev._sum.total || 0) / 100,
+        bookingRevenue: (bookingRev._sum.price || 0) / 100,
+        totalRevenue: ((subscriptionRev._sum.total || 0) + (bookingRev._sum.price || 0)) / 100
+      }
+    }),
+    
+    // Plan distribution
+    planDistribution: await Promise.all(
+      subscriptionsByPlan.map(async (planGroup) => {
+        const plan = await prisma.subscriptionPlan.findUnique({
+          where: { id: planGroup.planId }
+        })
+        return {
+          planName: plan?.displayName || 'Unknown',
+          count: planGroup._count._all,
+          revenue: (plan?.price || 0) * planGroup._count._all / 100
+        }
+      })
+    ),
+    
+    // Insights data for recommendations
+    insights: {
+      highChurn: churnRate > businessMetrics.churnThreshold,
+      strongGrowth: mrrGrowthRate > businessMetrics.growthTarget,
+      lowUtilization: (activeClubs / totalClubs) < 0.7,
+      healthyLTV: ltv > (cac * businessMetrics.ltcMultiplier),
+      trends: {
+        mrrTrend: mrrGrowthRate > 0 ? 'up' : 'down',
+        customerTrend: customerGrowthRate > 0 ? 'up' : 'down',
+        revenueTrend: currentMRR > lastMRR ? 'up' : 'down'
+      },
+      businessMetrics // Pass metrics to the dashboard for display
+    }
+  }
+
+  return (
+    <div className="space-y-6">
+      <div className="flex items-center justify-between">
+        <div>
+          <h1 className="text-3xl font-bold bg-gradient-to-r from-blue-600 to-purple-600 bg-clip-text text-transparent">
+            SaaS Analytics Dashboard
+          </h1>
+          <p className="text-gray-600 mt-2">
+            Métricas clave del negocio y análisis de rendimiento
+          </p>
+        </div>
+        <div className="text-sm text-gray-500">
+          Última actualización: {new Date().toLocaleString('es-MX')}
+        </div>
+      </div>
+
+      <AnalyticsDashboard data={analyticsData} />
+    </div>
+  )
+}

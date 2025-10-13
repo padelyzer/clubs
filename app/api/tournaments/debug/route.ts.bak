@@ -1,0 +1,109 @@
+import { NextRequest, NextResponse } from 'next/server'
+import { requireAuthAPI } from '@/lib/auth/actions'
+import { prisma } from '@/lib/config/prisma'
+
+/**
+ * Endpoint temporal de debug para torneos
+ * TODO: Eliminar cuando /api/tournaments/route.ts esté completamente funcional
+ * 
+ * Este endpoint NO usa middleware de módulos para facilitar debugging
+ */
+export async function GET(request: NextRequest) {
+  try {
+    console.log('[DEBUG] Tournaments debug endpoint called')
+    
+    // Solo autenticación básica, sin middleware de módulos
+    const session = await requireAuthAPI()
+    
+    if (!session) {
+      console.log('[DEBUG] No session found')
+      return NextResponse.json(
+        { 
+          success: false, 
+          error: 'No autorizado',
+          debug: {
+            endpoint: '/api/tournaments/debug',
+            issue: 'Sesión no válida o expirada',
+            suggestion: 'Verifica que estés autenticado correctamente'
+          }
+        },
+        { status: 401 }
+      )
+    }
+
+    console.log('[DEBUG] Session found:', {
+      userId: session.userId,
+      clubId: session.clubId,
+      role: session.role
+    })
+
+    if (!session.clubId) {
+      return NextResponse.json(
+        { 
+          success: false, 
+          error: 'Club no encontrado',
+          debug: {
+            endpoint: '/api/tournaments/debug',
+            issue: 'Usuario sin club asociado',
+            sessionData: {
+              userId: session.userId,
+              clubId: session.clubId,
+              role: session.role
+            }
+          }
+        },
+        { status: 400 }
+      )
+    }
+
+    // Obtener torneos básicos sin validaciones complejas
+    const tournaments = await prisma.Tournament.findMany({
+      where: {
+        clubId: session.clubId
+      },
+      include: {
+        _count: {
+          select: {
+            TournamentRegistration: true,
+            TournamentMatch: true
+          }
+        }
+      },
+      orderBy: {
+        createdAt: 'desc'
+      },
+      take: 20 // Limitar para debug
+    })
+
+    console.log('[DEBUG] Tournaments found:', tournaments.length)
+
+    return NextResponse.json({
+      success: true,
+      tournaments,
+      debug: {
+        endpoint: '/api/tournaments/debug',
+        clubId: session.clubId,
+        tournamentsCount: tournaments.length,
+        note: 'Este es un endpoint temporal de debug',
+        nextStep: 'Migrar a /api/tournaments cuando esté listo'
+      }
+    })
+
+  } catch (error) {
+    console.error('[DEBUG] Error in tournaments debug:', error)
+    
+    return NextResponse.json(
+      { 
+        success: false, 
+        error: 'Error en endpoint de debug',
+        debug: {
+          endpoint: '/api/tournaments/debug',
+          errorType: error?.constructor?.name || 'Unknown',
+          errorMessage: error?.message || 'Error desconocido',
+          stack: process.env.NODE_ENV === 'development' ? error?.stack : undefined
+        }
+      },
+      { status: 500 }
+    )
+  }
+}

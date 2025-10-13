@@ -1,0 +1,60 @@
+import { requireAuth } from '@/lib/auth/actions'
+import { prisma } from '@/lib/config/prisma'
+import { SetupWizard } from './setup-wizard'
+import { redirect } from 'next/navigation'
+
+export const dynamic = 'force-dynamic'
+
+export default async function SetupPage() {
+  const session = await requireAuth()
+
+  const club = await prisma.Club.findUnique({
+    where: { id: session.clubId },
+    include: {
+      courts: { orderBy: { order: 'asc' } },
+      schedules: { orderBy: { dayOfWeek: 'asc' } },
+      pricing: true
+    }
+  })
+
+  if (!club) {
+    redirect('/login')
+  }
+
+  // Check setup status
+  const setupStatus = {
+    courts: club.courts.length > 0,
+    schedules: club.schedules.length > 0,
+    pricing: club.pricing.length > 0
+  }
+
+  const isComplete = Object.values(setupStatus).every(Boolean)
+
+  // If already complete, redirect to dashboard
+  if (isComplete && club.active) {
+    redirect('/dashboard')
+  }
+
+  return (
+    <div className="max-w-4xl mx-auto">
+      <div className="animate-fade-in-up">
+        <div className="text-center mb-8">
+          <span className="text-6xl mb-4 block font-bold text-green-600">SETUP</span>
+          <h1 className="text-4xl font-bold text-gray-900 mb-4">
+            Configuración Inicial
+          </h1>
+          <p className="text-xl text-gray-600 max-w-2xl mx-auto">
+            Solo toma 5 minutos configurar tu club. Una vez completado, 
+            empezarás a recibir reservas inmediatamente.
+          </p>
+        </div>
+
+        <SetupWizard 
+          club={club} 
+          setupStatus={setupStatus}
+          isComplete={isComplete}
+        />
+      </div>
+    </div>
+  )
+}

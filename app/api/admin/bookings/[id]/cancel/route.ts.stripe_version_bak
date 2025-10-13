@@ -1,0 +1,65 @@
+import { NextRequest, NextResponse } from 'next/server'
+import { requireSuperAdmin } from '@/lib/auth/actions'
+import { prisma } from '@/lib/config/prisma'
+
+export async function POST(
+  request: NextRequest,
+  { params }: { params: Promise<{ id: string }> }
+) {
+  try {
+    const session = await requireSuperAdmin()
+    const { reason } = await request.json()
+    const paramData = await params
+    const { id } = paramData
+
+    const booking = await prisma.booking.findUnique({
+      where: { id },
+      include: {
+        Club: true,
+        Court: true
+      }
+    })
+    
+    if (!booking) {
+      return NextResponse.json(
+        { error: 'Reserva no encontrada' },
+        { status: 404 }
+      )
+    }
+    
+    if (!['PENDING', 'CONFIRMED'].includes(booking.status)) {
+      return NextResponse.json(
+        { error: 'Solo se pueden cancelar reservas pendientes o confirmadas' },
+        { status: 400 }
+      )
+    }
+    
+    const updatedBooking = await prisma.booking.update({
+      where: { id },
+      data: {
+        status: 'CANCELLED',
+        cancelledAt: new Date(),
+        notes: reason ? `Cancelada por admin: ${reason}` : 'Cancelada por administrador'
+      }
+    })
+    
+    // Si el pago estaba completado, procesar reembolso
+    if (booking.paymentStatus === 'completed') {
+      // TODO: Implementar lógica de reembolso con Stripe
+    }
+    
+    // TODO: Enviar notificación al cliente sobre la cancelación
+    
+    return NextResponse.json({
+      success: true,
+      booking: updatedBooking
+    })
+    
+  } catch (error) {
+    console.error('Error cancelling booking:', error)
+    return NextResponse.json(
+      { error: 'Error interno del servidor' },
+      { status: 500 }
+    )
+  }
+}

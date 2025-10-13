@@ -1,0 +1,407 @@
+import { prisma } from '@/lib/config/prisma'
+
+/**
+ * Opt-in/Opt-out system for WhatsApp notifications
+ * Handles user consent and preferences for different types of notifications
+ */
+
+// We'll need to add these fields to the database schema in the future
+// For now, we'll use a simple approach with user preferences
+
+export interface NotificationPreferences {
+  bookingConfirmations: boolean
+  paymentReminders: boolean
+  bookingReminders: boolean
+  promotionalMessages: boolean
+  generalUpdates: boolean
+  optInDate?: Date
+  optOutDate?: Date
+}
+
+export interface OptInRequest {
+  phoneNumber: string
+  playerName: string
+  email?: string
+  preferences: Partial<NotificationPreferences>
+  source: 'booking' | 'website' | 'manual' | 'widget'
+  clubId?: string
+}
+
+/**
+ * Record user opt-in for notifications
+ */
+export async function recordOptIn(request: OptInRequest): Promise<boolean> {
+  try {
+    const existingConsent = await prisma.whatsAppConsent.findUnique({
+      where: { phoneNumber: request.phoneNumber }
+    })
+
+    if (existingConsent) {
+      // Update existing consent
+      await prisma.whatsAppConsent.update({
+        where: { phoneNumber: request.phoneNumber },
+        data: {
+          ...request.preferences,
+          optOutDate: null,
+          optOutReason: null,
+          optOutSource: null,
+          optInDate: new Date(),
+          optInSource: request.source,
+          clubId: request.clubId || existingConsent.clubId
+        }
+      })
+    } else {
+      // Create new consent record
+      await prisma.whatsAppConsent.create({
+        data: {
+          phoneNumber: request.phoneNumber,
+          playerName: request.playerName,
+          email: request.email,
+          clubId: request.clubId,
+          optInSource: request.source,
+          bookingConfirmations: request.preferences.bookingConfirmations ?? true,
+          paymentReminders: request.preferences.paymentReminders ?? true,
+          bookingReminders: request.preferences.bookingReminders ?? true,
+          promotionalMessages: request.preferences.promotionalMessages ?? false,
+          generalUpdates: request.preferences.generalUpdates ?? false
+        }
+      })
+    }
+    
+    return true
+  } catch (error) {
+    console.error('[Opt-in] Error recording opt-in:', error)
+    return false
+  }
+}
+
+/**
+ * Record user opt-out from notifications
+ */
+export async function recordOptOut(phoneNumber: string, reason?: string, source: string = 'manual'): Promise<boolean> {
+  try {
+    const consent = await prisma.whatsAppConsent.findUnique({
+      where: { phoneNumber }
+    })
+
+    if (consent) {
+      await prisma.whatsAppConsent.update({
+        where: { phoneNumber },
+        data: {
+          // Disable all preferences
+          bookingConfirmations: false,
+          paymentReminders: false,
+          bookingReminders: false,
+          promotionalMessages: false,
+          generalUpdates: false,
+          // Record opt-out details
+          optOutDate: new Date(),
+          optOutReason: reason,
+          optOutSource: source
+        }
+      })
+      return true
+    }
+    
+    // Even if no consent record exists, create one to block future messages
+    await prisma.whatsAppConsent.create({
+      data: {
+        phoneNumber,
+        playerName: 'Opt-out User',
+        optInSource: 'never',
+        bookingConfirmations: false,
+        paymentReminders: false,
+        bookingReminders: false,
+        promotionalMessages: false,
+        generalUpdates: false,
+        optOutDate: new Date(),
+        optOutReason: reason,
+        optOutSource: source
+      }
+    })
+    
+    return true
+  } catch (error) {
+    console.error('[Opt-out] Error recording opt-out:', error)
+    return false
+  }
+}
+
+/**
+ * Check if user has opted in for specific notification type
+ */
+export async function hasOptedIn(phoneNumber: string, notificationType: keyof NotificationPreferences): Promise<boolean> {
+  try {
+    const consent = await prisma.whatsAppConsent.findUnique({
+      where: { phoneNumber }
+    })
+
+    if (!consent) {
+      // No consent record means no opt-in for promotional, but allow essential notifications
+      if (notificationType === 'promotionalMessages' || notificationType === 'generalUpdates') {
+        return false
+      }
+      // For essential notifications (booking, payment), assume implicit consent from booking
+      return true
+    }
+
+    // Check if user has opted out globally
+    if (consent.optOutDate) {
+      return false
+    }
+
+    // Check specific preference
+    return consent[notificationType] === true
+  } catch (error) {
+    console.error('[Opt-in] Error checking opt-in status:', error)
+    return false
+  }
+}
+
+/**
+ * Get user's notification preferences
+ */
+export async function getUserPreferences(phoneNumber: string): Promise<NotificationPreferences | null> {
+  try {
+    const consent = await prisma.whatsAppConsent.findUnique({
+      where: { phoneNumber }
+    })
+
+    if (!consent) {
+      // Return default preferences for unregistered users
+      return {
+        bookingConfirmations: true,
+        paymentReminders: true,
+        bookingReminders: true,
+        promotionalMessages: false,
+        generalUpdates: false
+      }
+    }
+
+    return {
+      bookingConfirmations: consent.bookingConfirmations,
+      paymentReminders: consent.paymentReminders,
+      bookingReminders: consent.bookingReminders,
+      promotionalMessages: consent.promotionalMessages,
+      generalUpdates: consent.generalUpdates,
+      optInDate: consent.optInDate,
+      optOutDate: consent.optOutDate || undefined
+    }
+  } catch (error) {
+    console.error('[Opt-in] Error getting user preferences:', error)
+    return null
+  }
+}
+
+/**
+ * Update user's notification preferences
+ */
+export async function updateUserPreferences(
+  phoneNumber: string, 
+  preferences: Partial<NotificationPreferences>
+): Promise<boolean> {
+  try {
+    const consent = await prisma.whatsAppConsent.findUnique({
+      where: { phoneNumber }
+    })
+
+    if (!consent) {
+      // Create new consent record with provided preferences
+      await prisma.whatsAppConsent.create({
+        data: {
+          phoneNumber,
+          playerName: 'User',
+          optInSource: 'preferences',
+          bookingConfirmations: preferences.bookingConfirmations ?? true,
+          paymentReminders: preferences.paymentReminders ?? true,
+          bookingReminders: preferences.bookingReminders ?? true,
+          promotionalMessages: preferences.promotionalMessages ?? false,
+          generalUpdates: preferences.generalUpdates ?? false
+        }
+      })
+      return true
+    }
+
+    // Update existing consent
+    await prisma.whatsAppConsent.update({
+      where: { phoneNumber },
+      data: {
+        ...preferences,
+        // If re-enabling any preference, clear opt-out
+        ...(Object.values(preferences).some(v => v === true) && {
+          optOutDate: null,
+          optOutReason: null,
+          optOutSource: null
+        })
+      }
+    })
+    
+    return true
+  } catch (error) {
+    console.error('[Opt-in] Error updating preferences:', error)
+    return false
+  }
+}
+
+/**
+ * Generate opt-out link for messages
+ */
+export function generateOptOutLink(phoneNumber: string, messageType?: string): string {
+  const baseUrl = process.env.NEXT_PUBLIC_APP_URL || 'https://padelyzer.com'
+  const encodedPhone = encodeURIComponent(phoneNumber)
+  const params = new URLSearchParams({
+    phone: encodedPhone,
+    ...(messageType && { type: messageType })
+  })
+  
+  return `${baseUrl}/opt-out?${params.toString()}`
+}
+
+/**
+ * Generate privacy policy link for consent forms
+ */
+export function getPrivacyPolicyLink(): string {
+  const baseUrl = process.env.NEXT_PUBLIC_APP_URL || 'https://padelyzer.com'
+  return `${baseUrl}/privacy-policy`
+}
+
+/**
+ * Get consent text for booking forms
+ */
+export function getBookingConsentText(): string {
+  return `Al realizar esta reserva, acepto recibir notificaciones por WhatsApp sobre mi reserva, pagos y recordatorios. Puedo cancelar en cualquier momento respondiendo "BAJA" a cualquier mensaje.`
+}
+
+/**
+ * Get promotional consent text (separate from booking consent)
+ */
+export function getPromotionalConsentText(): string {
+  return `Acepto recibir promociones y ofertas especiales por WhatsApp. Esta autorización es opcional y puedo cancelarla en cualquier momento.`
+}
+
+/**
+ * Validate phone number for WhatsApp
+ */
+export function isValidWhatsAppNumber(phoneNumber: string): boolean {
+  // Remove all non-digits
+  const cleaned = phoneNumber.replace(/\D/g, '')
+  
+  // Mexican phone numbers should be 10 digits
+  if (cleaned.length === 10) {
+    return true
+  }
+  
+  // Also accept international format
+  if (cleaned.length === 12 && cleaned.startsWith('52')) {
+    return true
+  }
+  
+  return false
+}
+
+/**
+ * Check if user is in opt-out list (global block list)
+ */
+export async function isOptedOut(phoneNumber: string): Promise<boolean> {
+  try {
+    const consent = await prisma.whatsAppConsent.findUnique({
+      where: { phoneNumber }
+    })
+    
+    // If user has opt-out date, they're opted out
+    if (consent?.optOutDate) {
+      return true
+    }
+    
+    // If all preferences are false, consider them opted out
+    if (consent && 
+        !consent.bookingConfirmations && 
+        !consent.paymentReminders && 
+        !consent.bookingReminders && 
+        !consent.promotionalMessages && 
+        !consent.generalUpdates) {
+      return true
+    }
+    
+    return false
+  } catch (error) {
+    console.error('[Opt-out] Error checking opt-out status:', error)
+    return true // Err on the side of caution
+  }
+}
+
+/**
+ * Process opt-out request from WhatsApp message
+ */
+export async function processWhatsAppOptOut(phoneNumber: string, messageBody: string): Promise<boolean> {
+  try {
+    const lowerMessage = messageBody.toLowerCase().trim()
+    
+    // Check for opt-out keywords
+    const optOutKeywords = [
+      'stop', 'baja', 'cancelar', 'unsubscribe', 
+      'no más', 'no mas', 'opt out', 'salir', 'alto'
+    ]
+    
+    const isOptOutRequest = optOutKeywords.some(keyword => lowerMessage.includes(keyword))
+    
+    if (isOptOutRequest) {
+      const success = await recordOptOut(phoneNumber, `WhatsApp opt-out: "${messageBody}"`)
+      
+      if (success) {
+        // Log successful opt-out but don't send confirmation (to respect opt-out)
+        console.log(`[Opt-out] Successfully processed opt-out for ${phoneNumber}`)
+        return true
+      }
+    }
+    
+    return false
+  } catch (error) {
+    console.error('[Opt-out] Error processing WhatsApp opt-out:', error)
+    return false
+  }
+}
+
+/**
+ * Get opt-in statistics for club dashboard
+ */
+export async function getOptInStats(clubId: string): Promise<{
+  totalCustomers: number
+  optedInCustomers: number
+  optedOutCustomers: number
+  promotionalOptIns: number
+}> {
+  try {
+    // Get all consents for this club
+    const consents = await prisma.whatsAppConsent.findMany({
+      where: { clubId }
+    })
+    
+    // Count unique customers from bookings
+    const uniqueCustomers = await prisma.Booking.groupBy({
+      by: ['playerPhone'],
+      where: { clubId },
+      _count: { playerPhone: true }
+    })
+    
+    const optedOutCount = consents.filter(c => c.optOutDate !== null).length
+    const promotionalCount = consents.filter(c => c.promotionalMessages && !c.optOutDate).length
+    const activeOptIns = consents.filter(c => !c.optOutDate && 
+      (c.bookingConfirmations || c.paymentReminders || c.bookingReminders)).length
+    
+    return {
+      totalCustomers: uniqueCustomers.length,
+      optedInCustomers: activeOptIns,
+      optedOutCustomers: optedOutCount,
+      promotionalOptIns: promotionalCount
+    }
+  } catch (error) {
+    console.error('[Opt-in] Error getting stats:', error)
+    return {
+      totalCustomers: 0,
+      optedInCustomers: 0,
+      optedOutCustomers: 0,
+      promotionalOptIns: 0
+    }
+  }
+}

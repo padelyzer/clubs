@@ -1,0 +1,154 @@
+import { NextRequest, NextResponse } from 'next/server'
+import { prisma } from '@/lib/config/prisma'
+
+// GET - Get public tournament information
+export async function GET(
+  request: NextRequest,
+  { params }: { params: Promise<{ id: string }> }
+) {
+  try {
+    const paramData = await params
+    const { id: tournamentId } = paramData
+    
+    // Get tournament with public information only
+    const tournament = await prisma.Tournament.findUnique({
+      where: { 
+        id: tournamentId,
+        // Only show public tournaments (not drafts)
+        status: {
+          not: 'DRAFT'
+        }
+      },
+      include: {
+        club: {
+          select: {
+            id: true,
+            name: true,
+            email: true,
+            phone: true,
+            address: true,
+            city: true,
+            website: true,
+            logo: true
+          }
+        }
+      }
+    })
+    
+    if (!tournament) {
+      return NextResponse.json(
+        { 
+          success: false, 
+          error: 'Torneo no encontrado o no disponible públicamente' 
+        },
+        { status: 404 }
+      )
+    }
+    
+    // Get public registrations (only confirmed, hide sensitive data)
+    const registrations = await prisma.tournamentRegistration.findMany({
+      where: {
+        tournamentId,
+        confirmed: true
+      },
+      select: {
+        id: true,
+        player1Name: true,
+        player2Name: true,
+        checkedIn: true,
+        createdAt: true
+      },
+      orderBy: {
+        createdAt: 'asc'
+      }
+    })
+    
+    // Get matches (public information)
+    const matches = await prisma.tournamentMatch.findMany({
+      where: {
+        tournamentId
+      },
+      select: {
+        id: true,
+        round: true,
+        matchNumber: true,
+        player1Name: true,
+        player2Name: true,
+        status: true,
+        winner: true,
+        score: true,
+        scheduledAt: true,
+        court: {
+          select: {
+            name: true
+          }
+        }
+      },
+      orderBy: [
+        { round: 'asc' },
+        { matchNumber: 'asc' }
+      ]
+    })
+    
+    // Calculate tournament statistics
+    const stats = {
+      totalRegistrations: registrations.length,
+      checkedInPlayers: registrations.filter(r => r.checkedIn).length,
+      completedMatches: matches.filter(m => m.status === 'COMPLETED').length,
+      totalMatches: matches.length,
+      currentRound: getCurrentRound(matches),
+      remainingSpots: Math.max(0, tournament.maxPlayers - registrations.length)
+    }
+    
+    return NextResponse.json({
+      success: true,
+      tournament: {
+        id: tournament.id,
+        name: tournament.name,
+        description: tournament.description,
+        type: tournament.type,
+        status: tournament.status,
+        startDate: tournament.startDate,
+        endDate: tournament.endDate,
+        registrationStart: tournament.registrationStart,
+        registrationEnd: tournament.registrationEnd,
+        maxPlayers: tournament.maxPlayers,
+        registrationFee: tournament.registrationFee,
+        currency: tournament.currency,
+        prizePool: tournament.prizePool,
+        rules: tournament.rules,
+        club: tournament.club,
+        createdAt: tournament.createdAt,
+        stats
+      },
+      registrations,
+      matches
+    })
+    
+  } catch (error) {
+    console.error('Error fetching public tournament:', error)
+    return NextResponse.json(
+      { success: false, error: 'Error al cargar información del torneo' },
+      { status: 500 }
+    )
+  }
+}
+
+function getCurrentRound(matches: any[]): string {
+  const inProgressMatches = matches.filter(m => m.status === 'IN_PROGRESS')
+  if (inProgressMatches.length > 0) {
+    return inProgressMatches[0].round
+  }
+  
+  const scheduledMatches = matches.filter(m => m.status === 'SCHEDULED')
+  if (scheduledMatches.length > 0) {
+    return scheduledMatches[0].round
+  }
+  
+  const completedMatches = matches.filter(m => m.status === 'COMPLETED')
+  if (completedMatches.length === matches.length && matches.length > 0) {
+    return 'Finalizado'
+  }
+  
+  return 'Por comenzar'
+}

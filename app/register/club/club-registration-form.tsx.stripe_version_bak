@@ -1,0 +1,453 @@
+'use client'
+
+import { useState } from 'react'
+import { useRouter } from 'next/navigation'
+import { registerClub } from './actions'
+import { useFormValidation, ValidationRules, CommonRules } from '@/hooks/use-form-validation'
+import { notify } from '@/components/ui/notification'
+import { Loader2, CheckCircle, AlertCircle } from 'lucide-react'
+
+const validationRules: ValidationRules = {
+  clubName: {
+    required: true,
+    minLength: 3,
+    message: 'El nombre del club debe tener al menos 3 caracteres'
+  },
+  email: CommonRules.email,
+  phone: CommonRules.phone,
+  address: {
+    required: true,
+    minLength: 10,
+    message: 'La dirección debe ser completa'
+  },
+  city: CommonRules.required,
+  ownerName: {
+    required: true,
+    minLength: 3,
+    message: 'El nombre debe tener al menos 3 caracteres'
+  },
+  ownerEmail: CommonRules.email,
+  password: CommonRules.password,
+  confirmPassword: {
+    required: true,
+    custom: (value) => null // Will validate in handleSubmit
+  }
+}
+
+export function ClubRegistrationForm() {
+  const [loading, setLoading] = useState(false)
+  const [completedSections, setCompletedSections] = useState<string[]>([])
+  const router = useRouter()
+  
+  const {
+    errors,
+    touched,
+    validateForm,
+    handleFieldChange,
+    handleFieldBlur,
+    getFieldError
+  } = useFormValidation({ 
+    rules: validationRules,
+    mode: 'onBlur'
+  })
+
+  const [formData, setFormData] = useState({
+    // Club Info
+    clubName: '',
+    email: '',
+    phone: '',
+    address: '',
+    city: 'Puebla',
+    website: '',
+    description: '',
+    
+    // Owner Info
+    ownerName: '',
+    ownerEmail: '',
+    password: '',
+    confirmPassword: ''
+  })
+
+  function updateField(field: string, value: string) {
+    setFormData(prev => ({ ...prev, [field]: value }))
+    handleFieldChange(field, value)
+    
+    // Update completed sections
+    if (field === 'description' || field === 'website') {
+      const clubFields = ['clubName', 'email', 'phone', 'address', 'city']
+      const allClubFieldsFilled = clubFields.every(f => formData[f as keyof typeof formData])
+      if (allClubFieldsFilled && !completedSections.includes('club')) {
+        setCompletedSections(prev => [...prev, 'club'])
+      }
+    }
+    
+    if (field === 'confirmPassword') {
+      const ownerFields = ['ownerName', 'ownerEmail', 'password', 'confirmPassword']
+      const allOwnerFieldsFilled = ownerFields.every(f => formData[f as keyof typeof formData])
+      if (allOwnerFieldsFilled && !completedSections.includes('owner')) {
+        setCompletedSections(prev => [...prev, 'owner'])
+      }
+    }
+  }
+
+  async function handleSubmit(e: React.FormEvent) {
+    e.preventDefault()
+    
+    // Custom password match validation
+    if (formData.password !== formData.confirmPassword) {
+      notify.error('Las contraseñas no coinciden')
+      return
+    }
+    
+    // Validate all fields
+    if (!validateForm(formData)) {
+      notify.error('Por favor corrige los errores en el formulario')
+      return
+    }
+    
+    setLoading(true)
+
+    try {
+      const result = await registerClub(formData)
+      
+      if (result.success) {
+        notify.success('Club registrado exitosamente')
+        router.push('/register/club/success')
+      } else {
+        notify.error(result.error || 'Error al registrar el club')
+      }
+    } catch (error) {
+      notify.error('Error interno. Intenta de nuevo.')
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  // Calculate progress
+  const totalFields = Object.keys(validationRules).length
+  const filledFields = Object.keys(formData).filter(
+    key => formData[key as keyof typeof formData] !== ''
+  ).length
+  const progressPercentage = (filledFields / totalFields) * 100
+
+  return (
+    <form onSubmit={handleSubmit} className="space-y-8">
+      {/* Progress Bar */}
+      <div className="bg-white p-4 rounded-lg shadow-sm">
+        <div className="flex items-center justify-between mb-2">
+          <span className="text-sm font-medium text-gray-700">Progreso del registro</span>
+          <span className="text-sm font-semibold text-emerald-600">
+            {Math.round(progressPercentage)}%
+          </span>
+        </div>
+        <div className="w-full bg-gray-200 rounded-full h-2">
+          <div 
+            className="bg-gradient-to-r from-emerald-500 to-emerald-600 h-2 rounded-full transition-all duration-500"
+            style={{ width: `${progressPercentage}%` }}
+          />
+        </div>
+        <div className="flex gap-2 mt-3">
+          {completedSections.includes('club') && (
+            <span className="inline-flex items-center gap-1 px-2 py-1 rounded-full bg-emerald-50 text-emerald-700 text-xs font-medium">
+              <CheckCircle className="h-3 w-3" />
+              Información del Club
+            </span>
+          )}
+          {completedSections.includes('owner') && (
+            <span className="inline-flex items-center gap-1 px-2 py-1 rounded-full bg-emerald-50 text-emerald-700 text-xs font-medium">
+              <CheckCircle className="h-3 w-3" />
+              Información del Propietario
+            </span>
+          )}
+        </div>
+      </div>
+
+      {/* Club Information */}
+      <div className="bg-white p-6 rounded-lg shadow-sm">
+        <h3 className="text-lg font-semibold text-gray-900 mb-4">
+          Información del Club
+        </h3>
+        <div className="grid md:grid-cols-2 gap-6">
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">
+              Nombre del Club *
+            </label>
+            <input
+              type="text"
+              required
+              value={formData.clubName}
+              onChange={(e) => updateField('clubName', e.target.value)}
+              onBlur={(e) => handleFieldBlur('clubName', e.target.value)}
+              className={`w-full border rounded-lg input-standard transition-colors focus:outline-none focus:ring-2 ${
+                getFieldError('clubName') && touched.clubName
+                  ? 'border-red-300 focus:ring-red-500 focus:border-red-500'
+                  : 'border-gray-300 focus:ring-emerald-500 focus:border-emerald-500'
+              }`}
+              placeholder="Club Padel Puebla"
+            />
+            {getFieldError('clubName') && touched.clubName && (
+              <p className="mt-1 text-xs text-red-600 flex items-center gap-1">
+                <AlertCircle className="h-3 w-3" />
+                {getFieldError('clubName')}
+              </p>
+            )}
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">
+              Email del Club *
+            </label>
+            <input
+              type="email"
+              required
+              value={formData.email}
+              onChange={(e) => updateField('email', e.target.value)}
+              onBlur={(e) => handleFieldBlur('email', e.target.value)}
+              className={`w-full border rounded-lg input-standard transition-colors focus:outline-none focus:ring-2 ${
+                getFieldError('email') && touched.email
+                  ? 'border-red-300 focus:ring-red-500 focus:border-red-500'
+                  : 'border-gray-300 focus:ring-emerald-500 focus:border-emerald-500'
+              }`}
+              placeholder="info@clubpadel.com"
+            />
+            {getFieldError('email') && touched.email && (
+              <p className="mt-1 text-xs text-red-600 flex items-center gap-1">
+                <AlertCircle className="h-3 w-3" />
+                {getFieldError('email')}
+              </p>
+            )}
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">
+              Teléfono del Club *
+            </label>
+            <input
+              type="tel"
+              required
+              value={formData.phone}
+              onChange={(e) => updateField('phone', e.target.value)}
+              onBlur={(e) => handleFieldBlur('phone', e.target.value)}
+              className={`w-full border rounded-lg input-standard transition-colors focus:outline-none focus:ring-2 ${
+                getFieldError('phone') && touched.phone
+                  ? 'border-red-300 focus:ring-red-500 focus:border-red-500'
+                  : 'border-gray-300 focus:ring-emerald-500 focus:border-emerald-500'
+              }`}
+              placeholder="222-123-4567"
+            />
+            {getFieldError('phone') && touched.phone && (
+              <p className="mt-1 text-xs text-red-600 flex items-center gap-1">
+                <AlertCircle className="h-3 w-3" />
+                {getFieldError('phone')}
+              </p>
+            )}
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">
+              Ciudad *
+            </label>
+            <select
+              required
+              value={formData.city}
+              onChange={(e) => updateField('city', e.target.value)}
+              className="w-full border border-gray-300 rounded-lg input-standard focus:ring-emerald-500 focus:border-emerald-500"
+            >
+              <option value="Puebla">Puebla</option>
+              <option value="Mexico City">Ciudad de México</option>
+              <option value="Guadalajara">Guadalajara</option>
+              <option value="Monterrey">Monterrey</option>
+              <option value="Otra">Otra</option>
+            </select>
+          </div>
+        </div>
+
+        <div className="mt-6">
+          <label className="block text-sm font-medium text-gray-700 mb-1">
+            Dirección Completa *
+          </label>
+          <input
+            type="text"
+            required
+            value={formData.address}
+            onChange={(e) => updateField('address', e.target.value)}
+            onBlur={(e) => handleFieldBlur('address', e.target.value)}
+            className={`w-full border rounded-lg input-standard transition-colors focus:outline-none focus:ring-2 ${
+              getFieldError('address') && touched.address
+                ? 'border-red-300 focus:ring-red-500 focus:border-red-500'
+                : 'border-gray-300 focus:ring-emerald-500 focus:border-emerald-500'
+            }`}
+            placeholder="Av. Juárez 123, Col. Centro, Puebla, Pue."
+          />
+          {getFieldError('address') && touched.address && (
+            <p className="mt-1 text-xs text-red-600 flex items-center gap-1">
+              <AlertCircle className="h-3 w-3" />
+              {getFieldError('address')}
+            </p>
+          )}
+        </div>
+
+        <div className="mt-6 grid md:grid-cols-2 gap-6">
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">
+              Sitio Web (opcional)
+            </label>
+            <input
+              type="url"
+              value={formData.website}
+              onChange={(e) => updateField('website', e.target.value)}
+              className="w-full border border-gray-300 rounded-lg input-standard focus:ring-emerald-500 focus:border-emerald-500"
+              placeholder="https://clubpadel.com"
+            />
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">
+              Descripción Breve
+            </label>
+            <input
+              type="text"
+              value={formData.description}
+              onChange={(e) => updateField('description', e.target.value)}
+              className="w-full border border-gray-300 rounded-lg input-standard focus:ring-emerald-500 focus:border-emerald-500"
+              placeholder="El mejor club de padel en Puebla"
+            />
+          </div>
+        </div>
+      </div>
+
+      {/* Owner Information */}
+      <div className="bg-white p-6 rounded-lg shadow-sm">
+        <h3 className="text-lg font-semibold text-gray-900 mb-4">
+          Información del Propietario
+        </h3>
+        <div className="grid md:grid-cols-2 gap-6">
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">
+              Nombre Completo *
+            </label>
+            <input
+              type="text"
+              required
+              value={formData.ownerName}
+              onChange={(e) => updateField('ownerName', e.target.value)}
+              onBlur={(e) => handleFieldBlur('ownerName', e.target.value)}
+              className={`w-full border rounded-lg input-standard transition-colors focus:outline-none focus:ring-2 ${
+                getFieldError('ownerName') && touched.ownerName
+                  ? 'border-red-300 focus:ring-red-500 focus:border-red-500'
+                  : 'border-gray-300 focus:ring-emerald-500 focus:border-emerald-500'
+              }`}
+              placeholder="Juan Pérez"
+            />
+            {getFieldError('ownerName') && touched.ownerName && (
+              <p className="mt-1 text-xs text-red-600 flex items-center gap-1">
+                <AlertCircle className="h-3 w-3" />
+                {getFieldError('ownerName')}
+              </p>
+            )}
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">
+              Email del Propietario *
+            </label>
+            <input
+              type="email"
+              required
+              value={formData.ownerEmail}
+              onChange={(e) => updateField('ownerEmail', e.target.value)}
+              onBlur={(e) => handleFieldBlur('ownerEmail', e.target.value)}
+              className={`w-full border rounded-lg input-standard transition-colors focus:outline-none focus:ring-2 ${
+                getFieldError('ownerEmail') && touched.ownerEmail
+                  ? 'border-red-300 focus:ring-red-500 focus:border-red-500'
+                  : 'border-gray-300 focus:ring-emerald-500 focus:border-emerald-500'
+              }`}
+              placeholder="juan@email.com"
+            />
+            {getFieldError('ownerEmail') && touched.ownerEmail && (
+              <p className="mt-1 text-xs text-red-600 flex items-center gap-1">
+                <AlertCircle className="h-3 w-3" />
+                {getFieldError('ownerEmail')}
+              </p>
+            )}
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">
+              Contraseña *
+            </label>
+            <input
+              type="password"
+              required
+              value={formData.password}
+              onChange={(e) => updateField('password', e.target.value)}
+              onBlur={(e) => handleFieldBlur('password', e.target.value)}
+              className={`w-full border rounded-lg input-standard transition-colors focus:outline-none focus:ring-2 ${
+                getFieldError('password') && touched.password
+                  ? 'border-red-300 focus:ring-red-500 focus:border-red-500'
+                  : 'border-gray-300 focus:ring-emerald-500 focus:border-emerald-500'
+              }`}
+              placeholder="Mínimo 6 caracteres"
+            />
+            {getFieldError('password') && touched.password && (
+              <p className="mt-1 text-xs text-red-600 flex items-center gap-1">
+                <AlertCircle className="h-3 w-3" />
+                {getFieldError('password')}
+              </p>
+            )}
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">
+              Confirmar Contraseña *
+            </label>
+            <input
+              type="password"
+              required
+              value={formData.confirmPassword}
+              onChange={(e) => updateField('confirmPassword', e.target.value)}
+              onBlur={(e) => {
+                handleFieldBlur('confirmPassword', e.target.value)
+                if (formData.password && e.target.value !== formData.password) {
+                  notify.warning('Las contraseñas no coinciden')
+                }
+              }}
+              className={`w-full border rounded-lg input-standard transition-colors focus:outline-none focus:ring-2 ${
+                formData.confirmPassword && formData.password !== formData.confirmPassword
+                  ? 'border-red-300 focus:ring-red-500 focus:border-red-500'
+                  : 'border-gray-300 focus:ring-emerald-500 focus:border-emerald-500'
+              }`}
+              placeholder="Repetir contraseña"
+            />
+            {formData.confirmPassword && formData.password !== formData.confirmPassword && (
+              <p className="mt-1 text-xs text-red-600 flex items-center gap-1">
+                <AlertCircle className="h-3 w-3" />
+                Las contraseñas no coinciden
+              </p>
+            )}
+          </div>
+        </div>
+      </div>
+
+      {/* Submit Button */}
+      <div className="flex justify-end">
+        <button
+          type="submit"
+          disabled={loading}
+          className="px-8 py-3 bg-gradient-to-r from-emerald-600 to-emerald-700 text-white font-medium rounded-lg hover:from-emerald-700 hover:to-emerald-800 transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2 shadow-lg"
+        >
+          {loading ? (
+            <>
+              <Loader2 className="h-5 w-5 animate-spin" />
+              Registrando...
+            </>
+          ) : (
+            <>
+              Registrar Club
+            </>
+          )}
+        </button>
+      </div>
+    </form>
+  )
+}

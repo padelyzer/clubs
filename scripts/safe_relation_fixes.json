@@ -1,0 +1,27 @@
+{
+  "comment": "Mapeo SEGURO de correcciones basado en schema.prisma",
+  "description": "Solo correcciones de capitalización en nombres de relaciones para include/select",
+  "fixes_for_includes": {
+    "club": "Club",
+    "booking": "Booking",
+    "bookingGroup": "BookingGroup",
+    "court": "Court",
+    "courts": "Court",
+    "class": "Class",
+    "player": "Player",
+    "splitPayment": "SplitPayment",
+    "splitPayments": "SplitPayment",
+    "payment": "Payment",
+    "payments": "Payment",
+    "instructor": "Instructor",
+    "tournament": "Tournament",
+    "notification": "Notification",
+    "notifications": "Notification",
+    "user": "User",
+    "users": "User",
+    "session": "Session",
+    "sessions": "Session",
+    "bookings": "Booking"
+  },
+  "note": "Este mapeo solo se aplica en contextos de include/select/where de Prisma"
+}

@@ -1,0 +1,419 @@
+import { NextRequest, NextResponse } from 'next/server'
+import { prisma } from '@/lib/config/prisma'
+import Stripe from 'stripe'
+import { withRateLimit } from '@/lib/rate-limit'
+
+export async function POST(request: NextRequest) {
+  try {
+    console.log('[PUBLIC PAYMENT] Request received')
+    console.log('[PUBLIC PAYMENT] Headers:', Object.fromEntries(request.headers.entries()))
+    
+    // Apply rate limiting for payment operations
+    const rateLimitResponse = await withRateLimit(request, 'api')
+    if (rateLimitResponse) {
+      console.log('[PUBLIC PAYMENT] Rate limited')
+      return rateLimitResponse
+    }
+
+    const body = await request.json()
+    const { bookingId, splitPaymentId } = body
+    
+    console.log('=== PUBLIC CREATE PAYMENT INTENT REQUEST ===')
+    console.log('BookingId:', bookingId)
+    console.log('SplitPaymentId:', splitPaymentId)
+
+    if (!bookingId && !splitPaymentId) {
+      return NextResponse.json(
+        { error: 'Se requiere bookingId o splitPaymentId' },
+        { status: 400 }
+      )
+    }
+
+    let booking
+    let amount
+    let paymentType
+    let clubId
+
+    if (splitPaymentId) {
+      // Handle split payment
+      const splitPayment = await prisma.splitPayment.findUnique({
+        where: { id: splitPaymentId },
+        include: {
+          Booking: {
+            include: {
+              Club: true,
+              Court: true
+            }
+          },
+          BookingGroup: {
+            include: {
+              Club: true,
+              bookings: {
+                include: {
+                  Court: true
+                }
+              }
+            }
+          }
+        }
+      })
+
+      if (!splitPayment) {
+        return NextResponse.json(
+          { error: 'Pago dividido no encontrado' },
+          { status: 404 }
+        )
+      }
+
+      // Check if payment is already completed
+      if (splitPayment.status === 'completed') {
+        return NextResponse.json(
+          { error: 'Este pago ya fue completado' },
+          { status: 400 }
+        )
+      }
+
+      // Check if it's for a booking or bookingGroup
+      if (splitPayment.BookingGroup) {
+        booking = splitPayment.BookingGroup
+        booking.isGroup = true
+        clubId = splitPayment.BookingGroup.clubId
+      } else if (splitPayment.Booking) {
+        booking = splitPayment.Booking
+        booking.isGroup = false
+        clubId = splitPayment.Booking.clubId
+      } else {
+        return NextResponse.json(
+          { error: 'Pago dividido sin reserva asociada' },
+          { status: 400 }
+        )
+      }
+      
+      amount = splitPayment.amount
+      paymentType = 'split'
+
+    } else {
+      // Handle full payment - try booking first, then bookingGroup, then classBooking
+      booking = await prisma.booking.findUnique({
+        where: { id: bookingId },
+        include: {
+          Club: true,
+          Court: true
+        }
+      })
+
+      if (!booking) {
+        // Try as bookingGroup
+        const bookingGroup = await prisma.bookingGroup.findUnique({
+          where: { id: bookingId },
+          include: {
+            Club: true,
+            bookings: {
+              include: {
+                Court: true
+              }
+            }
+          }
+        })
+        
+        if (bookingGroup) {
+          booking = bookingGroup
+          booking.isGroup = true
+          clubId = bookingGroup.clubId
+          amount = bookingGroup.price
+        } else {
+          // Try as classBooking
+          const classBooking = await prisma.classBooking.findUnique({
+            where: { id: bookingId },
+            include: {
+              Class: {
+                include: {
+                  Club: true,
+                  Court: true
+                }
+              }
+            }
+          })
+          
+          if (classBooking) {
+            // Transform classBooking to match expected structure
+            booking = {
+              id: classBooking.id,
+              date: classBooking.Class.date,
+              startTime: classBooking.Class.startTime,
+              endTime: classBooking.Class.endTime,
+              playerName: classBooking.studentName,
+              playerEmail: classBooking.studentEmail,
+              playerPhone: classBooking.studentPhone,
+              totalPlayers: 1,
+              price: classBooking.dueAmount || classBooking.Class.price,
+              Club: classBooking.Class.Club,
+              Court: classBooking.Class.Court,
+              clubId: classBooking.Class.clubId,
+              courtId: classBooking.Class.courtId,
+              splitPaymentEnabled: false,
+              splitPaymentCount: 0,
+              isClass: true,
+              isGroup: false
+            }
+            clubId = classBooking.Class.clubId
+            amount = classBooking.dueAmount || classBooking.Class.price
+          } else {
+            return NextResponse.json(
+              { error: 'Reserva no encontrada' },
+              { status: 404 }
+            )
+          }
+        }
+      } else {
+        booking.isGroup = false
+        clubId = booking.clubId
+        amount = booking.price
+      }
+      
+      paymentType = 'full'
+    }
+
+    const club = booking.club || booking.club
+    
+    if (!club) {
+      return NextResponse.json(
+        { error: 'No se pudo encontrar la información del club' },
+        { status: 400 }
+      )
+    }
+
+    // Check if payment is already completed for regular bookings
+    if (!splitPaymentId && booking.paymentStatus === 'completed') {
+      return NextResponse.json(
+        { error: 'Esta reserva ya está pagada' },
+        { status: 400 }
+      )
+    }
+
+    // Buscar configuración de Stripe del club en PaymentProvider
+    const stripeProvider = await prisma.paymentProvider.findFirst({
+      where: {
+        clubId: club.id,
+        providerId: 'stripe',
+        enabled: true
+      }
+    })
+
+    if (!stripeProvider || !stripeProvider.config) {
+      return NextResponse.json(
+        { 
+          error: 'Este club no tiene configurado Stripe. Por favor, contacte al club directamente para coordinar el pago.',
+          code: 'STRIPE_NOT_CONFIGURED'
+        },
+        { status: 400 }
+      )
+    }
+
+    const config = stripeProvider.config as any
+    if (!config.secretKey || !config.publicKey) {
+      return NextResponse.json(
+        { error: 'Configuración de Stripe incompleta para este club. Contacte al administrador.' },
+        { status: 400 }
+      )
+    }
+
+    console.log('Using club-specific Stripe keys for club:', club.id)
+    const stripeSecretKey = config.secretKey
+
+    // Initialize Stripe with the appropriate key
+    const stripe = new Stripe(stripeSecretKey, {
+      apiVersion: '2024-11-20.acacia'
+    })
+
+    // Check if there's already a payment with a valid Payment Intent
+    let existingPaymentIntent = null
+    
+    if (splitPaymentId) {
+      const splitPayment = await prisma.splitPayment.findUnique({
+        where: { id: splitPaymentId }
+      })
+      if (splitPayment?.stripePaymentIntentId && splitPayment.status === 'processing') {
+        existingPaymentIntent = splitPayment.stripePaymentIntentId
+      }
+    } else if (!booking.isClass) {
+      // Check if regular payment already has a payment intent
+      const existingPayment = await prisma.payment.findFirst({
+        where: booking.isGroup 
+          ? { bookingGroupId: booking.id }
+          : { bookingId: booking.id },
+        orderBy: { createdAt: 'desc' }
+      })
+      
+      if (existingPayment?.stripePaymentIntentId && existingPayment.status === 'processing') {
+        existingPaymentIntent = existingPayment.stripePaymentIntentId
+      }
+    }
+
+    let paymentIntent
+    
+    if (existingPaymentIntent) {
+      // Retrieve existing Payment Intent from Stripe
+      try {
+        paymentIntent = await stripe.paymentIntents.retrieve(existingPaymentIntent)
+        
+        // If the payment intent is already succeeded or canceled, create a new one
+        if (paymentIntent.status === 'succeeded' || paymentIntent.status === 'canceled') {
+          existingPaymentIntent = null
+        }
+      } catch (error) {
+        existingPaymentIntent = null
+      }
+    }
+    
+    if (!existingPaymentIntent) {
+      // Create new payment intent only if needed
+      const courtInfo = booking.isGroup 
+        ? booking.bookings.map((b: any) => b.Court.name).join(', ')
+        : booking.court?.name || 'Cancha'
+      
+      paymentIntent = await stripe.paymentIntents.create({
+        amount: amount, // Amount should be in cents (centavos)
+        currency: 'mxn',
+        payment_method_types: ['card'],
+        description: `Reserva pádel - ${club.name} - ${courtInfo} (${new Date(booking.date).toLocaleDateString('es-MX')})`,
+        metadata: {
+          booking_id: booking.id,
+          club_id: club.id,
+          court_name: courtInfo,
+          club_name: club.name,
+          payment_type: paymentType,
+          is_group: booking.isGroup ? 'true' : 'false',
+          is_class: booking.isClass ? 'true' : 'false',
+          ...(booking.isClass && { class_booking_id: booking.id }),
+          ...(splitPaymentId && { split_payment_id: splitPaymentId })
+        }
+      })
+    }
+
+    // Update payment record only if Payment Intent changed
+    if (splitPaymentId) {
+      const splitPayment = await prisma.splitPayment.findUnique({
+        where: { id: splitPaymentId }
+      })
+      
+      if (splitPayment && splitPayment.stripePaymentIntentId !== paymentIntent.id) {
+        await prisma.splitPayment.update({
+          where: { id: splitPaymentId },
+          data: {
+            stripePaymentIntentId: paymentIntent.id,
+            status: 'processing'
+          }
+        })
+      }
+    } else {
+      if (!booking.isClass) {
+        const existingPayment = await prisma.payment.findFirst({
+          where: booking.isGroup 
+            ? { bookingGroupId: booking.id }
+            : { bookingId: booking.id },
+          orderBy: { createdAt: 'desc' }
+        })
+
+        if (existingPayment) {
+          if (existingPayment.stripePaymentIntentId !== paymentIntent.id) {
+            await prisma.payment.update({
+              where: { id: existingPayment.id },
+              data: {
+                stripePaymentIntentId: paymentIntent.id,
+                status: 'processing',
+                amount
+              }
+            })
+          }
+        } else {
+          await prisma.payment.create({
+            data: {
+              id: `payment_${club.id}_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
+              ...(booking.isGroup 
+                ? { bookingGroupId: booking.id }
+                : { bookingId: booking.id }),
+              amount,
+              currency: 'MXN',
+              method: 'STRIPE',
+              status: 'processing',
+              stripePaymentIntentId: paymentIntent.id,
+              createdAt: new Date()
+            }
+          })
+        }
+      }
+
+      // Update booking status
+      if (booking.isClass) {
+        await prisma.classBooking.update({
+          where: { id: booking.id },
+          data: {
+            paymentStatus: 'processing',
+            paymentMethod: 'online'
+          }
+        })
+      } else if (booking.isGroup) {
+        await prisma.bookingGroup.update({
+          where: { id: booking.id },
+          data: {
+            status: 'CONFIRMED'
+          }
+        })
+      } else {
+        await prisma.booking.update({
+          where: { id: booking.id },
+          data: {
+            paymentStatus: 'processing'
+          }
+        })
+      }
+    }
+
+    return NextResponse.json({
+      success: true,
+      clientSecret: paymentIntent.client_secret,
+      paymentIntentId: paymentIntent.id,
+      amount,
+      bookingDetails: {
+        id: booking.id,
+        date: booking.date,
+        startTime: booking.startTime,
+        endTime: booking.endTime,
+        clubName: club.name,
+        courtName: booking.isGroup ? booking.bookings.map((b: any) => b.Court.name).join(', ') : booking.court?.name,
+        playerName: booking.playerName,
+        totalPlayers: booking.totalPlayers || 1,
+        price: booking.price,
+        splitPaymentEnabled: booking.splitPaymentEnabled || false,
+        splitPaymentCount: booking.splitPaymentCount || 0,
+        isGroup: booking.isGroup || false
+      }
+    })
+
+  } catch (error) {
+    console.error('Error creating payment intent:', error)
+    
+    // Log más detallado del error
+    if (error instanceof Error) {
+      console.error('Error details:', {
+        message: error.message,
+        stack: error.stack,
+        name: error.name
+      })
+      
+      // Devolver mensaje más específico en desarrollo
+      if (process.env.NODE_ENV === 'development') {
+        return NextResponse.json(
+          { error: `Error: ${error.message}` },
+          { status: 500 }
+        )
+      }
+    }
+    
+    return NextResponse.json(
+      { error: 'Error interno del servidor' },
+      { status: 500 }
+    )
+  }
+}

@@ -1,0 +1,317 @@
+import { NextRequest, NextResponse } from 'next/server'
+import { prisma } from '@/lib/config/prisma'
+import { addDays, addWeeks, addMonths, format, startOfWeek } from 'date-fns'
+
+// POST - Create recurring classes
+export async function POST(request: NextRequest) {
+  try {
+    const data = await request.json()
+    const {
+      classData,
+      recurrencePattern,
+      interval = 1,
+      daysOfWeek = [],
+      endDate,
+      occurrences
+    } = data
+
+    // Validate input
+    if (!classData || !recurrencePattern) {
+      return NextResponse.json(
+        { success: false, error: 'Datos de clase y patrón de recurrencia requeridos' },
+        { status: 400 }
+      )
+    }
+
+    // Calculate recurrence dates
+    const dates: Date[] = []
+    let currentDate = new Date(classData.date)
+    const end = endDate ? new Date(endDate) : addMonths(currentDate, 3) // Default 3 months
+    let count = 0
+    const maxOccurrences = occurrences || 52 // Default max 52 occurrences (1 year weekly)
+
+    switch (recurrencePattern) {
+      case 'DAILY':
+        while (currentDate <= end && count < maxOccurrences) {
+          dates.push(new Date(currentDate))
+          currentDate = addDays(currentDate, interval)
+          count++
+        }
+        break
+
+      case 'WEEKLY':
+        if (daysOfWeek.length === 0) {
+          // Use same day of week as original
+          while (currentDate <= end && count < maxOccurrences) {
+            dates.push(new Date(currentDate))
+            currentDate = addWeeks(currentDate, interval)
+            count++
+          }
+        } else {
+          // Specific days of week
+          const startWeek = startOfWeek(currentDate, { weekStartsOn: 1 }) // Monday start
+          currentDate = startWeek
+          
+          while (currentDate <= end && count < maxOccurrences) {
+            for (let i = 0; i < 7; i++) {
+              const checkDate = addDays(startWeek, i)
+              if (daysOfWeek.includes(checkDate.getDay()) && checkDate >= classData.date && checkDate <= end) {
+                dates.push(new Date(checkDate))
+                count++
+                if (count >= maxOccurrences) break
+              }
+            }
+            startWeek.setDate(startWeek.getDate() + (7 * interval))
+            currentDate = startWeek
+          }
+        }
+        break
+
+      case 'MONTHLY':
+        while (currentDate <= end && count < maxOccurrences) {
+          dates.push(new Date(currentDate))
+          currentDate = addMonths(currentDate, interval)
+          count++
+        }
+        break
+
+      default:
+        return NextResponse.json(
+          { success: false, error: 'Patrón de recurrencia no válido' },
+          { status: 400 }
+        )
+    }
+
+    // Create all classes in a transaction
+    const result = await prisma.$transaction(async (tx) => {
+      const classes = []
+      
+      // Create first class with recurrence info
+      const firstClass = await tx.class.create({
+        data: {
+          ...classData,
+          isRecurring: true,
+          recurrencePattern: JSON.stringify({
+            pattern: recurrencePattern,
+            interval,
+            daysOfWeek,
+            endDate,
+            occurrences: dates.length
+          })
+        }
+      })
+      classes.push(firstClass)
+
+      // Create recurrence record
+      await tx.classRecurrence.create({
+        data: {
+          classId: firstClass.id,
+          pattern: recurrencePattern,
+          interval,
+          daysOfWeek,
+          endDate: end,
+          occurrences: dates.length,
+          active: true
+        }
+      })
+
+      // Create remaining classes
+      for (let i = 1; i < dates.length; i++) {
+        const recurringClass = await tx.class.create({
+          data: {
+            ...classData,
+            date: dates[i],
+            isRecurring: true,
+            recurrencePattern: JSON.stringify({
+              pattern: recurrencePattern,
+              interval,
+              daysOfWeek,
+              originalClassId: firstClass.id,
+              occurrence: i + 1,
+              totalOccurrences: dates.length
+            })
+          }
+        })
+        classes.push(recurringClass)
+      }
+
+      return classes
+    })
+
+    return NextResponse.json({
+      success: true,
+      message: `${result.length} clases creadas exitosamente`,
+      classes: result,
+      dates: dates.map(d => format(d, 'yyyy-MM-dd'))
+    })
+
+  } catch (error) {
+    console.error('Error creating recurring classes:', error)
+    return NextResponse.json(
+      { success: false, error: 'Error al crear clases recurrentes' },
+      { status: 500 }
+    )
+  }
+}
+
+// GET - Get recurrence info for a class
+export async function GET(request: NextRequest) {
+  try {
+    const { searchParams } = new URL(request.url)
+    const classId = searchParams.get('classId')
+    
+    if (!classId) {
+      return NextResponse.json(
+        { success: false, error: 'ID de clase requerido' },
+        { status: 400 }
+      )
+    }
+
+    const recurrence = await prisma.classRecurrence.findUnique({
+      where: { classId },
+      include: {
+        class: true
+      }
+    })
+
+    if (!recurrence) {
+      return NextResponse.json(
+        { success: false, error: 'Información de recurrencia no encontrada' },
+        { status: 404 }
+      )
+    }
+
+    // Get all related classes
+    const pattern = JSON.parse(recurrence.Class.recurrencePattern || '{}')
+    const relatedClasses = await prisma.class.findMany({
+      where: {
+        recurrencePattern: {
+          contains: pattern.originalClassId || classId
+        }
+      },
+      orderBy: { date: 'asc' }
+    })
+
+    return NextResponse.json({
+      success: true,
+      recurrence,
+      relatedClasses,
+      totalOccurrences: relatedClasses.length
+    })
+
+  } catch (error) {
+    console.error('Error fetching recurrence info:', error)
+    return NextResponse.json(
+      { success: false, error: 'Error al obtener información de recurrencia' },
+      { status: 500 }
+    )
+  }
+}
+
+// DELETE - Cancel recurring classes
+export async function DELETE(request: NextRequest) {
+  try {
+    const { searchParams } = new URL(request.url)
+    const classId = searchParams.get('classId')
+    const cancelAll = searchParams.get('cancelAll') === 'true'
+    
+    if (!classId) {
+      return NextResponse.json(
+        { success: false, error: 'ID de clase requerido' },
+        { status: 400 }
+      )
+    }
+
+    const result = await prisma.$transaction(async (tx) => {
+      if (cancelAll) {
+        // Get recurrence info
+        const recurrence = await tx.classRecurrence.findUnique({
+          where: { classId }
+        })
+        
+        if (recurrence) {
+          // Cancel all related classes
+          const pattern = JSON.parse((await tx.class.findUnique({
+            where: { id: classId },
+            select: { recurrencePattern: true }
+          }))?.recurrencePattern || '{}')
+          
+          const cancelled = await tx.class.updateMany({
+            where: {
+              OR: [
+                { id: classId },
+                { recurrencePattern: { contains: pattern.originalClassId || classId } }
+              ],
+              date: { gte: new Date() } // Only future classes
+            },
+            data: {
+              status: 'CANCELLED',
+              cancelledAt: new Date(),
+              cancelReason: 'Serie de clases cancelada'
+            }
+          })
+          
+          // Deactivate recurrence
+          await tx.classRecurrence.update({
+            where: { classId },
+            data: { active: false }
+          })
+          
+          return { cancelledCount: cancelled.count }
+        }
+      }
+      
+      // Cancel single class
+      await tx.class.update({
+        where: { id: classId },
+        data: {
+          status: 'CANCELLED',
+          cancelledAt: new Date(),
+          cancelReason: 'Clase individual cancelada'
+        }
+      })
+      
+      // Add to exceptions if part of recurrence
+      const recurrence = await tx.classRecurrence.findFirst({
+        where: {
+          class: {
+            recurrencePattern: { contains: classId }
+          }
+        }
+      })
+      
+      if (recurrence) {
+        const classData = await tx.class.findUnique({
+          where: { id: classId },
+          select: { date: true }
+        })
+        
+        if (classData) {
+          await tx.classRecurrence.update({
+            where: { id: recurrence.id },
+            data: {
+              exceptions: {
+                push: classData.date
+              }
+            }
+          })
+        }
+      }
+      
+      return { cancelledCount: 1 }
+    })
+
+    return NextResponse.json({
+      success: true,
+      message: `${result.cancelledCount} clase(s) cancelada(s) exitosamente`,
+      ...result
+    })
+
+  } catch (error) {
+    console.error('Error cancelling recurring classes:', error)
+    return NextResponse.json(
+      { success: false, error: 'Error al cancelar clases' },
+      { status: 500 }
+    )
+  }
+}

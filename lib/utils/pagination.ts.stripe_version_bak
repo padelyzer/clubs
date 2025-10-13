@@ -1,0 +1,162 @@
+import { Prisma } from '@prisma/client'
+
+export interface PaginationParams {
+  page?: number
+  limit?: number
+  sort?: string
+  order?: 'asc' | 'desc'
+}
+
+export interface PaginationResult<T> {
+  data: T[]
+  pagination: {
+    page: number
+    limit: number
+    total: number
+    pages: number
+    hasNext: boolean
+    hasPrev: boolean
+  }
+}
+
+/**
+ * Parse pagination params from request
+ */
+export function parsePaginationParams(
+  searchParams: URLSearchParams | Record<string, string | string[] | undefined>
+): PaginationParams {
+  const params = searchParams instanceof URLSearchParams 
+    ? Object.fromEntries(searchParams.entries())
+    : searchParams
+
+  return {
+    page: Math.max(1, parseInt(params.page as string) || 1),
+    limit: Math.min(100, Math.max(1, parseInt(params.limit as string) || 20)),
+    sort: params.sort as string || 'createdAt',
+    order: (params.order as 'asc' | 'desc') || 'desc'
+  }
+}
+
+/**
+ * Create paginated response
+ */
+export function createPaginatedResponse<T>(
+  data: T[],
+  total: number,
+  params: PaginationParams
+): PaginationResult<T> {
+  const { page = 1, limit = 20 } = params
+  const pages = Math.ceil(total / limit)
+  
+  return {
+    data,
+    pagination: {
+      page,
+      limit,
+      total,
+      pages,
+      hasNext: page < pages,
+      hasPrev: page > 1
+    }
+  }
+}
+
+/**
+ * Get Prisma pagination options
+ */
+export function getPrismaPage(params: PaginationParams) {
+  const { page = 1, limit = 20 } = params
+  
+  return {
+    skip: (page - 1) * limit,
+    take: limit
+  }
+}
+
+/**
+ * Get Prisma order by options
+ */
+export function getPrismaOrderBy(params: PaginationParams): any {
+  const { sort = 'createdAt', order = 'desc' } = params
+  
+  // Handle nested sorting (e.g., "club.name")
+  if (sort.includes('.')) {
+    const parts = sort.split('.')
+    let orderBy: any = {}
+    let current = orderBy
+    
+    for (let i = 0; i < parts.length - 1; i++) {
+      current[parts[i]] = {}
+      current = current[parts[i]]
+    }
+    
+    current[parts[parts.length - 1]] = order
+    return orderBy
+  }
+  
+  return { [sort]: order }
+}
+
+/**
+ * Paginate Prisma query
+ */
+export async function paginateQuery<T>(
+  model: any,
+  params: PaginationParams,
+  where?: Prisma.Args<any, 'findMany'>['where'],
+  include?: Prisma.Args<any, 'findMany'>['include']
+): Promise<PaginationResult<T>> {
+  const [total, data] = await Promise.all([
+    model.count({ where }),
+    model.findMany({
+      where,
+      include,
+      ...getPrismaPage(params),
+      orderBy: getPrismaOrderBy(params)
+    })
+  ])
+  
+  return createPaginatedResponse(data, total, params)
+}
+
+/**
+ * Build pagination links for API responses
+ */
+export function buildPaginationLinks(
+  baseUrl: string,
+  params: PaginationParams,
+  total: number
+): {
+  first?: string
+  last?: string
+  prev?: string
+  next?: string
+} {
+  const { page = 1, limit = 20 } = params
+  const pages = Math.ceil(total / limit)
+  const links: any = {}
+  
+  const buildUrl = (p: number) => {
+    const url = new URL(baseUrl)
+    url.searchParams.set('page', p.toString())
+    url.searchParams.set('limit', limit.toString())
+    if (params.sort) url.searchParams.set('sort', params.sort)
+    if (params.order) url.searchParams.set('order', params.order)
+    return url.toString()
+  }
+  
+  if (pages > 0) {
+    links.first = buildUrl(1)
+    links.last = buildUrl(pages)
+  }
+  
+  if (page > 1) {
+    links.prev = buildUrl(page - 1)
+  }
+  
+  if (page < pages) {
+    links.next = buildUrl(page + 1)
+  }
+  
+  return links
+}

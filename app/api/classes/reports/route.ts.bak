@@ -1,0 +1,316 @@
+import { NextRequest, NextResponse } from 'next/server'
+import { prisma } from '@/lib/config/prisma'
+import { requireAuthAPI } from '@/lib/auth/actions'
+import { z } from 'zod'
+import { startOfMonth, endOfMonth, startOfWeek, endOfWeek, parseISO } from 'date-fns'
+
+const reportSchema = z.object({
+  instructorId: z.string().optional(),
+  period: z.enum(['week', 'month', 'custom']).default('month'),
+  startDate: z.string().optional(),
+  endDate: z.string().optional()
+})
+
+// GET - Generate instructor reports
+export async function GET(request: NextRequest) {
+  try {
+    const session = await requireAuthAPI()
+    
+    if (!session) {
+      return NextResponse.json(
+        { success: false, error: 'No autorizado' },
+        { status: 401 }
+      )
+    }
+    const { searchParams } = new URL(request.url)
+    
+    const params = reportSchema.parse({
+      instructorId: searchParams.get('instructorId') || undefined,
+      period: searchParams.get('period') || 'month',
+      startDate: searchParams.get('startDate') || undefined,
+      endDate: searchParams.get('endDate') || undefined
+    })
+    
+    // Determine date range
+    let startDate: Date
+    let endDate: Date
+    
+    if (params.period === 'custom' && params.startDate && params.endDate) {
+      startDate = parseISO(params.startDate)
+      endDate = parseISO(params.endDate)
+    } else if (params.period === 'week') {
+      startDate = startOfWeek(new Date(), { weekStartsOn: 1 })
+      endDate = endOfWeek(new Date(), { weekStartsOn: 1 })
+    } else {
+      startDate = startOfMonth(new Date())
+      endDate = endOfMonth(new Date())
+    }
+    
+    // Build where clause
+    const where: any = {
+      clubId: session.clubId,
+      date: {
+        gte: startDate,
+        lte: endDate
+      },
+      status: { not: 'CANCELLED' }
+    }
+    
+    if (params.instructorId) {
+      where.instructorId = params.instructorId
+    }
+    
+    // Fetch classes with attendance data
+    const classes = await prisma.Class.findMany({
+      where,
+      include: {
+        instructor: true,
+        court: true,
+        bookings: {
+          include: {
+            player: true
+          }
+        }
+      },
+      orderBy: { date: 'asc' }
+    })
+    
+    // Calculate statistics for each instructor
+    const instructorStats = new Map()
+    
+    classes.forEach(cls => {
+      const instructorId = cls.instructorId || 'unassigned'
+      const instructorName = cls.instructor?.name || 'Sin asignar'
+      
+      if (!instructorStats.has(instructorId)) {
+        instructorStats.set(instructorId, {
+          id: instructorId,
+          name: instructorName,
+          totalClasses: 0,
+          completedClasses: 0,
+          cancelledClasses: 0,
+          totalStudents: 0,
+          totalAttended: 0,
+          totalAbsent: 0,
+          totalLate: 0,
+          totalRevenue: 0,
+          collectedRevenue: 0,
+          pendingRevenue: 0,
+          classes: []
+        })
+      }
+      
+      const stats = instructorStats.get(instructorId)
+      stats.totalClasses++
+      
+      if (cls.status === 'COMPLETED') {
+        stats.completedClasses++
+      } else if (cls.status === 'CANCELLED') {
+        stats.cancelledClasses++
+      }
+      
+      // Calculate attendance and revenue
+      let classRevenue = 0
+      let collectedRevenue = 0
+      let presentCount = 0
+      let absentCount = 0
+      let lateCount = 0
+      
+      cls.bookings.forEach(booking => {
+        stats.totalStudents++
+        
+        if (booking.attendanceStatus === 'PRESENT') {
+          stats.totalAttended++
+          presentCount++
+        } else if (booking.attendanceStatus === 'ABSENT') {
+          stats.totalAbsent++
+          absentCount++
+        } else if (booking.attendanceStatus === 'LATE') {
+          stats.totalLate++
+          lateCount++
+        }
+        
+        classRevenue += booking.dueAmount || cls.price
+        if (booking.paymentStatus === 'completed') {
+          collectedRevenue += booking.paidAmount || 0
+        }
+      })
+      
+      stats.totalRevenue += classRevenue
+      stats.collectedRevenue += collectedRevenue
+      stats.pendingRevenue += (classRevenue - collectedRevenue)
+      
+      // Add class details
+      stats.classes.push({
+        id: cls.id,
+        name: cls.name,
+        date: cls.date,
+        time: `${cls.startTime} - ${cls.endTime}`,
+        court: cls.court?.name,
+        status: cls.status,
+        students: cls.bookings.length,
+        maxStudents: cls.maxStudents,
+        attendance: {
+          present: presentCount,
+          absent: absentCount,
+          late: lateCount,
+          pending: cls.bookings.length - (presentCount + absentCount + lateCount)
+        },
+        revenue: classRevenue,
+        collected: collectedRevenue,
+        pending: classRevenue - collectedRevenue,
+        attendanceRate: cls.bookings.length > 0 
+          ? Math.round(((presentCount + lateCount) / cls.bookings.length) * 100)
+          : 0
+      })
+    })
+    
+    // Convert map to array and calculate overall statistics
+    const instructorReports = Array.from(instructorStats.values()).map(stats => ({
+      ...stats,
+      attendanceRate: stats.totalStudents > 0 
+        ? Math.round(((stats.totalAttended + stats.totalLate) / stats.totalStudents) * 100)
+        : 0,
+      averageStudentsPerClass: stats.completedClasses > 0
+        ? Math.round(stats.totalStudents / stats.completedClasses)
+        : 0,
+      collectionRate: stats.totalRevenue > 0
+        ? Math.round((stats.collectedRevenue / stats.totalRevenue) * 100)
+        : 0
+    }))
+    
+    // Calculate overall summary
+    const summary = {
+      period: {
+        start: startDate,
+        end: endDate,
+        type: params.period
+      },
+      totalClasses: classes.length,
+      totalStudents: instructorReports.reduce((sum: number, r) => sum + r.totalStudents, 0),
+      totalRevenue: instructorReports.reduce((sum: number, r) => sum + r.totalRevenue, 0),
+      collectedRevenue: instructorReports.reduce((sum: number, r) => sum + r.collectedRevenue, 0),
+      pendingRevenue: instructorReports.reduce((sum: number, r) => sum + r.pendingRevenue, 0),
+      overallAttendanceRate: 0,
+      overallCollectionRate: 0
+    }
+    
+    if (summary.totalStudents > 0) {
+      const totalAttended = instructorReports.reduce((sum: number, r) => sum + r.totalAttended + r.totalLate, 0)
+      summary.overallAttendanceRate = Math.round((totalAttended / summary.totalStudents) * 100)
+    }
+    
+    if (summary.totalRevenue > 0) {
+      summary.overallCollectionRate = Math.round((summary.collectedRevenue / summary.totalRevenue) * 100)
+    }
+    
+    return NextResponse.json({
+      success: true,
+      summary,
+      instructors: instructorReports,
+      detailedClasses: params.instructorId ? instructorReports[0]?.classes || [] : []
+    })
+    
+  } catch (error) {
+    console.error('Error generating report:', error)
+    
+    if (error instanceof z.ZodError) {
+      return NextResponse.json(
+        { success: false, error: 'Parámetros inválidos', details: error.errors },
+        { status: 400 }
+      )
+    }
+    
+    return NextResponse.json(
+      { success: false, error: 'Error al generar reporte' },
+      { status: 500 }
+    )
+  }
+}
+
+// POST - Export report to CSV/PDF
+export async function POST(request: NextRequest) {
+  try {
+    const session = await requireAuthAPI()
+    
+    if (!session) {
+      return NextResponse.json(
+        { success: false, error: 'No autorizado' },
+        { status: 401 }
+      )
+    }
+    const body = await request.json()
+    const { format = 'csv', ...params } = body
+    
+    // Get report data
+    const reportResponse = await GET(request)
+    const reportData = await reportResponse.json()
+    
+    if (!reportData.success) {
+      return reportResponse
+    }
+    
+    if (format === 'csv') {
+      // Generate CSV
+      const csv = generateCSV(reportData)
+      
+      return new NextResponse(csv, {
+        headers: {
+          'Content-Type': 'text/csv',
+          'Content-Disposition': `attachment; filename="reporte-clases-${new Date().toISOString().split('T')[0]}.csv"`
+        }
+      })
+    } else {
+      // For PDF generation, you would need a PDF library like puppeteer or pdfkit
+      return NextResponse.json(
+        { success: false, error: 'Formato PDF no implementado aún' },
+        { status: 501 }
+      )
+    }
+    
+  } catch (error) {
+    console.error('Error exporting report:', error)
+    return NextResponse.json(
+      { success: false, error: 'Error al exportar reporte' },
+      { status: 500 }
+    )
+  }
+}
+
+function generateCSV(reportData: any): string {
+  const lines: string[] = []
+  
+  // Headers
+  lines.push('Reporte de Clases')
+  lines.push(`Periodo: ${new Date(reportData.summary.period.start).toLocaleDateString()} - ${new Date(reportData.summary.period.end).toLocaleDateString()}`)
+  lines.push('')
+  
+  // Summary
+  lines.push('RESUMEN GENERAL')
+  lines.push(`Total de Clases,${reportData.summary.totalClasses}`)
+  lines.push(`Total de Estudiantes,${reportData.summary.totalStudents}`)
+  lines.push(`Ingresos Totales,$${(reportData.summary.totalRevenue / 100).toFixed(2)}`)
+  lines.push(`Ingresos Cobrados,$${(reportData.summary.collectedRevenue / 100).toFixed(2)}`)
+  lines.push(`Ingresos Pendientes,$${(reportData.summary.pendingRevenue / 100).toFixed(2)}`)
+  lines.push(`Tasa de Asistencia,${reportData.summary.overallAttendanceRate}%`)
+  lines.push(`Tasa de Cobro,${reportData.summary.overallCollectionRate}%`)
+  lines.push('')
+  
+  // Instructor details
+  lines.push('DETALLE POR INSTRUCTOR')
+  lines.push('Instructor,Clases,Estudiantes,Asistencia %,Ingresos,Cobrado,Pendiente')
+  
+  reportData.instructors.forEach((instructor: any) => {
+    lines.push([
+      instructor.name,
+      instructor.totalClasses,
+      instructor.totalStudents,
+      `${instructor.attendanceRate}%`,
+      `$${(instructor.totalRevenue / 100).toFixed(2)}`,
+      `$${(instructor.collectedRevenue / 100).toFixed(2)}`,
+      `$${(instructor.pendingRevenue / 100).toFixed(2)}`
+    ].join(','))
+  })
+  
+  return lines.join('\n')
+}

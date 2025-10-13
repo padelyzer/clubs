@@ -1,0 +1,84 @@
+import { NextRequest, NextResponse } from 'next/server'
+import { getAccountStatus } from '@/lib/config/stripe'
+import { prisma } from '@/lib/config/prisma'
+import { requireStaffAuth } from '@/lib/auth/actions'
+
+export async function GET(request: NextRequest) {
+  try {
+    const session = await requireStaffAuth()
+
+    const club = await prisma.club.findUnique({
+      where: { id: session.clubId },
+      select: { 
+        id: true,
+        stripeAccountId: true,
+        stripeOnboardingCompleted: true,
+        stripeChargesEnabled: true,
+        stripePayoutsEnabled: true,
+        stripeDetailsSubmitted: true
+      }
+    })
+
+    if (!club) {
+      return NextResponse.json(
+        { error: 'Club no encontrado' },
+        { status: 404 }
+      )
+    }
+
+    if (!club.stripeAccountId) {
+      return NextResponse.json({
+        hasAccount: false,
+        onboardingCompleted: false,
+        chargesEnabled: false,
+        payoutsEnabled: false,
+        detailsSubmitted: false,
+        requirements: []
+      })
+    }
+
+    // Get account status from Stripe
+    const accountStatusResult = await getAccountStatus(club.stripeAccountId)
+    
+    if (!accountStatusResult.success) {
+      return NextResponse.json(
+        { error: accountStatusResult.error.message },
+        { status: 400 }
+      )
+    }
+    
+    const accountStatus = accountStatusResult.data
+
+    // Update club with latest status
+    await prisma.club.update({
+      where: { id: club.id },
+      data: {
+        stripeOnboardingCompleted: accountStatus.detailsSubmitted,
+        stripeChargesEnabled: accountStatus.chargesEnabled,
+        stripePayoutsEnabled: accountStatus.payoutsEnabled,
+        stripeDetailsSubmitted: accountStatus.detailsSubmitted,
+        stripeRequirements: JSON.stringify(accountStatus.requirements)
+      }
+    })
+
+    return NextResponse.json({
+      hasAccount: true,
+      accountId: club.stripeAccountId,
+      onboardingCompleted: accountStatus.detailsSubmitted,
+      chargesEnabled: accountStatus.chargesEnabled,
+      payoutsEnabled: accountStatus.payoutsEnabled,
+      detailsSubmitted: accountStatus.detailsSubmitted,
+      requirements: accountStatus.requirements,
+      accountType: accountStatus.accountType,
+      country: accountStatus.country,
+      defaultCurrency: accountStatus.defaultCurrency
+    })
+
+  } catch (error) {
+    console.error('Error getting Stripe Connect account status:', error)
+    return NextResponse.json(
+      { error: 'Error interno del servidor' },
+      { status: 500 }
+    )
+  }
+}

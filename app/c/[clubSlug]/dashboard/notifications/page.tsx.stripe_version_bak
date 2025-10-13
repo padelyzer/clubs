@@ -1,0 +1,188 @@
+import { redirect } from 'next/navigation'
+import { requireAuth } from '@/lib/auth/actions'
+import { prisma } from '@/lib/config/prisma'
+import { NotificationsDashboard } from './notifications-dashboard'
+
+export const dynamic = 'force-dynamic'
+
+export default async function NotificationsPage() {
+  const session = await requireAuth()
+  
+  if (!session?.clubId) {
+    redirect('/login')
+  }
+
+  // Get notifications for this club
+  const notifications = await prisma.notification.findMany({
+    where: {
+      Booking: {
+        clubId: session.clubId
+      }
+    },
+    include: {
+      Booking: {
+        include: {
+          Court: true,
+          Club: true
+        }
+      },
+      SplitPayment: true
+    },
+    orderBy: {
+      createdAt: 'desc'
+    },
+    take: 100
+  })
+
+  // Calculate basic stats
+  const stats = {
+    total: notifications.length,
+    sent: notifications.filter(n => n.status === 'sent').length,
+    delivered: notifications.filter(n => n.status === 'delivered').length,
+    failed: notifications.filter(n => n.status === 'failed').length,
+    pending: notifications.filter(n => n.status === 'pending').length
+  }
+
+  // Template breakdown
+  const templateBreakdown = notifications.reduce((acc, notification) => {
+    if (!acc[notification.template]) {
+      acc[notification.template] = {
+        template: notification.template,
+        total: 0,
+        sent: 0,
+        delivered: 0,
+        failed: 0,
+        pending: 0
+      }
+    }
+    acc[notification.template].total++
+    acc[notification.template][notification.status]++
+    return acc
+  }, {} as Record<string, any>)
+
+  // Recent activity (last 7 days)
+  const sevenDaysAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000)
+  const recentNotifications = notifications.filter(n => 
+    n.createdAt >= sevenDaysAgo
+  )
+
+  return (
+    <div className="space-y-6">
+      <div>
+        <h1 className="text-3xl font-bold text-gray-900">Notificaciones WhatsApp</h1>
+        <p className="text-gray-600">
+          Gestiona y monitorea las notificaciones automáticas de tu club
+        </p>
+      </div>
+
+      {/* Stats Cards */}
+      <div className="grid grid-cols-1 md:grid-cols-5 gap-6">
+        <div className="bg-white rounded-lg shadow p-6">
+          <div className="flex items-center">
+            <div className="p-2 bg-blue-100 rounded-lg">
+              <span className="text-sm font-semibold">Total</span>
+            </div>
+            <div className="ml-4">
+              <p className="text-sm text-gray-600">Total Enviados</p>
+              <p className="text-2xl font-bold text-gray-900">{stats.total}</p>
+            </div>
+          </div>
+        </div>
+
+        <div className="bg-white rounded-lg shadow p-6">
+          <div className="flex items-center">
+            <div className="p-2 bg-green-100 rounded-lg">
+              <span className="text-sm font-semibold">OK</span>
+            </div>
+            <div className="ml-4">
+              <p className="text-sm text-gray-600">Enviados</p>
+              <p className="text-2xl font-bold text-green-600">{stats.sent}</p>
+            </div>
+          </div>
+        </div>
+
+        <div className="bg-white rounded-lg shadow p-6">
+          <div className="flex items-center">
+            <div className="p-2 bg-emerald-100 rounded-lg">
+              <span className="text-sm font-semibold">Vistos</span>
+            </div>
+            <div className="ml-4">
+              <p className="text-sm text-gray-600">Entregados</p>
+              <p className="text-2xl font-bold text-emerald-600">{stats.delivered}</p>
+            </div>
+          </div>
+        </div>
+
+        <div className="bg-white rounded-lg shadow p-6">
+          <div className="flex items-center">
+            <div className="p-2 bg-red-100 rounded-lg">
+              <span className="text-sm font-semibold">Error</span>
+            </div>
+            <div className="ml-4">
+              <p className="text-sm text-gray-600">Fallidos</p>
+              <p className="text-2xl font-bold text-red-600">{stats.failed}</p>
+            </div>
+          </div>
+        </div>
+
+        <div className="bg-white rounded-lg shadow p-6">
+          <div className="flex items-center">
+            <div className="p-2 bg-yellow-100 rounded-lg">
+              <span className="text-sm font-semibold">Pend</span>
+            </div>
+            <div className="ml-4">
+              <p className="text-sm text-gray-600">Pendientes</p>
+              <p className="text-2xl font-bold text-yellow-600">{stats.pending}</p>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* Success Rate */}
+      <div className="bg-white rounded-lg shadow p-6">
+        <h3 className="text-lg font-semibold text-gray-900 mb-4">Tasa de Éxito</h3>
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+          <div>
+            <div className="flex justify-between items-center mb-2">
+              <span className="text-sm text-gray-600">Tasa de Entrega</span>
+              <span className="text-sm font-semibold">
+                {stats.total > 0 ? ((stats.delivered / stats.total) * 100).toFixed(1) : 0}%
+              </span>
+            </div>
+            <div className="w-full bg-gray-200 rounded-full h-2">
+              <div 
+                className="bg-green-600 h-2 rounded-full" 
+                style={{ 
+                  width: stats.total > 0 ? `${(stats.delivered / stats.total) * 100}%` : '0%' 
+                }}
+              ></div>
+            </div>
+          </div>
+          <div>
+            <div className="flex justify-between items-center mb-2">
+              <span className="text-sm text-gray-600">Tasa de Envío</span>
+              <span className="text-sm font-semibold">
+                {stats.total > 0 ? (((stats.sent + stats.delivered) / stats.total) * 100).toFixed(1) : 0}%
+              </span>
+            </div>
+            <div className="w-full bg-gray-200 rounded-full h-2">
+              <div 
+                className="bg-blue-600 h-2 rounded-full" 
+                style={{ 
+                  width: stats.total > 0 ? `${((stats.sent + stats.delivered) / stats.total) * 100}%` : '0%' 
+                }}
+              ></div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <NotificationsDashboard 
+        notifications={notifications} 
+        templateBreakdown={Object.values(templateBreakdown)}
+        recentCount={recentNotifications.length}
+        clubId={session.clubId}
+      />
+    </div>
+  )
+}

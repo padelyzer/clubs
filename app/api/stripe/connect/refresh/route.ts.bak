@@ -1,0 +1,101 @@
+import { NextRequest, NextResponse } from 'next/server'
+import { createAccountLink } from '@/lib/config/stripe'
+import { prisma } from '@/lib/config/prisma'
+import { requireStaffAuth } from '@/lib/auth/actions'
+
+export async function POST(request: NextRequest) {
+  try {
+    const session = await requireStaffAuth()
+
+    const club = await prisma.Club.findUnique({
+      where: { id: session.clubId },
+      select: { 
+        id: true, 
+        name: true,
+        stripeAccountId: true,
+        stripeOnboardingCompleted: true
+      }
+    })
+
+    if (!club) {
+      return NextResponse.json(
+        { error: 'Club no encontrado' },
+        { status: 404 }
+      )
+    }
+
+    if (!club.stripeAccountId) {
+      return NextResponse.json(
+        { error: 'No hay cuenta de Stripe Connect para refrescar' },
+        { status: 400 }
+      )
+    }
+
+    if (club.stripeOnboardingCompleted) {
+      return NextResponse.json(
+        { error: 'La configuración ya está completa' },
+        { status: 400 }
+      )
+    }
+
+    // Create new account link for continuing onboarding
+    const refreshUrl = `${process.env.NEXT_PUBLIC_APP_URL}/dashboard/settings/stripe?refresh=true`
+    const returnUrl = `${process.env.NEXT_PUBLIC_APP_URL}/dashboard/settings/stripe?success=true`
+
+    const linkResult = await createAccountLink(club.stripeAccountId, refreshUrl, returnUrl)
+    
+    if (!linkResult.success) {
+      console.error('Error creating account link:', linkResult.error)
+      
+      // Handle specific Stripe errors
+      if (linkResult.error?.type === 'StripeInvalidRequestError' && 
+          linkResult.error?.code === 'account_invalid') {
+        return NextResponse.json(
+          { 
+            error: 'La cuenta de Stripe es inválida. Necesita crear una nueva cuenta.',
+            requiresNewAccount: true
+          },
+          { status: 400 }
+        )
+      }
+
+      return NextResponse.json(
+        { error: 'Error creando link de configuración: ' + linkResult.error.message },
+        { status: 500 }
+      )
+    }
+
+    console.log('Stripe account link refreshed for club:', club.id)
+
+    return NextResponse.json({
+      success: true,
+      onboardingUrl: linkResult.data.url,
+      message: 'Link de configuración refrescado exitosamente'
+    })
+
+  } catch (error) {
+    console.error('Error in Stripe Connect refresh:', error)
+    
+    // Handle specific error types
+    if (error instanceof Error) {
+      if (error.message.includes('authentication')) {
+        return NextResponse.json(
+          { error: 'Sesión expirada. Por favor inicia sesión nuevamente.' },
+          { status: 401 }
+        )
+      }
+      
+      if (error.message.includes('stripe')) {
+        return NextResponse.json(
+          { error: 'Error de comunicación con Stripe. Intenta nuevamente.' },
+          { status: 503 }
+        )
+      }
+    }
+
+    return NextResponse.json(
+      { error: 'Error interno del servidor' },
+      { status: 500 }
+    )
+  }
+}

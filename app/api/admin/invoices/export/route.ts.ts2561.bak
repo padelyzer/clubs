@@ -1,0 +1,171 @@
+import { NextRequest, NextResponse } from 'next/server'
+import { requireSuperAdmin } from '@/lib/auth/actions'
+import { prisma } from '@/lib/config/prisma'
+
+export async function POST(request: NextRequest) {
+  try {
+    // Verify super admin access
+    await requireSuperAdmin()
+
+    // Get query parameters for filtering
+    const { searchParams } = new URL(request.url)
+    const status = searchParams.get('status')
+    const startDate = searchParams.get('startDate')
+    const endDate = searchParams.get('endDate')
+    const clubId = searchParams.get('clubId')
+
+    // Build where clause
+    const where: any = {}
+    
+    if (status && status !== 'all') {
+      where.status = status.toUpperCase()
+    }
+    
+    if (startDate) {
+      where.createdAt = { ...where.createdAt, gte: new Date(startDate) }
+    }
+    
+    if (endDate) {
+      where.createdAt = { ...where.createdAt, lte: new Date(endDate) }
+    }
+    
+    if (clubId) {
+      where.clubId = clubId
+    }
+
+    // Get invoices with related data
+    const invoices = await prisma.subscriptionInvoice.findMany({
+      where,
+      include: {
+        club: {
+          select: {
+            id: true,
+            name: true,
+            email: true,
+            city: true,
+            state: true,
+            status: true
+          }
+        },
+        subscription: {
+          select: {
+            id: true,
+            status: true,
+            plan: {
+              select: {
+                name: true,
+                displayName: true,
+                price: true
+              }
+            }
+          }
+        }
+      },
+      orderBy: { createdAt: 'desc' }
+    })
+
+    // Generate CSV content
+    const csvHeaders = [
+      'Número de Factura',
+      'Club',
+      'Email del Club',
+      'Ciudad',
+      'Estado',
+      'Plan',
+      'Estado de Factura',
+      'Monto',
+      'IVA',
+      'Total',
+      'Moneda',
+      'Fecha de Creación',
+      'Fecha de Vencimiento',
+      'Fecha de Pago',
+      'Período de Facturación (Inicio)',
+      'Período de Facturación (Fin)',
+      'Estado del Club',
+      'Estado de Suscripción'
+    ]
+
+    const csvRows = invoices.map(invoice => {
+      const formatDate = (date: Date | null) => {
+        return date ? new Date(date).toLocaleDateString('es-MX') : ''
+      }
+
+      const formatPrice = (price: number) => {
+        return (price / 100).toFixed(2)
+      }
+
+      return [
+        invoice.invoiceNumber,
+        invoice.Club.name,
+        invoice.Club.email,
+        invoice.Club.city,
+        invoice.Club.state,
+        invoice.subscription.plan.displayName,
+        invoice.status,
+        formatPrice(invoice.amount),
+        formatPrice(invoice.tax),
+        formatPrice(invoice.total),
+        invoice.currency,
+        formatDate(invoice.createdAt),
+        formatDate(invoice.dueDate),
+        formatDate(invoice.paidAt),
+        formatDate(invoice.billingPeriodStart),
+        formatDate(invoice.billingPeriodEnd),
+        invoice.Club.status,
+        invoice.subscription.status
+      ]
+    })
+
+    // Create CSV content
+    const csvContent = [
+      csvHeaders.join(','),
+      ...csvRows.map(row => 
+        row.map(field => {
+          // Escape fields that contain commas, quotes, or newlines
+          const stringField = String(field || '')
+          if (stringField.includes(',') || stringField.includes('"') || stringField.includes('\n')) {
+            return `"${stringField.replace(/"/g, '""')}"`
+          }
+          return stringField
+        }).join(',')
+      )
+    ].join('\n')
+
+    // Add BOM for proper UTF-8 handling in Excel
+    const bom = '\uFEFF'
+    const csvWithBom = bom + csvContent
+
+    // Set headers for file download
+    const filename = `facturas_${new Date().toISOString().split('T')[0]}.csv`
+    
+    return new NextResponse(csvWithBom, {
+      status: 200,
+      headers: {
+        'Content-Type': 'text/csv; charset=utf-8',
+        'Content-Disposition': `attachment; filename="${filename}"`,
+        'Content-Length': Buffer.byteLength(csvWithBom, 'utf8').toString()
+      }
+    })
+
+  } catch (error) {
+    console.error('Error exporting invoices:', error)
+    
+    if (error instanceof Error && error.message.includes('Unauthorized')) {
+      return NextResponse.json(
+        { error: 'No tienes permisos para realizar esta acción' },
+        { status: 403 }
+      )
+    }
+
+    return NextResponse.json(
+      { error: 'Error interno del servidor al exportar facturas' },
+      { status: 500 }
+    )
+  }
+}
+
+// GET method for basic export without filters
+export async function GET(request: NextRequest) {
+  return POST(request)
+}

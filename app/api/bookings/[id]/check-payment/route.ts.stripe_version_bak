@@ -1,0 +1,125 @@
+import { NextRequest, NextResponse } from 'next/server'
+import { prisma } from '@/lib/config/prisma'
+import { requireAuthAPI } from '@/lib/auth/actions'
+
+export async function GET(
+  request: NextRequest,
+  { params }: { params: Promise<{ id: string }> }
+) {
+  try {
+    const session = await requireAuthAPI()
+    
+    if (!session) {
+      return NextResponse.json(
+        { success: false, error: 'No autorizado' },
+        { status: 401 }
+      )
+    }
+
+    const paramData = await params
+    const { id } = paramData
+    
+    console.log('[Check Payment] Checking payment for booking:', id)
+
+    // Check for regular booking payment
+    const booking = await prisma.booking.findUnique({
+      where: { 
+        id,
+        clubId: session.clubId
+      },
+      include: {
+        Payment: {
+          where: {
+            status: 'processing'
+          },
+          orderBy: {
+            createdAt: 'desc'
+          },
+          take: 1
+        },
+        SplitPayment: {
+          where: {
+            status: 'pending'
+          }
+        }
+      }
+    })
+
+    if (booking) {
+      // Check for regular payment
+      if (booking.Payment.length > 0) {
+        const payment = booking.Payment[0]
+        return NextResponse.json({
+          hasPaymentIntent: true,
+          paymentIntentId: payment.stripePaymentIntentId,
+          paymentLink: `${process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000'}/pay/${id}`,
+          status: payment.status
+        })
+      }
+      
+      // Check if it's a split payment booking with pending payments
+      if (booking.splitPaymentEnabled && booking.SplitPayment.length > 0) {
+        return NextResponse.json({
+          hasPaymentIntent: false,
+          paymentIntentId: null,
+          paymentLink: `${process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000'}/pay/${id}`,
+          status: 'pending',
+          isSplitPayment: true,
+          pendingSplitPayments: booking.SplitPayment.length
+        })
+      }
+    }
+
+    // Check for booking group payment
+    const bookingGroup = await prisma.bookingGroup.findUnique({
+      where: { 
+        id,
+        clubId: session.clubId
+      },
+      include: {
+        payments: {
+          where: {
+            status: 'processing'
+          },
+          orderBy: {
+            createdAt: 'desc'
+          },
+          take: 1
+        }
+      }
+    })
+
+    if (bookingGroup && bookingGroup.payments.length > 0) {
+      const payment = bookingGroup.payments[0]
+      return NextResponse.json({
+        hasPaymentIntent: true,
+        paymentIntentId: payment.stripePaymentIntentId,
+        paymentLink: `${process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000'}/pay/${id}`,
+        status: payment.status
+      })
+    }
+
+
+    // No payment intent found
+    return NextResponse.json({
+      hasPaymentIntent: false,
+      paymentIntentId: null,
+      paymentLink: null,
+      status: null
+    })
+
+  } catch (error) {
+    console.error('Error checking payment:', {
+      error,
+      bookingId: id,
+      errorMessage: error instanceof Error ? error.message : 'Unknown error'
+    })
+    return NextResponse.json(
+      { 
+        error: 'Error al verificar pago',
+        details: error instanceof Error ? error.message : 'Unknown error' 
+      },
+      { status: 500 }
+    )
+  }
+}

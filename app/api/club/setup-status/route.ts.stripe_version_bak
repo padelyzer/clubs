@@ -1,0 +1,54 @@
+import { NextRequest, NextResponse } from 'next/server'
+import { requireAuthAPI } from '@/lib/auth/actions'
+import { prisma } from '@/lib/config/prisma'
+
+export async function GET(request: NextRequest) {
+  try {
+    const session = await requireAuthAPI()
+    
+    if (!session) {
+      return NextResponse.json(
+        { success: false, error: 'No autorizado' },
+        { status: 401 }
+      )
+    }
+    
+    const club = await prisma.club.findUnique({
+      where: { id: session.clubId },
+      include: {
+        ClubSettings: true
+      }
+    })
+
+    if (!club) {
+      return NextResponse.json(
+        { error: 'Club no encontrado' },
+        { status: 404 }
+      )
+    }
+
+    const setupCompleted = club.initialSetupCompleted || false
+    
+    return NextResponse.json({
+      success: true,
+      setupCompleted,
+      club: {
+        id: club.id,
+        name: club.name,
+        address: club.address,
+        city: club.city,
+        state: club.state,
+        country: club.country,
+        postalCode: club.postalCode
+      },
+      hasSettings: !!club.ClubSettings
+    })
+
+  } catch (error) {
+    console.error('Error checking setup status:', error)
+    return NextResponse.json(
+      { error: 'Error interno del servidor' },
+      { status: 500 }
+    )
+  }
+}
