@@ -2559,13 +2559,12 @@ export function CheckInModal({
             ? booking.splitPayments.some(sp => sp.status !== 'completed')
             : !isPaid
           
-          // Botón de gestionar pagos divididos - DESHABILITADO por solicitud del usuario
-          /*
+          // Botón de gestionar pagos divididos
           if (hasSplitPaymentsEnabled && (!hasSplitPayments || somePaymentsPending)) {
             // Para pagos divididos con pagos pendientes o sin datos cargados
             const completedCount = booking.splitPayments?.filter(sp => sp.status === 'completed').length || 0
             const totalCount = booking.splitPaymentCount || booking.splitPayments?.length || 0
-            
+
             return (
               <AppleButton
                 variant="primary"
@@ -2582,7 +2581,6 @@ export function CheckInModal({
               </AppleButton>
             )
           }
-          */
           
           if (!isPaid && step === 'payment' && !booking.splitPaymentEnabled) {
             return (
