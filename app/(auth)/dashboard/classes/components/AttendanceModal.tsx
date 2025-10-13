@@ -153,7 +153,7 @@ export function AttendanceModal({
         if (data.summary.totalRevenue > 0) {
           notify.info({
             title: 'Pagos procesados',
-            message: `Ingresos: ${formatCurrency(data.summary.totalRevenue / 100, 'MXN')}`,
+            message: `Ingresos: ${formatCurrency(data.summary.totalRevenue / 100)}`,
             duration: 5000
           })
         }
@@ -347,7 +347,7 @@ export function AttendanceModal({
                         <div className="space-y-2">
                           <label className="block text-xs font-medium text-gray-700">
                             <DollarSign className="w-3 h-3 inline mr-1" />
-                            Pago: {formatCurrency(student.suggestedPaymentAmount / 100, 'MXN')}
+                            Pago: {formatCurrency(student.suggestedPaymentAmount / 100)}
                           </label>
                           <select
                             value={currentAttendance.paymentMethod || ''}

@@ -50,7 +50,7 @@ export const DEFAULT_CLASS_FORM = {
     frequency: 'WEEKLY',
     interval: 1,
     occurrences: 12,
-    endDate: null
+    endDate: null as string | null
   }
 }
 

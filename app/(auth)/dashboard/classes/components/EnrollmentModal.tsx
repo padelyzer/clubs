@@ -85,10 +85,10 @@ export function EnrollmentModal({
                 <strong>Horario:</strong> {classItem.startTime} - {classItem.endTime}
               </div>
               <div>
-                <strong>Instructor:</strong> {classItem.instructor?.name || classItem.instructorName}
+                <strong>Instructor:</strong> {classItem.instructor?.name || 'Sin asignar'}
               </div>
               <div>
-                <strong>Precio:</strong> {formatCurrency(classItem.price / 100, 'MXN')}
+                <strong>Precio:</strong> {formatCurrency(classItem.price / 100)}
               </div>
               <div className="col-span-2">
                 <strong>Disponibilidad:</strong>{' '}
@@ -242,7 +242,7 @@ export function EnrollmentModal({
                           max="4"
                         />
                         <p className="text-xs text-gray-500 mt-1">
-                          Cada pago: {formatCurrency((classItem.price / 100) / enrollmentForm.splitCount, 'MXN')}
+                          Cada pago: {formatCurrency((classItem.price / 100) / enrollmentForm.splitCount)}
                         </p>
                       </div>
                     )}

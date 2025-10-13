@@ -105,7 +105,7 @@ export function ClassCard({
         {/* Price */}
         <div className="flex items-center gap-2 text-sm text-gray-600">
           <DollarSign className="w-4 h-4" />
-          <span>{formatCurrency(classItem.price / 100, 'MXN')}</span>
+          <span>{formatCurrency(classItem.price / 100)}</span>
         </div>
       </div>
 
@@ -153,9 +153,10 @@ export function ClassCard({
             </ButtonModern>
 
             <ButtonModern
-              variant="danger"
+              variant="secondary"
               size="sm"
               onClick={() => onDelete(classItem)}
+              className="text-red-600 hover:text-red-700 hover:bg-red-50"
             >
               <Trash2 className="w-4 h-4" />
             </ButtonModern>
