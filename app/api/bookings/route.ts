@@ -422,6 +422,7 @@ export async function POST(request: NextRequest) {
         playerPhone: validatedData.playerPhone,
         totalPlayers: validatedData.totalPlayers,
         price,
+        amount: price,
         currency: 'MXN',
         splitPaymentEnabled: validatedData.splitPaymentEnabled,
         splitPaymentCount: validatedData.splitPaymentCount,

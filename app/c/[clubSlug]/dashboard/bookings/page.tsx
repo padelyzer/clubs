@@ -24,7 +24,7 @@ type Booking = {
   playerName: string
   playerEmail?: string
   playerPhone: string
-  court: { id: string; name: string }
+  Court: { id: string; name: string }
   date: string
   startTime: string
   endTime: string
@@ -188,7 +188,7 @@ function BookingsPageContent() {
           playerName: 'Juan Pérez',
           playerEmail: 'juan@example.com',
           playerPhone: '555-1234',
-          court: { id: '1', name: 'Cancha Central' },
+          Court: { id: '1', name: 'Cancha Central' },
           date: selectedDate.toISOString(),
           startTime: '09:00',
           endTime: '10:30',
@@ -1268,7 +1268,7 @@ function BookingsPageContent() {
           courts={courts}
           existingBookings={bookings.map(b => ({
             id: b.id,
-            courtId: b.court.id,
+            courtId: b.Court.id,
             date: b.date,
             startTime: b.startTime,
             endTime: b.endTime,
