@@ -155,7 +155,7 @@ export async function POST(
         }, 'Resultado confirmado automáticamente')
       } else {
         // Los resultados no coinciden, marcar conflicto
-        await prisma.resultSubmissions.updateMany({
+        await prisma.tournamentMatchResult.updateMany({
           where: { matchId },
           data: {
             conflictStatus: 'pending',

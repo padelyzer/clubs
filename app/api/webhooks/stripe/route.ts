@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { headers } from 'next/headers'
 import { prisma } from '@/lib/config/prisma'
 import { paymentService } from '@/lib/services/payment-service'
+import { generateId } from '@/lib/utils/generate-id'
 import Stripe from 'stripe'
 
 export async function POST(request: NextRequest) {
@@ -126,7 +127,7 @@ async function handlePaymentIntentSucceeded(paymentIntent: Stripe.PaymentIntent)
         where: { id: bookingId },
         data: {
           status: 'CONFIRMED',
-          paymentStatus: 'PAID'
+          paymentStatus: 'completed'
         }
       })
       
@@ -140,7 +141,7 @@ async function handlePaymentIntentSucceeded(paymentIntent: Stripe.PaymentIntent)
           ]
         },
         data: {
-          status: 'succeeded',
+          status: 'completed',
           stripePaymentIntentId: paymentIntent.id
         }
       })
@@ -155,6 +156,7 @@ async function handlePaymentIntentSucceeded(paymentIntent: Stripe.PaymentIntent)
       if (!existingTransaction) {
         await prisma.transaction.create({
           data: {
+            id: generateId(),
             clubId: booking.clubId,
             type: 'INCOME',
             category: 'BOOKING',
@@ -164,6 +166,7 @@ async function handlePaymentIntentSucceeded(paymentIntent: Stripe.PaymentIntent)
             date: new Date(),
             reference: paymentIntent.id,
             bookingId,
+            updatedAt: new Date(),
             metadata: {
               bookingId,
               paymentMethod: 'stripe',
@@ -199,22 +202,22 @@ async function handlePaymentIntentSucceeded(paymentIntent: Stripe.PaymentIntent)
         include: {
           Booking: {
             include: {
-              splitPayments: true
+              SplitPayment: true
             }
           }
         }
       })
-      
+
       if (splitPayment?.Booking) {
-        const allPaid = splitPayment.Booking.splitPayments.every(sp => sp.status === 'completed')
-        
+        const allPaid = splitPayment.Booking.SplitPayment.every(sp => sp.status === 'completed')
+
         if (allPaid) {
           // Update booking status if all split payments are complete
           await prisma.booking.update({
             where: { id: splitPayment.Booking.id },
             data: {
               status: 'CONFIRMED',
-              paymentStatus: 'PAID'
+              paymentStatus: 'completed'
             }
           })
         }
@@ -240,18 +243,7 @@ async function handlePaymentIntentSucceeded(paymentIntent: Stripe.PaymentIntent)
         paymentStatus: 'completed',
         confirmed: true,
         paidAmount: paymentIntent.amount,
-        stripePaymentIntentId: paymentIntent.id
-      }
-    })
-
-    // Update tournament payment record
-    await prisma.tournamentPayment.updateMany({
-      where: {
-        tournamentId,
-        stripePaymentIntentId: paymentIntent.id
-      },
-      data: {
-        status: 'completed'
+        paymentReference: paymentIntent.id
       }
     })
 
@@ -279,7 +271,7 @@ async function handlePaymentIntentFailed(paymentIntent: Stripe.PaymentIntent) {
         where: { id: bookingId },
         data: {
           status: 'PENDING',
-          paymentStatus: 'FAILED'
+          paymentStatus: 'failed'
         }
       })
       
@@ -332,17 +324,6 @@ async function handlePaymentIntentFailed(paymentIntent: Stripe.PaymentIntent) {
       }
     })
 
-    // Update tournament payment record
-    await prisma.tournamentPayment.updateMany({
-      where: {
-        tournamentId,
-        stripePaymentIntentId: paymentIntent.id
-      },
-      data: {
-        status: 'failed'
-      }
-    })
-
     console.log(`Payment intent failed for registration: ${registrationId}`)
 
   } catch (error) {
@@ -366,73 +347,32 @@ async function handleCheckoutSessionCompleted(session: Stripe.Checkout.Session) 
       return
     }
 
-    // Update payment record
-    await prisma.tournamentPayment.update({
-      where: { id: registrationId },
-      data: {
-        status: 'completed',
-        stripeSessionId: session.id
-      }
-    })
-
-    // Create tournament registration from payment link data
-    const paymentRecord = await prisma.tournamentPayment.findUnique({
+    // Find existing registration to update
+    const existingRegistration = await prisma.tournamentRegistration.findUnique({
       where: { id: registrationId }
     })
 
-    if (paymentRecord && paymentRecord.metadata) {
-      const paymentMeta = paymentRecord.metadata as any
+    if (existingRegistration) {
+      // Update existing registration
+      await prisma.tournamentRegistration.update({
+        where: { id: registrationId },
+        data: {
+          paymentStatus: 'completed',
+          confirmed: true,
+          paidAmount: session.amount_total || 0,
+          paymentReference: session.id
+        }
+      })
 
-      // Create or find players
-      const player1 = await createOrFindPlayer(
-        paymentRecord.tournamentId,
-        paymentMeta.player1Name,
-        paymentMeta.player1Email,
-        paymentMeta.player1Phone
+      // Create financial transaction
+      await createFinancialTransaction(
+        tournamentId,
+        session.amount_total || 0,
+        'payment_link',
+        session.id
       )
 
-      const player2 = await createOrFindPlayer(
-        paymentRecord.tournamentId,
-        paymentMeta.player2Name,
-        paymentMeta.player2Email,
-        paymentMeta.player2Phone
-      )
-
-      if (player1 && player2) {
-        // Create tournament registration
-        const partnerId = `team_${Date.now()}`
-        
-        await prisma.tournamentRegistration.create({
-          data: {
-            tournamentId,
-            player1Id: player1.id,
-            player1Name: player1.name,
-            player1Email: player1.email,
-            player1Phone: player1.phone,
-            player2Id: player2.id,
-            player2Name: player2.name,
-            player2Email: player2.email,
-            player2Phone: player2.phone,
-            partnerId,
-            teamName: paymentMeta.teamName || null,
-            paymentStatus: 'completed',
-            paymentMethod: 'STRIPE_LINK',
-            confirmed: true,
-            paidAmount: session.amount_total || 0,
-            stripeSessionId: session.id
-          }
-        })
-
-        // Create financial transaction
-        await createFinancialTransaction(
-          tournamentId, 
-          session.amount_total || 0, 
-          'payment_link', 
-          session.id
-        )
-
-        console.log(`Checkout session completed for registration: ${registrationId}`)
-      }
+      console.log(`Checkout session completed for registration: ${registrationId}`)
     }
 
   } catch (error) {
@@ -476,10 +416,12 @@ async function createOrFindPlayer(
     if (!player) {
       player = await prisma.player.create({
         data: {
+          id: generateId(),
           clubId: tournament.clubId,
           name,
           email,
-          phone
+          phone,
+          updatedAt: new Date()
         }
       })
     }
@@ -513,6 +455,7 @@ async function createFinancialTransaction(
     // Create income transaction
     await prisma.transaction.create({
       data: {
+        id: generateId(),
         clubId: tournament.clubId,
         type: 'INCOME',
         category: 'TOURNAMENT',
@@ -521,6 +464,7 @@ async function createFinancialTransaction(
         description: `Inscripción ${tournament.name}`,
         date: new Date(),
         reference: transactionId,
+        updatedAt: new Date(),
         metadata: {
           tournamentId,
           paymentMethod: method,

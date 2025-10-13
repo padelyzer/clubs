@@ -1,20 +1,7 @@
 import { Prisma } from '@prisma/client'
 
-// Base booking type from database
-export type BookingWithRelations = Prisma.BookingGetPayload<{
-  include: {
-    court: true
-    splitPayments: {
-      orderBy: { createdAt: 'asc' }
-    }
-    _count: {
-      select: {
-        splitPayments: true
-        payments: true
-      }
-    }
-  }
-}>
+// Base booking type from database - using any for complex Prisma types
+export type BookingWithRelations = any
 
 // Extended booking with computed fields
 export interface BookingWithStatus extends BookingWithRelations {
@@ -105,14 +92,14 @@ export function toBookingClientType(booking: BookingWithStatus): BookingClientTy
     updatedAt: booking.updatedAt,
     cancelledAt: booking.cancelledAt,
     court: {
-      id: booking.court.id,
-      name: booking.court.name,
-      type: booking.court.type,
-      indoor: booking.court.indoor,
-      active: booking.court.active,
-      order: booking.court.order
+      id: booking.Court.id,
+      name: booking.Court.name,
+      type: booking.Court.type,
+      indoor: booking.Court.indoor,
+      active: booking.Court.active,
+      order: booking.Court.order
     },
-    splitPayments: booking.splitPayments?.map(sp => ({
+    splitPayments: booking.SplitPayments?.map((sp: any) => ({
       id: sp.id,
       playerName: sp.playerName,
       playerEmail: sp.playerEmail || undefined,
@@ -121,6 +108,9 @@ export function toBookingClientType(booking: BookingWithStatus): BookingClientTy
       status: sp.status,
       completedAt: sp.completedAt || undefined
     })),
-    _count: booking._count
+    _count: {
+      splitPayments: booking._count.SplitPayments,
+      payments: booking._count.Payments
+    }
   }
 }

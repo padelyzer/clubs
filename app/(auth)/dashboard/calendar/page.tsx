@@ -302,8 +302,8 @@ function CalendarPageContent() {
     if (selectedView !== 'timeGridWeek') return events
 
     const summaryEvents: any[] = []
-    const timeSlots = []
-    
+    const timeSlots: string[] = []
+
     // Generate time slots from 07:00 to 20:30 (30 min intervals)
     for (let hour = 7; hour < 21; hour++) {
       timeSlots.push(`${hour.toString().padStart(2, '0')}:00`)
@@ -682,7 +682,7 @@ function CalendarPageContent() {
           </div>
         ) : (
           <FullCalendar
-              ref={calendarRef}
+              ref={calendarRef as any}
               plugins={[dayGridPlugin, timeGridPlugin, interactionPlugin, listPlugin]}
               initialView={selectedView}
               locale={esLocale}
@@ -1218,7 +1218,7 @@ function CalendarPageContent() {
                   Check-in
                 </ButtonModern>
                 <ButtonModern
-                  variant="danger"
+                  variant="ghost"
                   onClick={() => {
                     // TODO: Implement cancel
                     notify.error('Reserva cancelada')

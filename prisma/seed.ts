@@ -1,6 +1,7 @@
 import { PrismaClient } from '@prisma/client'
 import bcrypt from 'bcryptjs'
 import { PasswordGenerator } from '../lib/security/password-generator'
+import { generateId } from '../lib/utils/generate-id'
 
 const prisma = new PrismaClient()
 
@@ -125,6 +126,7 @@ async function main() {
       data: {
         id: 'court-central-001',
         name: 'Cancha Central',
+        type: 'PADEL',
         indoor: true,
         active: true,
         order: 1,
@@ -136,6 +138,7 @@ async function main() {
       data: {
         id: 'court-norte-001',
         name: 'Cancha Norte',
+        type: 'PADEL',
         indoor: false,
         active: true,
         order: 2,
@@ -147,6 +150,7 @@ async function main() {
       data: {
         id: 'court-sur-001',
         name: 'Cancha Sur',
+        type: 'PADEL',
         indoor: true,
         active: true,
         order: 3,
@@ -164,10 +168,12 @@ async function main() {
     daysOfWeek.map((day) =>
       prisma.schedule.create({
         data: {
+          id: generateId(),
           dayOfWeek: day,
           openTime: '07:00',
           closeTime: '22:00',
-              clubId: club.id,
+          clubId: club.id,
+          updatedAt: new Date(),
         },
       })
     )
@@ -178,10 +184,12 @@ async function main() {
   // Crear Precios
   const pricing = await prisma.pricing.create({
     data: {
+      id: generateId(),
       startTime: '07:00',
       endTime: '22:00',
       price: 50000, // $500 MXN
       clubId: club.id,
+      updatedAt: new Date(),
     },
   })
 
@@ -268,98 +276,114 @@ async function main() {
   const players = await Promise.all([
     prisma.player.create({
       data: {
+        id: generateId(),
         clubId: club.id,
-        clientNumber: 'P001',
+        memberNumber: 'P001',
         name: 'Carlos Rodríguez',
         email: 'carlos@example.com',
         phone: '+34600111222',
         gender: 'MALE',
         level: 'INTERMEDIATE',
-        active: true
+        active: true,
+        updatedAt: new Date(),
       }
     }),
     prisma.player.create({
       data: {
+        id: generateId(),
         clubId: club.id,
-        clientNumber: 'P002',
+        memberNumber: 'P002',
         name: 'María González',
         email: 'maria@example.com',
         phone: '+34600333444',
         gender: 'FEMALE',
         level: 'ADVANCED',
-        active: true
+        active: true,
+        updatedAt: new Date(),
       }
     }),
     prisma.player.create({
       data: {
+        id: generateId(),
         clubId: club.id,
-        clientNumber: 'P003',
+        memberNumber: 'P003',
         name: 'Juan Martínez',
         email: 'juan@example.com',
         phone: '+34600555666',
         gender: 'MALE',
         level: 'INTERMEDIATE',
-        active: true
+        active: true,
+        updatedAt: new Date(),
       }
     }),
     prisma.player.create({
       data: {
+        id: generateId(),
         clubId: club.id,
-        clientNumber: 'P004',
+        memberNumber: 'P004',
         name: 'Ana López',
         email: 'ana@example.com',
         phone: '+34600777888',
         gender: 'FEMALE',
         level: 'BEGINNER',
-        active: true
+        active: true,
+        updatedAt: new Date(),
       }
     }),
     prisma.player.create({
       data: {
+        id: generateId(),
         clubId: club.id,
-        clientNumber: 'P005',
+        memberNumber: 'P005',
         name: 'Pedro Sánchez',
         email: 'pedro@example.com',
         phone: '+34600999000',
         gender: 'MALE',
         level: 'ADVANCED',
-        active: true
+        active: true,
+        updatedAt: new Date(),
       }
     }),
     prisma.player.create({
       data: {
+        id: generateId(),
         clubId: club.id,
-        clientNumber: 'P006',
+        memberNumber: 'P006',
         name: 'Laura Fernández',
         email: 'laura@example.com',
         phone: '+34600111333',
         gender: 'FEMALE',
         level: 'INTERMEDIATE',
-        active: true
+        active: true,
+        updatedAt: new Date(),
       }
     }),
     prisma.player.create({
       data: {
+        id: generateId(),
         clubId: club.id,
-        clientNumber: 'P007',
+        memberNumber: 'P007',
         name: 'Diego Ruiz',
         email: 'diego@example.com',
         phone: '+34600222444',
         gender: 'MALE',
         level: 'PROFESSIONAL',
-        active: true
+        active: true,
+        updatedAt: new Date(),
       }
     }),
     prisma.player.create({
       data: {
+        id: generateId(),
         clubId: club.id,
-        clientNumber: 'P008',
+        memberNumber: 'P008',
         name: 'Carmen Díaz',
         email: 'carmen@example.com',
         phone: '+34600333555',
         gender: 'FEMALE',
         level: 'ADVANCED',
-        active: true
+        active: true,
+        updatedAt: new Date(),
       }
     })
   ])

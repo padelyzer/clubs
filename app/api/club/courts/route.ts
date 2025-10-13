@@ -33,21 +33,15 @@ export async function POST(request: NextRequest) {
 
     const {
       name,
-      description,
-      courtType,
-      surface,
-      isIndoor,
-      hasLighting,
-      basePrice,
-      peakPrice,
-      maxPlayers,
+      type,
+      indoor,
       active
     } = body
 
     // Validación básica
-    if (!name || !courtType) {
+    if (!name) {
       return NextResponse.json(
-        { error: 'Nombre y tipo de cancha son requeridos' },
+        { error: 'Nombre de cancha es requerido' },
         { status: 400 }
       )
     }
@@ -57,7 +51,7 @@ export async function POST(request: NextRequest) {
       where: { clubId: session.clubId },
       orderBy: { order: 'desc' }
     })
-    
+
     const nextOrder = lastCourt ? lastCourt.order + 1 : 1
 
     // Crear la cancha
@@ -65,14 +59,8 @@ export async function POST(request: NextRequest) {
       data: {
         clubId: session.clubId,
         name,
-        description: description || null,
-        courtType: courtType || 'PADEL',
-        surface: surface || 'ARTIFICIAL_GRASS',
-        isIndoor: isIndoor || false,
-        hasLighting: hasLighting || true,
-        basePrice: basePrice || 600,
-        peakPrice: peakPrice || null,
-        maxPlayers: maxPlayers || 4,
+        type: type || 'PADEL',
+        indoor: indoor || false,
         order: nextOrder,
         active: active !== false
       }

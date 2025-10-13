@@ -83,7 +83,7 @@ export class NotificationTemplateService {
           clubId
         },
         orderBy: { createdAt: 'desc' },
-        include: { court: true }
+        include: { Court: true }
       }),
       
       // Total spent
@@ -269,18 +269,17 @@ export class NotificationTemplateService {
     const customTemplate = await prisma.notificationTemplate.findFirst({
       where: {
         clubId,
-        type,
-        active: true
+        enabled: true
       },
       orderBy: {
-        isDefault: 'desc'
+        createdAt: 'desc'
       }
     })
-    
+
     if (customTemplate) {
-      return customTemplate.body
+      return customTemplate.content
     }
-    
+
     // Return default template
     return this.getDefaultTemplate(type, {})
   }
@@ -289,8 +288,12 @@ export class NotificationTemplateService {
    * Get default template
    */
   private static getDefaultTemplate(type: NotificationType, data: Record<string, any>): string {
-    const templates = {
-      BOOKING_CONFIRMATION: 
+    const templates: Partial<Record<NotificationType, string>> = {
+      WHATSAPP:
+        `Hola {playerName} 👋\n\n` +
+        `{message}`,
+
+      EMAIL:
         `¡Hola {playerName}! 🎾\n\n` +
         `Tu reserva ha sido confirmada:\n\n` +
         `📅 Fecha: {bookingDate}\n` +
@@ -298,32 +301,43 @@ export class NotificationTemplateService {
         `🏟️ Cancha: {courtName}\n` +
         `💰 Total: ${data.totalPrice || '{totalPrice}'}\n\n` +
         `¡Te esperamos!`,
-      
-      BOOKING_REMINDER:
+
+      REMINDER:
         `⏰ Recordatorio - {playerName}\n\n` +
         `Tu juego es en {hoursRemaining} horas:\n` +
         `📍 {clubName}\n` +
         `🎾 Cancha: {courtName}\n` +
         `⏰ Hora: {bookingTime}\n\n` +
         `¡No olvides tu equipamiento!`,
-      
+
       PAYMENT_REMINDER:
         `💰 Pago Pendiente - {playerName}\n\n` +
         `Tienes un pago pendiente de ${data.amount || '{amount}'}\n` +
         `Para tu reserva del {bookingDate}\n\n` +
         `Completa tu pago aquí: {paymentLink}`,
-      
-      BOOKING_CANCELLATION:
+
+      CANCELLATION:
         `❌ Reserva Cancelada - {playerName}\n\n` +
         `Tu reserva del {bookingDate} a las {bookingTime} ha sido cancelada.\n\n` +
         `{refundInfo}`,
-        
-      GENERAL:
-        `Hola {playerName} 👋\n\n` +
-        `{message}`
+
+      EMAIL_CONFIRMATION:
+        `¡Hola {playerName}! 🎾\n\n` +
+        `Tu reserva ha sido confirmada:\n\n` +
+        `📅 Fecha: {bookingDate}\n` +
+        `⏰ Hora: {bookingTime}\n` +
+        `🏟️ Cancha: {courtName}\n` +
+        `💰 Total: ${data.totalPrice || '{totalPrice}'}\n\n` +
+        `¡Te esperamos!`,
+
+      PAYMENT_RECEIVED:
+        `✅ Pago Recibido - {playerName}\n\n` +
+        `Hemos recibido tu pago de ${data.amount || '{amount}'}\n` +
+        `Para tu reserva del {bookingDate}\n\n` +
+        `¡Gracias!`
     }
-    
-    return templates[type] || templates.GENERAL
+
+    return templates[type] || templates.WHATSAPP || 'Hola {playerName} 👋\n\n{message}'
   }
 
   /**
@@ -356,32 +370,36 @@ export class NotificationTemplateService {
       const existing = await prisma.notificationTemplate.findFirst({
         where: { clubId, name }
       })
-      
+
+      // Convert variables to string array for schema
+      const variableStrings = variables?.map(v => v.key) || []
+
       if (existing) {
         // Update existing
         return await prisma.notificationTemplate.update({
           where: { id: existing.id },
           data: {
-            type,
-            body,
-            variables: variables || [],
+            content: body,
+            variables: variableStrings,
             updatedAt: new Date()
           }
         })
       }
-      
+
       // Create new
       return await prisma.notificationTemplate.create({
         data: {
+          id: `tpl_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
           clubId,
+          templateId: `${name.toLowerCase().replace(/\s+/g, '_')}_${Date.now()}`,
           name,
-          type,
-          body,
-          variables: variables || [],
-          active: true
+          content: body,
+          variables: variableStrings,
+          enabled: true,
+          updatedAt: new Date()
         }
       })
-      
+
     } catch (error) {
       console.error('Error creating template:', error)
       throw error
@@ -399,13 +417,13 @@ export class NotificationTemplateService {
       const template = await prisma.notificationTemplate.findUnique({
         where: { id: templateId }
       })
-      
+
       if (!template) {
         throw new Error('Template not found')
       }
-      
-      return this.replaceVariables(template.body, sampleData)
-      
+
+      return this.replaceVariables(template.content, sampleData)
+
     } catch (error) {
       console.error('Error testing template:', error)
       throw error
@@ -420,18 +438,23 @@ export class NotificationTemplateService {
       where: { clubId },
       orderBy: { createdAt: 'desc' }
     })
-    
+
     return templates.map(t => ({
       id: t.id,
       name: t.name,
-      type: t.type,
-      subject: t.subject,
-      body: t.body,
-      variables: (t.variables as TemplateVariable[]) || [],
+      type: 'WHATSAPP' as NotificationType, // Default type since schema doesn't have type field
+      subject: t.subject || undefined,
+      body: t.content,
+      variables: t.variables.map(v => ({
+        key: v,
+        description: '',
+        example: '',
+        required: false
+      })),
       performance: {
-        deliveryRate: t.deliveryRate || 0,
-        openRate: t.openRate || 0,
-        clickRate: t.clickRate || 0
+        deliveryRate: 0,
+        openRate: 0,
+        clickRate: 0
       }
     }))
   }
@@ -443,22 +466,22 @@ export class NotificationTemplateService {
     const original = await prisma.notificationTemplate.findUnique({
       where: { id: templateId }
     })
-    
+
     if (!original) {
       throw new Error('Template not found')
     }
-    
+
     return await prisma.notificationTemplate.create({
       data: {
+        id: `tpl_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
         clubId: original.clubId,
+        templateId: `${newName.toLowerCase().replace(/\s+/g, '_')}_${Date.now()}`,
         name: newName,
-        type: original.type,
-        language: original.language,
         subject: original.subject,
-        body: original.body,
+        content: original.content,
         variables: original.variables,
-        active: true,
-        isDefault: false
+        enabled: true,
+        updatedAt: new Date()
       }
     })
   }
@@ -477,7 +500,7 @@ export class NotificationTemplateService {
       where: {
         clubId,
         date: { gte: new Date() },
-        status: 'confirmed'
+        status: 'CONFIRMED'
       },
       take: testSize,
       orderBy: { date: 'asc' }

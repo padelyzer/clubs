@@ -27,37 +27,19 @@ export async function GET(
         id: matchId
       },
       include: {
-        tournament: {
+        Tournament: {
           select: {
             name: true,
             clubId: true,
-            club: {
+            Club: {
               select: {
                 name: true
               }
             }
           }
         },
-        court: {
+        Court: {
           select: {
-            name: true
-          }
-        },
-        player1: {
-          select: {
-            id: true,
-            name: true
-          }
-        },
-        player2: {
-          select: {
-            id: true,
-            name: true
-          }
-        },
-        winner: {
-          select: {
-            id: true,
             name: true
           }
         }
@@ -87,8 +69,8 @@ export async function GET(
         success: true,
         match: {
           ...match,
-          player1Score: match.player1Score as number[],
-          player2Score: match.player2Score as number[],
+          team1Score: match.team1Score,
+          team2Score: match.team2Score,
           canEdit: false,
           message: 'Este partido ya ha sido completado'
         }
@@ -106,8 +88,8 @@ export async function GET(
       success: true,
       match: {
         ...match,
-        player1Score: match.player1Score as number[],
-        player2Score: match.player2Score as number[],
+        team1Score: match.team1Score,
+        team2Score: match.team2Score,
         canEdit: true
       }
     })
@@ -138,10 +120,6 @@ export async function POST(
     const match = await prisma.tournamentMatch.findFirst({
       where: {
         id: matchId
-      },
-      include: {
-        player1: true,
-        player2: true
       }
     })
 
@@ -185,22 +163,19 @@ export async function POST(
     const updatedMatch = await prisma.tournamentMatch.update({
       where: { id: matchId },
       data: {
-        player1Score: player1Score,
-        player2Score: player2Score,
-        winnerId: finalWinnerId,
-        winnerName: finalWinnerId === match.player1Id ? match.player1Name : match.player2Name,
+        team1Score: player1Score.reduce((a, b) => a + b, 0),
+        team2Score: player2Score.reduce((a, b) => a + b, 0),
+        team1Sets: player1Score,
+        team2Sets: player2Score,
+        winner: finalWinnerId === match.player1Id ? match.player1Name : match.player2Name,
         status: 'COMPLETED',
-        completedAt: new Date(),
-        resultCapturedBy: capturedBy,
-        resultVerified: capturedBy === 'admin', // Admin captures are auto-verified
+        actualEndTime: new Date(),
+        resultsConfirmed: capturedBy === 'admin', // Admin captures are auto-verified
         notes: notes || match.notes
       },
       include: {
-        tournament: true,
-        player1: true,
-        player2: true,
-        winner: true,
-        court: true
+        Tournament: true,
+        Court: true
       }
     })
 
@@ -256,9 +231,9 @@ export async function PUT(
     const updatedMatch = await prisma.tournamentMatch.update({
       where: { id: matchId },
       data: {
-        resultVerified: verified,
-        disputeRaised: dispute || false,
-        disputeNotes: disputeNotes || match.disputeNotes
+        resultsConfirmed: verified,
+        conflictResolved: !dispute,
+        notes: disputeNotes || match.notes
       }
     })
 

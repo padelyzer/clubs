@@ -19,6 +19,33 @@ import BookingsIncomeModule from './BookingsIncomeModule'
 import ClassesIncomeModule from './ClassesIncomeModule'
 import TournamentsIncomeModule from './TournamentsIncomeModule'
 
+interface TransactionWithBooking {
+  id: string
+  type: string
+  category: string
+  description: string
+  amount: number
+  date: string
+  reference?: string
+  cleanedReference?: string
+  playerName?: string
+  courtName?: string
+  status: 'completed' | 'pending' | 'processing'
+  paymentMethod?: string
+  notes?: string
+  createdAt?: string
+  updatedAt?: string
+  Booking?: {
+    Court?: {
+      name: string
+    }
+    Payment?: Array<{
+      method: string
+    }>
+    playerName?: string
+  }
+}
+
 interface Transaction {
   id: string
   type: string
@@ -113,14 +140,14 @@ export default function IncomeModuleProfessional() {
         const data = await response.json()
         // Set the actual total count from the API
         setTotalTransactionsCount(data.total || data.transactions?.length || 0)
-        const mappedTransactions = (data.transactions || []).map((t: any) => {
+        const mappedTransactions = (data.transactions || []).map((t: TransactionWithBooking) => {
           // Extract payment method from notes if it exists
           let paymentMethod = 'No especificado'
-          
+
           // First try to get from booking's payment (note: capital B for Booking)
           if (t.Booking?.Payment?.[0]?.method) {
             paymentMethod = t.Booking.Payment[0].method
-          } 
+          }
           // Check reference for payment method (for split payments)
           else if (t.reference) {
             if (t.reference.startsWith('MANUAL_') || t.reference.includes('CASH')) {
@@ -213,8 +240,7 @@ export default function IncomeModuleProfessional() {
     console.log('🔍 Primera transacción raw:', transactions[0] ? {
       id: transactions[0].id,
       description: transactions[0].description,
-      hasBooking: !!transactions[0].Booking,
-      bookingCourt: transactions[0].Booking?.Court?.name,
+      courtName: transactions[0].courtName,
       fullStructure: transactions[0]
     } : 'No hay transacciones')
     
@@ -243,8 +269,6 @@ export default function IncomeModuleProfessional() {
           id: t.id.substring(0, 8),
           description: t.description,
           courtName: t.courtName,
-          hasBooking: !!t.Booking,
-          bookingCourt: t.Booking?.Court?.name,
         })
         
         const dateObj = new Date(t.createdAt || t.date)
@@ -296,7 +320,7 @@ export default function IncomeModuleProfessional() {
       
     } catch (error) {
       console.error('❌ Error en exportación:', error)
-      alert(`Error al exportar: ${error.message}`)
+      alert(`Error al exportar: ${(error as Error).message}`)
     }
   }
 
@@ -418,14 +442,17 @@ export default function IncomeModuleProfessional() {
   if (activeView === 'bookings') {
     return <BookingsIncomeModule />
   }
-  
+
   if (activeView === 'classes') {
     return <ClassesIncomeModule />
   }
-  
+
   if (activeView === 'tournaments') {
     return <TournamentsIncomeModule />
   }
+
+  // Type assertion needed after early returns to help TypeScript understand activeView can still be any of the union values
+  const view = activeView as 'general' | 'bookings' | 'classes' | 'tournaments'
 
   if (loading) {
     return (
@@ -608,10 +635,10 @@ export default function IncomeModuleProfessional() {
             padding: '10px 20px',
             borderRadius: '10px 10px 0 0',
             border: 'none',
-            background: activeView === 'bookings' ? '#E8F7DC' : 'transparent',
-            color: activeView === 'bookings' ? '#182A01' : '#516640',
+            background: view === 'bookings' ? '#E8F7DC' : 'transparent',
+            color: view === 'bookings' ? '#182A01' : '#516640',
             fontSize: '14px',
-            fontWeight: activeView === 'bookings' ? 600 : 500,
+            fontWeight: view === 'bookings' ? 600 : 500,
             cursor: 'pointer',
             display: 'flex',
             alignItems: 'center',
@@ -630,10 +657,10 @@ export default function IncomeModuleProfessional() {
               padding: '10px 20px',
               borderRadius: '10px 10px 0 0',
               border: 'none',
-              background: activeView === 'classes' ? '#E8F7DC' : 'transparent',
-              color: activeView === 'classes' ? '#182A01' : '#516640',
+              background: view === 'classes' ? '#E8F7DC' : 'transparent',
+              color: view === 'classes' ? '#182A01' : '#516640',
               fontSize: '14px',
-              fontWeight: activeView === 'classes' ? 600 : 500,
+              fontWeight: view === 'classes' ? 600 : 500,
               cursor: 'pointer',
               display: 'flex',
               alignItems: 'center',
@@ -653,10 +680,10 @@ export default function IncomeModuleProfessional() {
               padding: '10px 20px',
               borderRadius: '10px 10px 0 0',
               border: 'none',
-              background: activeView === 'tournaments' ? '#E8F7DC' : 'transparent',
-              color: activeView === 'tournaments' ? '#182A01' : '#516640',
+              background: view === 'tournaments' ? '#E8F7DC' : 'transparent',
+              color: view === 'tournaments' ? '#182A01' : '#516640',
               fontSize: '14px',
-              fontWeight: activeView === 'tournaments' ? 600 : 500,
+              fontWeight: view === 'tournaments' ? 600 : 500,
               cursor: 'pointer',
               display: 'flex',
               alignItems: 'center',

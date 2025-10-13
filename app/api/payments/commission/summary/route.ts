@@ -21,7 +21,7 @@ export async function GET(request: NextRequest) {
       include: { Club: true }
     })
 
-    if (!user || !user.club) {
+    if (!user || !user.Club) {
       return NextResponse.json(
         { error: 'Club no encontrado' },
         { status: 404 }
@@ -40,12 +40,12 @@ export async function GET(request: NextRequest) {
       }
     }
 
-    const summary = await getClubCommissionSummary(user.club.id, dateRange)
+    const summary = await getClubCommissionSummary(user.Club.id, dateRange)
 
     return NextResponse.json({
       success: true,
-      clubId: user.club.id,
-      clubName: user.club.name,
+      clubId: user.Club.id,
+      clubName: user.Club.name,
       summary,
       dateRange,
     })

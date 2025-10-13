@@ -113,7 +113,7 @@ export async function POST(request: NextRequest) {
       { 
         success: false, 
         error: 'Error creando paquete',
-        details: error?.message || 'Error desconocido'
+        details: (error as Error)?.message || 'Error desconocido'
       },
       { status: 500 }
     )

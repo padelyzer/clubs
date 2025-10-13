@@ -97,7 +97,7 @@ export class TimezoneValidator {
       )
       
     } catch (error) {
-      result.summary.validationErrors.push(`System validation error: ${error.message}`)
+      result.summary.validationErrors.push(`System validation error: ${(error as Error).message}`)
     }
 
     return result
@@ -191,7 +191,7 @@ export class TimezoneValidator {
         result.summary.validationErrors.push(`Timezone detection failed: ${passedTests}/${testCases.length} tests passed`)
       }
     } catch (error) {
-      result.summary.validationErrors.push(`Timezone detection test error: ${error.message}`)
+      result.summary.validationErrors.push(`Timezone detection test error: ${(error as Error).message}`)
     }
   }
 
@@ -216,14 +216,14 @@ export class TimezoneValidator {
             passedTests++
           }
         } catch (error) {
-          result.summary.validationErrors.push(`Date operation failed for ${timezone}: ${error.message}`)
+          result.summary.validationErrors.push(`Date operation failed for ${timezone}: ${(error as Error).message}`)
         }
       }
 
       result.details.systemTests.dateFiltering = passedTests === testTimezones.length
       result.details.systemTests.utcConversion = passedTests === testTimezones.length
     } catch (error) {
-      result.summary.validationErrors.push(`Date operations test error: ${error.message}`)
+      result.summary.validationErrors.push(`Date operations test error: ${(error as Error).message}`)
     }
   }
 
@@ -257,7 +257,7 @@ export class TimezoneValidator {
         result.summary.validationErrors.push('API integration test failed: no club with timezone found')
       }
     } catch (error) {
-      result.summary.validationErrors.push(`API integration test error: ${error.message}`)
+      result.summary.validationErrors.push(`API integration test error: ${(error as Error).message}`)
     }
   }
 
@@ -295,12 +295,12 @@ export class TimezoneValidator {
           }
         } catch (error) {
           result.summary.validationErrors.push(
-            `Future club scenario failed: Error testing ${detectedTimezone}: ${error.message}`
+            `Future club scenario failed: Error testing ${detectedTimezone}: ${(error as Error).message}`
           )
         }
       }
     } catch (error) {
-      result.summary.validationErrors.push(`Future club scenario test error: ${error.message}`)
+      result.summary.validationErrors.push(`Future club scenario test error: ${(error as Error).message}`)
     }
   }
 
@@ -373,11 +373,11 @@ export class TimezoneValidator {
 
           result.fixed++
         } catch (error) {
-          result.errors.push(`Failed to fix club ${club.name}: ${error.message}`)
+          result.errors.push(`Failed to fix club ${club.name}: ${(error as Error).message}`)
         }
       }
     } catch (error) {
-      result.errors.push(`Fix operation error: ${error.message}`)
+      result.errors.push(`Fix operation error: ${(error as Error).message}`)
     }
 
     return result

@@ -1,5 +1,6 @@
 import { WhatsAppLinkService } from '@/lib/services/whatsapp-link-service'
 import { prisma } from '@/lib/config/prisma'
+import { NotificationType } from '@prisma/client'
 
 /**
  * Notification hooks for automatic WhatsApp messages
@@ -72,25 +73,7 @@ export async function onPaymentCompleted(splitPaymentId: string) {
     console.log(`[WhatsApp Hook] Payment completed: ${splitPaymentId}`)
 
     const splitPayment = await prisma.splitPayment.findUnique({
-      where: { id: splitPaymentId },
-      include: {
-        Booking: {
-          include: {
-            Club: true,
-            Court: true
-          }
-        },
-        BookingGroup: {
-          include: {
-            Club: true,
-            bookings: {
-              include: {
-                Court: true
-              }
-            }
-          }
-        }
-      }
+      where: { id: splitPaymentId }
     })
 
     if (!splitPayment) {
@@ -100,16 +83,30 @@ export async function onPaymentCompleted(splitPaymentId: string) {
 
     // Generate payment completion confirmation
     console.log(`[WhatsApp Hook] Generating payment completion confirmation for: ${splitPayment.playerPhone}`)
-    
-    // Determine if it's a group booking or individual booking
-    const clubId = splitPayment.Booking?.clubId || splitPayment.BookingGroup?.clubId
+
+    // Get the booking to retrieve clubId
+    let clubId = ''
     const actualBookingId = splitPayment.bookingId || splitPayment.bookingGroupId
+
+    if (splitPayment.bookingId) {
+      const booking = await prisma.booking.findUnique({
+        where: { id: splitPayment.bookingId },
+        select: { clubId: true }
+      })
+      clubId = booking?.clubId || ''
+    } else if (splitPayment.bookingGroupId) {
+      const bookingGroup = await prisma.bookingGroup.findUnique({
+        where: { id: splitPayment.bookingGroupId },
+        select: { clubId: true }
+      })
+      clubId = bookingGroup?.clubId || ''
+    }
     
     const completionResult = await WhatsAppLinkService.generateLink({
-      clubId: clubId,
-      notificationType: 'SPLIT_PAYMENT_COMPLETED',
+      clubId: clubId || '',
+      notificationType: 'SPLIT_PAYMENT_COMPLETED' as NotificationType,
       playerName: splitPayment.playerName,
-      playerPhone: splitPayment.playerPhone,
+      playerPhone: splitPayment.playerPhone || '',
       bookingId: actualBookingId
     })
     
@@ -149,9 +146,9 @@ export async function onBookingCancelled(bookingId: string) {
     
     const cancellationResult = await WhatsAppLinkService.generateLink({
       clubId: booking.clubId,
-      notificationType: 'BOOKING_CANCELLATION',
+      notificationType: 'BOOKING_CANCELLATION' as NotificationType,
       playerName: booking.playerName,
-      playerPhone: booking.playerPhone,
+      playerPhone: booking.playerPhone || '',
       bookingId: booking.id
     })
     
@@ -166,9 +163,9 @@ export async function onBookingCancelled(bookingId: string) {
       for (const splitPayment of booking.SplitPayment) {
         const splitCancellationResult = await WhatsAppLinkService.generateLink({
           clubId: booking.clubId,
-          notificationType: 'BOOKING_CANCELLATION',
+          notificationType: 'BOOKING_CANCELLATION' as NotificationType,
           playerName: splitPayment.playerName,
-          playerPhone: splitPayment.playerPhone,
+          playerPhone: splitPayment.playerPhone || '',
           bookingId: booking.id
         })
         
@@ -210,9 +207,9 @@ export async function onBookingConfirmed(bookingId: string) {
     
     const confirmationResult = await WhatsAppLinkService.generateLink({
       clubId: booking.clubId,
-      notificationType: 'BOOKING_CONFIRMATION',
+      notificationType: 'BOOKING_CONFIRMATION' as NotificationType,
       playerName: booking.playerName,
-      playerPhone: booking.playerPhone,
+      playerPhone: booking.playerPhone || '',
       bookingId: booking.id
     })
     
@@ -280,9 +277,9 @@ export async function sendPromotionalMessage(clubId: string, promotion: {
 
     // Generate promotional WhatsApp links
     for (const booking of uniqueCustomers) {
-      const promoMessage = 
+      const promoMessage =
         `¡Hola ${booking.playerName}! 🎾\n\n` +
-        `${booking.club.name} tiene una promoción especial para ti:\n\n` +
+        `${booking.Club?.name || 'El club'} tiene una promoción especial para ti:\n\n` +
         `🏆 ${promotion.title}\n` +
         `💰 ${promotion.discountAmount}% de descuento\n` +
         `📅 Válido hasta: ${promotion.expiryDate}\n\n` +
@@ -290,9 +287,9 @@ export async function sendPromotionalMessage(clubId: string, promotion: {
 
       const promoResult = await WhatsAppLinkService.generateLink({
         clubId,
-        notificationType: 'GENERAL',
+        notificationType: 'GENERAL' as NotificationType,
         playerName: booking.playerName,
-        playerPhone: booking.playerPhone,
+        playerPhone: booking.playerPhone || '',
         message: promoMessage,
         expirationHours: 72 // 3 days for promotions
       })
@@ -328,18 +325,18 @@ export async function scheduleReminders() {
           lte: new Date(twoHoursFromNow.toDateString()) // Within next 24 hours
         },
         // Check if reminder not already sent
-        notifications: {
+        Notification: {
           none: {
             type: 'PAYMENT_REMINDER',
             status: {
-              in: ['link_generated', 'delivered']
+              in: ['sent', 'delivered']
             }
           }
         }
       },
       include: {
-        club: true,
-        court: true
+        Club: true,
+        Court: true
       }
     })
 
@@ -356,19 +353,19 @@ export async function scheduleReminders() {
       if (isInReminderWindow) {
         console.log(`[WhatsApp Hook] Generating reminder for booking: ${booking.id}`)
         
-        const reminderMessage = 
+        const reminderMessage =
           `¡Hola ${booking.playerName}! ⏰\n\n` +
-          `Te recordamos tu reserva en ${booking.club.name}:\n\n` +
+          `Te recordamos tu reserva en ${booking.Club.name}:\n\n` +
           `📅 Hoy a las ${booking.startTime}\n` +
-          `🎾 Cancha: ${booking.court.name}\n` +
-          `📍 ${booking.club.address}\n\n` +
+          `🎾 Cancha: ${booking.Court.name}\n` +
+          `📍 ${booking.Club.address || ''}\n\n` +
           `¡Te esperamos en 2 horas! 🎾`
 
         const reminderResult = await WhatsAppLinkService.generateLink({
           clubId: booking.clubId,
-          notificationType: 'PAYMENT_REMINDER',
+          notificationType: 'PAYMENT_REMINDER' as NotificationType,
           playerName: booking.playerName,
-          playerPhone: booking.playerPhone,
+          playerPhone: booking.playerPhone || '',
           bookingId: booking.id,
           message: reminderMessage
         })
@@ -391,7 +388,7 @@ export async function scheduleReminders() {
 /**
  * Update notification status (simplified for link-based approach)
  */
-export async function updateNotificationStatus(notificationId: string, status: 'delivered' | 'failed' | 'expired', errorMessage?: string) {
+export async function updateNotificationStatus(notificationId: string, status: 'delivered' | 'failed', errorMessage?: string) {
   try {
     await prisma.notification.update({
       where: { id: notificationId },
@@ -401,9 +398,9 @@ export async function updateNotificationStatus(notificationId: string, status: '
         updatedAt: new Date()
       }
     })
-    
+
     console.log(`[WhatsApp Hook] Updated notification status: ${notificationId} -> ${status}`)
-    
+
   } catch (error) {
     console.error('[WhatsApp Hook] Error updating notification status:', error)
   }

@@ -143,7 +143,7 @@ export async function PUT(request: NextRequest) {
 
     if (!parsed.success) {
       return NextResponse.json(
-        { error: 'Datos inválidos', details: parsed.error.errors },
+        { error: 'Datos inválidos', details: parsed.error.issues },
         { status: 400 }
       )
     }

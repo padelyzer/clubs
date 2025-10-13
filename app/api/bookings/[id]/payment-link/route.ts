@@ -26,7 +26,7 @@ export async function GET(
         clubId: session.clubId
       },
       include: {
-        payments: {
+        Payment: {
           where: {
             method: 'STRIPE'
           }
@@ -60,12 +60,12 @@ export async function GET(
           id
         },
         include: {
-          class: true
+          Class: true
         }
       })
-      
+
       // Verify the class belongs to the user's club
-      if (classBooking && classBooking.class?.clubId !== session.clubId) {
+      if (classBooking && classBooking.Class?.clubId !== session.clubId) {
         classBooking = null
       }
     }
@@ -86,9 +86,9 @@ export async function GET(
         paymentLink,
         booking: {
           id: bookingGroup.id,
-          playerName: bookingGroup.name,
-          price: bookingGroup.totalPrice,
-          paymentStatus: bookingGroup.paymentStatus,
+          playerName: bookingGroup.playerName,
+          price: bookingGroup.price,
+          paymentStatus: bookingGroup.status, // Using status instead
           isGroup: true,
           type: 'group'
         }
@@ -99,14 +99,14 @@ export async function GET(
         paymentLink,
         booking: {
           id: classBooking.id,
-          playerName: classBooking.studentName,
-          price: classBooking.dueAmount,
+          playerName: classBooking.playerName,
+          price: classBooking.paidAmount || 0,
           paymentStatus: classBooking.paymentStatus,
           isGroup: false,
           type: 'class',
-          className: classBooking.class?.name,
-          studentEmail: classBooking.studentEmail,
-          studentPhone: classBooking.studentPhone
+          className: classBooking.Class?.name,
+          studentEmail: classBooking.playerEmail,
+          studentPhone: classBooking.playerPhone
         }
       })
     } else {
@@ -167,12 +167,12 @@ export async function POST(
           id
         },
         include: {
-          class: true
+          Class: true
         }
       })
-      
+
       // Verify the class belongs to the user's club
-      if (classBooking && classBooking.class?.clubId !== session.clubId) {
+      if (classBooking && classBooking.Class?.clubId !== session.clubId) {
         classBooking = null
       }
     }

@@ -16,14 +16,14 @@ export async function POST(request: NextRequest) {
     }
     
     // Get all active instructors with monthly payment
-    const monthlyInstructors = await prisma.classInstructor.findMany({
+    const monthlyInstructors = await prisma.instructor.findMany({
       where: {
         active: true,
-        paymentType: 'MONTHLY',
-        monthlyRate: { gt: 0 } // Only instructors with a rate > 0
+        paymentType: 'FIXED',
+        fixedSalary: { gt: 0 } // Only instructors with a rate > 0
       },
       include: {
-        club: true
+        Club: true
       }
     })
     
@@ -42,7 +42,7 @@ export async function POST(request: NextRequest) {
     // Check if expenses for this month already exist
     const existingExpenses = await prisma.transaction.findMany({
       where: {
-        category: 'MONTHLY_INSTRUCTOR_PAYMENT',
+        category: 'SALARY',
         date: {
           gte: new Date(year, month - 1, 1),
           lt: new Date(year, month, 1)
@@ -65,8 +65,8 @@ export async function POST(request: NextRequest) {
         data: {
           clubId: instructor.clubId,
           type: 'EXPENSE',
-          category: 'MONTHLY_INSTRUCTOR_PAYMENT',
-          amount: instructor.monthlyRate, // Already in cents
+          category: 'SALARY',
+          amount: instructor.fixedSalary, // Already in cents
           currency: 'MXN',
           description: `Pago mensual - ${instructor.name} (${monthName})`,
           date: expenseDate,
@@ -77,8 +77,8 @@ export async function POST(request: NextRequest) {
             instructorName: instructor.name,
             paymentMonth: month,
             paymentYear: year,
-            paymentType: 'MONTHLY',
-            monthlyRate: instructor.monthlyRate,
+            paymentType: 'FIXED',
+            monthlyRate: instructor.fixedSalary,
             processedAt: new Date().toISOString()
           }
         }
@@ -94,7 +94,7 @@ export async function POST(request: NextRequest) {
       month: monthName,
       transactions: transactions.map(t => ({
         id: t.id,
-        instructorName: t.metadata.instructorName,
+        instructorName: (t.metadata as any)?.instructorName || 'Desconocido',
         amount: t.amount / 100, // Convert to pesos for display
         description: t.description
       }))
@@ -126,7 +126,7 @@ export async function GET(request: NextRequest) {
     // Get existing monthly expenses for the specified month
     const expenses = await prisma.transaction.findMany({
       where: {
-        category: 'MONTHLY_INSTRUCTOR_PAYMENT',
+        category: 'SALARY',
         date: {
           gte: new Date(year, month - 1, 1),
           lt: new Date(year, month, 1)
@@ -147,7 +147,7 @@ export async function GET(request: NextRequest) {
       totalAmount: expenses.reduce((sum, exp) => sum + exp.amount, 0) / 100, // Convert to pesos
       expenses: expenses.map(exp => ({
         id: exp.id,
-        instructorName: exp.metadata?.instructorName || 'Desconocido',
+        instructorName: (exp.metadata as any)?.instructorName || 'Desconocido',
         amount: exp.amount / 100,
         description: exp.description,
         date: exp.date,

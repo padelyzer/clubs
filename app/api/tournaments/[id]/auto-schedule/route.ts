@@ -24,6 +24,21 @@ export async function POST(
     const { id: tournamentId } = paramData
     const { date, scheduleConfigs, courts } = await req.json()
 
+    // SEGURIDAD: Verificar que el torneo pertenece al club del usuario
+    const tournament = await prisma.tournament.findFirst({
+      where: {
+        id: tournamentId,
+        clubId: session.clubId
+      }
+    })
+
+    if (!tournament) {
+      return NextResponse.json(
+        { success: false, error: 'Torneo no encontrado o no pertenece a tu club' },
+        { status: 404 }
+      )
+    }
+
     let totalScheduledMatches = 0
     const scheduledMatchesDetails: any[] = []
 

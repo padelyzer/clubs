@@ -2,6 +2,7 @@ import { prisma } from '@/lib/config/prisma'
 import { sendWhatsAppNotification, sendSMSNotification, sendEmailNotification } from '@/lib/payments/notifications'
 import { format } from 'date-fns'
 import { es } from 'date-fns/locale'
+import { v4 as uuidv4 } from 'uuid'
 
 interface BookingData {
   id: string
@@ -108,13 +109,15 @@ Equipo ${booking.club.name}
         notifications.push(
           prisma.notification.create({
             data: {
+              id: uuidv4(),
               bookingId: booking.id,
               type: 'WHATSAPP',
               template: 'widget_booking_confirmation',
               recipient: booking.playerPhone,
               status: 'sent',
               twilioSid: whatsappResult.messageId,
-              sentAt: new Date()
+              sentAt: new Date(),
+              updatedAt: new Date()
             }
           })
         )
@@ -129,6 +132,7 @@ Equipo ${booking.club.name}
         notifications.push(
           prisma.notification.create({
             data: {
+              id: uuidv4(),
               bookingId: booking.id,
               type: 'SMS',
               template: 'widget_booking_confirmation_sms',
@@ -136,7 +140,8 @@ Equipo ${booking.club.name}
               status: smsResult.success ? 'sent' : 'failed',
               twilioSid: smsResult.messageId,
               errorMessage: smsResult.error,
-              sentAt: smsResult.success ? new Date() : undefined
+              sentAt: smsResult.success ? new Date() : undefined,
+              updatedAt: new Date()
             }
           })
         )
@@ -155,13 +160,15 @@ Equipo ${booking.club.name}
       notifications.push(
         prisma.notification.create({
           data: {
+            id: uuidv4(),
             bookingId: booking.id,
             type: 'EMAIL',
             template: 'widget_booking_confirmation_email',
             recipient: booking.playerEmail,
             status: emailResult.success ? 'sent' : 'failed',
             errorMessage: emailResult.error,
-            sentAt: emailResult.success ? new Date() : undefined
+            sentAt: emailResult.success ? new Date() : undefined,
+            updatedAt: new Date()
           }
         })
       )
@@ -212,13 +219,15 @@ ${booking.playerEmail ? `Email: ${booking.playerEmail}` : ''}
     if (result.success) {
       await prisma.notification.create({
         data: {
+          id: uuidv4(),
           bookingId: booking.id,
           type: 'WHATSAPP',
           template: 'widget_booking_club_notification',
           recipient: booking.club.phone,
           status: 'sent',
           twilioSid: result.messageId,
-          sentAt: new Date()
+          sentAt: new Date(),
+          updatedAt: new Date()
         }
       })
     }

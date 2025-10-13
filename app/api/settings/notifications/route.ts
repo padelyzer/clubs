@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { requireAuthAPI } from '@/lib/auth/actions'
 import { prisma } from '@/lib/config/prisma'
 import { z } from 'zod'
+import { v4 as uuidv4 } from 'uuid'
 
 // Validation schemas
 const notificationChannelSchema = z.object({
@@ -79,7 +80,13 @@ export async function GET(request: NextRequest) {
       ]
 
       for (const channel of defaultChannels) {
-        await prisma.notificationChannel.create({ data: channel })
+        await prisma.notificationChannel.create({
+          data: {
+            ...channel,
+            id: uuidv4(),
+            updatedAt: new Date()
+          }
+        })
       }
     }
 
@@ -112,7 +119,13 @@ export async function GET(request: NextRequest) {
       ]
 
       for (const template of defaultTemplates) {
-        await prisma.notificationTemplate.create({ data: template })
+        await prisma.notificationTemplate.create({
+          data: {
+            ...template,
+            id: uuidv4(),
+            updatedAt: new Date()
+          }
+        })
       }
     }
 
@@ -162,9 +175,11 @@ export async function PUT(request: NextRequest) {
           config: validatedChannel.config || {}
         },
         create: {
+          id: uuidv4(),
           clubId: session.clubId,
           ...validatedChannel,
-          config: validatedChannel.config || {}
+          config: validatedChannel.config || {},
+          updatedAt: new Date()
         }
       })
     }
@@ -182,8 +197,10 @@ export async function PUT(request: NextRequest) {
         },
         update: validatedTemplate,
         create: {
+          id: uuidv4(),
           clubId: session.clubId,
-          ...validatedTemplate
+          ...validatedTemplate,
+          updatedAt: new Date()
         }
       })
     }

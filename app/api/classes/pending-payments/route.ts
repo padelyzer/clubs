@@ -35,53 +35,55 @@ export async function GET(request: NextRequest) {
     }
     
     if (instructorId) {
-      where.class.instructorId = instructorId
+      where.Class.instructorId = instructorId
     }
-    
+
     const pendingPayments = await prisma.classBooking.findMany({
       where,
       include: {
-        class: {
+        Class: {
           include: {
-            instructor: true,
-            court: true
+            Instructor: true,
+            Court: true
           }
         },
-        player: true
+        Player: true
       },
       orderBy: [
-        { class: { date: 'desc' } },
-        { studentName: 'asc' }
+        { Class: { date: 'desc' } },
+        { playerName: 'asc' }
       ]
     })
-    
+
     // Group by class for better organization
     const paymentsByClass = pendingPayments.reduce((acc: any, booking) => {
       const classId = booking.classId
       if (!acc[classId]) {
         acc[classId] = {
-          class: booking.class,
+          class: booking.Class,
           bookings: [],
           totalDue: 0,
           totalPaid: 0
         }
       }
-      
+
+      const dueAmount = booking.Class.price - (booking.paidAmount || 0)
+
       acc[classId].bookings.push({
         id: booking.id,
-        studentName: booking.studentName,
-        studentPhone: booking.studentPhone,
-        studentEmail: booking.studentEmail,
+        studentName: booking.playerName,
+        studentPhone: booking.playerPhone,
+        studentEmail: booking.playerEmail,
         enrollmentDate: booking.enrollmentDate,
-        dueAmount: booking.dueAmount,
+        dueAmount: dueAmount,
         paidAmount: booking.paidAmount,
         paymentStatus: booking.paymentStatus,
         paymentMethod: booking.paymentMethod,
-        attended: booking.attended
+        attended: booking.checkedIn
       })
-      
-      acc[classId].totalDue += booking.dueAmount
-      acc[classId].totalPaid += booking.paidAmount
+
+      acc[classId].totalDue += dueAmount
+      acc[classId].totalPaid += (booking.paidAmount || 0)
       
       return acc
     }, {})
@@ -90,11 +92,11 @@ export async function GET(request: NextRequest) {
     const summary = {
       totalClasses: Object.keys(paymentsByClass).length,
       totalStudents: pendingPayments.length,
-      totalDue: pendingPayments.reduce((sum, b) => sum + b.dueAmount, 0),
-      totalPaid: pendingPayments.reduce((sum, b) => sum + b.paidAmount, 0),
+      totalDue: pendingPayments.reduce((sum, b) => sum + (b.Class.price - (b.paidAmount || 0)), 0),
+      totalPaid: pendingPayments.reduce((sum, b) => sum + (b.paidAmount || 0), 0),
       totalPending: 0
     }
-    
+
     summary.totalPending = summary.totalDue - summary.totalPaid
     
     return NextResponse.json({
@@ -131,9 +133,9 @@ export async function POST(request: NextRequest) {
     const booking = await prisma.classBooking.findUnique({
       where: { id: validatedData.bookingId },
       include: {
-        class: {
+        Class: {
           include: {
-            instructor: true
+            Instructor: true
           }
         }
       }
@@ -146,45 +148,50 @@ export async function POST(request: NextRequest) {
       )
     }
     
+    // Calculate due amount
+    const dueAmount = booking.Class.price - (booking.paidAmount || 0)
+
     // Update payment
     const updatedBooking = await prisma.classBooking.update({
       where: { id: validatedData.bookingId },
       data: {
-        paidAmount: booking.paidAmount + validatedData.amount,
-        paymentStatus: booking.paidAmount + validatedData.amount >= booking.dueAmount ? 'completed' : 'partial',
+        paidAmount: (booking.paidAmount || 0) + validatedData.amount,
+        paymentStatus: (booking.paidAmount || 0) + validatedData.amount >= dueAmount ? 'completed' : 'pending',
         paymentMethod: validatedData.method,
         updatedAt: new Date()
       }
     })
-    
-    // Create payment record in history
-    await prisma.classPaymentHistory.create({
+
+    // Create transaction record
+    await prisma.transaction.create({
       data: {
-        classBookingId: validatedData.bookingId,
+        id: `txn_${session.clubId}_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
+        clubId: session.clubId,
+        type: 'INCOME',
+        category: 'CLASS',
         amount: validatedData.amount,
-        method: validatedData.method,
+        currency: 'MXN',
+        description: `Pago de clase: ${booking.Class.name}`,
+        date: new Date(),
         reference: validatedData.reference,
-        processedBy: session.user?.email || 'system',
-        processedAt: new Date()
+        createdAt: new Date(),
+        updatedAt: new Date()
       }
     })
     
     // Send receipt if requested
-    if (validatedData.sendReceipt && booking.studentPhone) {
-      const remainingAmount = booking.dueAmount - (booking.paidAmount + validatedData.amount)
-      const message = `✅ Pago recibido para clase "${booking.class.name}"
+    if (validatedData.sendReceipt && booking.playerPhone) {
+      const remainingAmount = dueAmount - (booking.paidAmount || 0) - validatedData.amount
+      const message = `✅ Pago recibido para clase "${booking.Class.name}"
 Monto: ${formatCurrency(validatedData.amount / 100)}
 Método: ${getPaymentMethodName(validatedData.method)}
 ${validatedData.reference ? `Referencia: ${validatedData.reference}` : ''}
 ${remainingAmount > 0 ? `Saldo pendiente: ${formatCurrency(remainingAmount / 100)}` : 'Pago completo ✓'}
 
 Gracias por tu pago!`
-      
+
       try {
-        await sendWhatsAppMessage({
-          to: booking.studentPhone,
-          message
-        })
+        await sendWhatsAppMessage(booking.playerPhone, message)
       } catch (error) {
         console.error('Error sending receipt:', error)
       }
@@ -202,7 +209,7 @@ Gracias por tu pago!`
     
     if (error instanceof z.ZodError) {
       return NextResponse.json(
-        { success: false, error: 'Datos inválidos', details: error.errors },
+        { success: false, error: 'Datos inválidos', details: error.issues },
         { status: 400 }
       )
     }
@@ -238,41 +245,42 @@ export async function PUT(request: NextRequest) {
     const bookings = await prisma.classBooking.findMany({
       where: {
         id: { in: bookingIds },
-        paymentStatus: { in: ['pending', 'partial'] }
+        paymentStatus: 'pending' // Only pending, not partial (doesn't exist in enum)
       },
       include: {
-        class: true
+        Class: true
       }
     })
-    
+
     const results = []
-    
+
     for (const booking of bookings) {
-      if (booking.studentPhone) {
-        const customMessage = message || `📢 Recordatorio: Tienes un pago pendiente de ${formatCurrency((booking.dueAmount - booking.paidAmount) / 100)} para la clase "${booking.class.name}". Por favor realiza tu pago lo antes posible.`
-        
+      if (booking.playerPhone) {
+        const dueAmount = booking.Class.price - (booking.paidAmount || 0)
+        const customMessage = message || `📢 Recordatorio: Tienes un pago pendiente de ${formatCurrency(dueAmount / 100)} para la clase "${booking.Class.name}". Por favor realiza tu pago lo antes posible.`
+
         try {
-          await sendWhatsAppMessage({
-            to: booking.studentPhone,
-            message: customMessage
-          })
-          
-          await prisma.classNotification.create({
+          await sendWhatsAppMessage(booking.playerPhone, customMessage)
+
+          await prisma.notification.create({
             data: {
-              classId: booking.classId,
-              studentId: booking.id,
-              studentPhone: booking.studentPhone,
-              studentName: booking.studentName,
-              type: 'PAYMENT_REMINDER',
+              id: `notif_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
+              bookingId: booking.id,
+              type: 'REMINDER',
+              template: 'payment_reminder',
+              recipient: booking.playerName,
+              recipientPhone: booking.playerPhone,
               message: customMessage,
               status: 'sent',
-              sentAt: new Date()
+              sentAt: new Date(),
+              createdAt: new Date(),
+              updatedAt: new Date()
             }
           })
-          
-          results.push({ studentName: booking.studentName, status: 'sent' })
+
+          results.push({ studentName: booking.playerName, status: 'sent' })
         } catch (error) {
-          results.push({ studentName: booking.studentName, status: 'failed', error })
+          results.push({ studentName: booking.playerName, status: 'failed', error })
         }
       }
     }

@@ -56,7 +56,7 @@ export async function sendWhatsAppTemplate(message: WhatsAppMessage) {
     console.error('WhatsApp send error:', error)
     return {
       success: false,
-      error: error.message
+      error: (error as Error).message
     }
   }
 }

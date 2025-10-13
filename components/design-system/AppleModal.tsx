@@ -10,6 +10,7 @@ interface AppleModalProps {
   size?: 'small' | 'medium' | 'large' | 'fullscreen'
   showCloseButton?: boolean
   footer?: React.ReactNode
+  maxWidth?: string
 }
 
 export function AppleModal({
@@ -20,7 +21,8 @@ export function AppleModal({
   children,
   size = 'medium',
   showCloseButton = true,
-  footer
+  footer,
+  maxWidth
 }: AppleModalProps) {
   useEffect(() => {
     if (isOpen) {
@@ -96,14 +98,15 @@ export function AppleModal({
       <div
         style={{
           ...sizeStyles[size],
+          ...(maxWidth ? { maxWidth } : {}),
           backgroundColor: 'white',
           borderRadius: size === 'fullscreen' ? 0 : '20px',
           display: 'flex',
           flexDirection: 'column',
           width: '100%',
           position: 'relative',
-          boxShadow: size === 'fullscreen' 
-            ? 'none' 
+          boxShadow: size === 'fullscreen'
+            ? 'none'
             : '0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04)',
           animation: 'slideUp 0.3s ease',
           overflow: 'hidden'

@@ -39,6 +39,7 @@ model Booking {
   playerPhone         String
   totalPlayers        Int            @default(4)
   price               Int
+  amount              Int?           // Campo calculado para finanzas
   currency            String         @default("MXN")
   paymentStatus       PaymentStatus  @default(pending)
   paymentType         PaymentType    @default(ONSITE)
@@ -220,11 +221,12 @@ model Court {
   order       Int          @default(1)
   active      Boolean      @default(true)
   createdAt   DateTime     @default(now())
-  updatedAt   DateTime
-  Booking     Booking[]
-  Class       Class[]
-  Club        Club         @relation(fields: [clubId], references: [id], onDelete: Cascade)
-  CourtQRCode CourtQRCode?
+  updatedAt       DateTime
+  Booking         Booking[]
+  Class           Class[]
+  TournamentMatch TournamentMatch[]
+  Club            Club              @relation(fields: [clubId], references: [id], onDelete: Cascade)
+  CourtQRCode     CourtQRCode?
 
   @@index([active])
   @@index([clubId])
@@ -252,6 +254,12 @@ model Notification {
   type           NotificationType
   template       String
   recipient      String
+  recipientPhone String?
+  recipientName  String?
+  studentPhone   String?            // Para notificaciones de clases
+  studentName    String?            // Para notificaciones de clases
+  message        String?            // Mensaje personalizado
+  whatsappLink   String?
   status         NotificationStatus @default(pending)
   twilioSid      String?
   errorMessage   String?
@@ -565,6 +573,7 @@ model TournamentMatch {
   conflictResolved  Boolean                 @default(false)
   resultsConfirmed  Boolean                 @default(false)
   Tournament        Tournament              @relation(fields: [tournamentId], references: [id], onDelete: Cascade)
+  Court             Court?                  @relation(fields: [courtId], references: [id], onDelete: SetNull)
   ResultSubmissions TournamentMatchResult[]
 
   @@index([courtId])
@@ -738,10 +747,12 @@ model Class {
   createdAt       DateTime          @default(now())
   updatedAt       DateTime
   cancelledAt     DateTime?
-  Club            Club              @relation(fields: [clubId], references: [id], onDelete: Cascade)
-  Court           Court?            @relation(fields: [courtId], references: [id])
-  Instructor      Instructor?       @relation(fields: [instructorId], references: [id])
-  ClassBooking    ClassBooking[]
+  Club              Club                @relation(fields: [clubId], references: [id], onDelete: Cascade)
+  Court             Court?              @relation(fields: [courtId], references: [id])
+  Instructor        Instructor?         @relation(fields: [instructorId], references: [id])
+  ClassBooking      ClassBooking[]
+  ClassHistory      ClassHistory[]
+  ClassNotification ClassNotification[]
 
   @@index([clubId, date])
   @@index([courtId])
@@ -789,8 +800,9 @@ model ClassBooking {
   updatedAt     DateTime
   enrollmentDate DateTime?       @default(now())
   paymentMethod  String?
-  Class         Class            @relation(fields: [classId], references: [id], onDelete: Cascade)
-  Player        Player?          @relation("PlayerClassBookings", fields: [playerId], references: [id])
+  Class          Class           @relation(fields: [classId], references: [id], onDelete: Cascade)
+  Player         Player?         @relation("PlayerClassBookings", fields: [playerId], references: [id])
+  ClassRefund    ClassRefund[]
 
   @@index([classId])
   @@index([playerId])
@@ -1377,6 +1389,11 @@ enum NotificationType {
   WHATSAPP
   EMAIL
   SMS
+  REMINDER
+  PAYMENT_REMINDER
+  CANCELLATION
+  EMAIL_CONFIRMATION
+  PAYMENT_RECEIVED
 }
 
 enum PaymentMethod {
@@ -1501,4 +1518,56 @@ enum BillingStatus {
   PAID
   FAILED
   CANCELLED
+}
+
+// Class Management Models
+model ClassHistory {
+  id            String   @id @default(cuid())
+  classId       String
+  action        String   // RESCHEDULED, CANCELLED, etc.
+  previousData  Json?
+  newData       Json?
+  reason        String?
+  performedBy   String
+  performedAt   DateTime
+  createdAt     DateTime @default(now())
+  Class         Class    @relation(fields: [classId], references: [id], onDelete: Cascade)
+
+  @@index([classId])
+  @@index([action])
+  @@index([performedAt])
+}
+
+model ClassNotification {
+  id            String   @id @default(cuid())
+  classId       String
+  studentId     String
+  studentPhone  String
+  studentName   String
+  type          String   // RESCHEDULE, CANCELLATION, REMINDER, etc.
+  message       String
+  status        String   @default("pending")
+  sentAt        DateTime?
+  createdAt     DateTime @default(now())
+  Class         Class    @relation(fields: [classId], references: [id], onDelete: Cascade)
+
+  @@index([classId])
+  @@index([status])
+  @@index([createdAt])
+}
+
+model ClassRefund {
+  id              String   @id @default(cuid())
+  classBookingId  String
+  studentId       String
+  amount          Int
+  status          String   @default("pending")
+  reason          String?
+  processedAt     DateTime?
+  createdAt       DateTime @default(now())
+  ClassBooking    ClassBooking @relation(fields: [classBookingId], references: [id], onDelete: Cascade)
+
+  @@index([classBookingId])
+  @@index([status])
+  @@index([createdAt])
 }

@@ -105,7 +105,7 @@ export default function RegistrationSuccessPage() {
             {/* Actions */}
             <div className="flex flex-col sm:flex-row gap-4">
               <Link href={`/tournament/${params.slug}`} className="flex-1">
-                <Button variant="outline" className="w-full">
+                <Button variant="secondary" className="w-full">
                   Ver Detalles del Torneo
                 </Button>
               </Link>

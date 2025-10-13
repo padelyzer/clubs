@@ -44,7 +44,7 @@ export async function GET(request: NextRequest) {
     
     if (!validation.success) {
       return NextResponse.json(
-        { error: 'Invalid parameters', details: formatValidationErrors(validation.errors) },
+        { error: 'Invalid parameters', details: 'errors' in validation ? formatValidationErrors(validation.errors) : {} },
         { status: 400 }
       )
     }

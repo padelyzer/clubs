@@ -21,20 +21,20 @@ export async function GET(request: NextRequest) {
           include: {
             _count: {
               select: {
-                users: true,
-                courts: true,
-                bookings: true
+                User: true,
+                Court: true,
+                Booking: true
               }
             }
           }
         })
         filename = 'clubes'
         break
-        
+
       case 'users':
         data = await prisma.user.findMany({
           include: {
-            club: {
+            Club: {
               select: {
                 name: true,
                 status: true
@@ -60,14 +60,14 @@ export async function GET(request: NextRequest) {
         data = await prisma.booking.findMany({
           where: whereClause,
           include: {
-            club: {
+            Club: {
               select: {
                 name: true,
                 city: true,
                 state: true
               }
             },
-            court: {
+            Court: {
               select: {
                 name: true,
                 type: true
@@ -77,7 +77,7 @@ export async function GET(request: NextRequest) {
         })
         filename = 'reservas'
         break
-        
+
       case 'finance':
         data = await prisma.booking.findMany({
           where: {
@@ -86,13 +86,13 @@ export async function GET(request: NextRequest) {
             ...(dateTo && { createdAt: { lte: new Date(dateTo) } })
           },
           include: {
-            club: {
+            Club: {
               select: {
                 name: true,
                 stripeCommissionRate: true
               }
             },
-            payments: true
+            Payment: true
           }
         })
         filename = 'finanzas'

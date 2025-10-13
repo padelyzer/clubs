@@ -42,7 +42,7 @@ export default function LoginTestPage() {
         }, 1000)
       }
     } catch (error) {
-      setResult({ error: error.message })
+      setResult({ error: (error as Error).message })
     } finally {
       setLoading(false)
     }

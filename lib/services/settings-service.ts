@@ -201,12 +201,15 @@ export class SettingsService {
       if (rules.length > 0) {
         await prisma.scheduleRule.createMany({
           data: rules.map(rule => ({
+            id: `schedule_rule_${clubId}_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
             clubId,
             name: rule.name,
             dayOfWeek: rule.dayOfWeek,
             startTime: rule.startTime,
             endTime: rule.endTime,
-            enabled: rule.enabled
+            enabled: rule.enabled,
+            createdAt: new Date(),
+            updatedAt: new Date()
           }))
         })
       }
@@ -251,12 +254,15 @@ export class SettingsService {
       if (rules.length > 0) {
         await prisma.priceRule.createMany({
           data: rules.map(rule => ({
+            id: `price_rule_${clubId}_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
             clubId,
             name: rule.name,
             type: rule.type,
             price: rule.price,
             conditions: rule.conditions,
-            enabled: rule.enabled
+            enabled: rule.enabled,
+            createdAt: new Date(),
+            updatedAt: new Date()
           }))
         })
       }
@@ -301,12 +307,15 @@ export class SettingsService {
       if (rules.length > 0) {
         await prisma.discountRule.createMany({
           data: rules.map(rule => ({
+            id: `discount_rule_${clubId}_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
             clubId,
             name: rule.name,
             type: rule.type,
             value: rule.value,
             conditions: rule.conditions,
-            enabled: rule.enabled
+            enabled: rule.enabled,
+            createdAt: new Date(),
+            updatedAt: new Date()
           }))
         })
       }
@@ -428,11 +437,14 @@ export class SettingsService {
             config: channel.config
           },
           create: {
+            id: `notification_channel_${clubId}_${channel.channelId}_${Date.now()}`,
             clubId,
             channelId: channel.channelId,
             name: channel.name,
             enabled: channel.enabled,
-            config: channel.config
+            config: channel.config,
+            createdAt: new Date(),
+            updatedAt: new Date()
           }
         })
       }
@@ -492,6 +504,7 @@ export class SettingsService {
             enabled: template.enabled
           },
           create: {
+            id: `notification_template_${clubId}_${template.templateId}_${Date.now()}`,
             clubId,
             templateId: template.templateId,
             name: template.name,
@@ -501,7 +514,9 @@ export class SettingsService {
             subject: template.subject,
             content: template.content,
             variables: template.variables,
-            enabled: template.enabled
+            enabled: template.enabled,
+            createdAt: new Date(),
+            updatedAt: new Date()
           }
         })
       }
@@ -550,8 +565,11 @@ export class SettingsService {
         where: { clubId },
         update: settings,
         create: {
+          id: `widget_settings_${clubId}_${Date.now()}`,
           clubId,
-          ...settings
+          ...settings,
+          createdAt: new Date(),
+          updatedAt: new Date()
         }
       })
       return true

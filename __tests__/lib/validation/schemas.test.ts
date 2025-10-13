@@ -267,8 +267,8 @@ describe('Validation Schemas', () => {
 
       expect(result.success).toBe(false)
       if (!result.success) {
-        expect(result.errors).toHaveProperty('email')
-        expect(result.errors).toHaveProperty('password')
+        expect('errors' in result && result.errors).toHaveProperty('email')
+        expect('errors' in result && result.errors).toHaveProperty('password')
       }
     })
 
@@ -286,7 +286,7 @@ describe('Validation Schemas', () => {
       const result = validateRequestBody(loginSchema, invalidData, customMessages)
 
       expect(result.success).toBe(false)
-      if (!result.success) {
+      if (!result.success && 'errors' in result) {
         expect(result.errors.email).toBe(customMessages.email)
         expect(result.errors.password).toBe(customMessages.password)
       }

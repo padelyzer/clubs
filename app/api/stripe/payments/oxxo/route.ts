@@ -37,17 +37,17 @@ export async function POST(request: NextRequest) {
     if (splitPaymentId) {
       // Handle split payment - verify it belongs to the user's club
       const splitPayment = await prisma.splitPayment.findFirst({
-        where: { 
+        where: {
           id: splitPaymentId,
-          booking: {
+          Booking: {
             clubId: session.clubId
           }
         },
         include: {
-          booking: {
+          Booking: {
             include: {
-              club: true,
-              court: true
+              Club: true,
+              Court: true
             }
           }
         }
@@ -67,20 +67,20 @@ export async function POST(request: NextRequest) {
         )
       }
 
-      booking = splitPayment.booking
+      booking = splitPayment.Booking
       amount = splitPayment.amount
       paymentType = 'split'
 
     } else {
       // Handle full payment - verify booking belongs to user's club
       booking = await prisma.booking.findFirst({
-        where: { 
+        where: {
           id: bookingId,
-          clubId: session.clubId 
+          clubId: session.clubId
         },
         include: {
-          club: true,
-          court: true
+          Club: true,
+          Court: true
         }
       })
 
@@ -102,7 +102,7 @@ export async function POST(request: NextRequest) {
       paymentType = 'full'
     }
 
-    const club = booking.club
+    const club = booking.Club
 
     if (!club.stripeAccountId || !club.stripeOnboardingCompleted) {
       return NextResponse.json(
@@ -124,7 +124,7 @@ export async function POST(request: NextRequest) {
       metadata: {
         booking_id: booking.id,
         club_id: club.id,
-        court_name: booking.court.name,
+        court_name: booking.Court.name,
         club_name: club.name,
         payment_type: paymentType,
         payment_method: 'oxxo',
@@ -216,7 +216,7 @@ export async function POST(request: NextRequest) {
         startTime: booking.startTime,
         endTime: booking.endTime,
         clubName: club.name,
-        courtName: booking.court.name,
+        courtName: booking.Court.name,
       }
     })
 

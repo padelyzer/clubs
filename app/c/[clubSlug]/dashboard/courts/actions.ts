@@ -23,12 +23,15 @@ export async function createCourt(clubId: string, formData: FormData) {
 
   await prisma.court.create({
     data: {
+      id: `court_${clubId}_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
       name,
       type: type as any,
       order,
       indoor,
       active,
-      clubId
+      clubId,
+      createdAt: new Date(),
+      updatedAt: new Date()
     }
   })
 
@@ -45,7 +48,7 @@ export async function updateCourt(courtId: string, formData: FormData) {
     include: { Club: true }
   })
 
-  if (!court || court.club.id !== session.clubId) {
+  if (!court || court.Club.id !== session.clubId) {
     throw new Error('Unauthorized')
   }
 
@@ -80,18 +83,18 @@ export async function deleteCourt(courtId: string) {
   
   const court = await prisma.court.findUnique({
     where: { id: courtId },
-    include: { 
-      club: true,
-      bookings: { where: { status: { not: 'CANCELLED' } } }
+    include: {
+      Club: true,
+      Booking: { where: { status: { not: 'CANCELLED' } } }
     }
   })
 
-  if (!court || court.club.id !== session.clubId) {
+  if (!court || court.Club.id !== session.clubId) {
     throw new Error('Unauthorized')
   }
 
   // Check for active bookings
-  if (court.bookings.length > 0) {
+  if (court.Booking.length > 0) {
     throw new Error('Cannot delete court with active bookings')
   }
 

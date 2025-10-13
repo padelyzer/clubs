@@ -126,7 +126,7 @@ export async function GET(request: NextRequest) {
         { 
           success: false, 
           error: 'Parámetros inválidos',
-          details: error.errors.map(e => `${e.path.join('.')}: ${e.message}`).join(', ')
+          details: error.issues.map(e => `${e.path.join('.')}: ${e.message}`).join(', ')
         },
         { status: 400 }
       )
@@ -231,7 +231,7 @@ export async function POST(request: NextRequest) {
         { 
           success: false, 
           error: 'Datos de torneo inválidos',
-          details: error.errors.map(e => `${e.path.join('.')}: ${e.message}`).join(', ')
+          details: error.issues.map(e => `${e.path.join('.')}: ${e.message}`).join(', ')
         },
         { status: 400 }
       )

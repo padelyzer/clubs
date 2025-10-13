@@ -90,30 +90,11 @@ export async function POST(request: NextRequest) {
       const firstClass = await tx.class.create({
         data: {
           ...classData,
-          isRecurring: true,
-          recurrencePattern: JSON.stringify({
-            pattern: recurrencePattern,
-            interval,
-            daysOfWeek,
-            endDate,
-            occurrences: dates.length
-          })
+          recurring: true,
+          recurringDays: daysOfWeek || []
         }
       })
       classes.push(firstClass)
-
-      // Create recurrence record
-      await tx.classRecurrence.create({
-        data: {
-          classId: firstClass.id,
-          pattern: recurrencePattern,
-          interval,
-          daysOfWeek,
-          endDate: end,
-          occurrences: dates.length,
-          active: true
-        }
-      })
 
       // Create remaining classes
       for (let i = 1; i < dates.length; i++) {
@@ -121,15 +102,8 @@ export async function POST(request: NextRequest) {
           data: {
             ...classData,
             date: dates[i],
-            isRecurring: true,
-            recurrencePattern: JSON.stringify({
-              pattern: recurrencePattern,
-              interval,
-              daysOfWeek,
-              originalClassId: firstClass.id,
-              occurrence: i + 1,
-              totalOccurrences: dates.length
-            })
+            recurring: true,
+            recurringDays: daysOfWeek || []
           }
         })
         classes.push(recurringClass)
@@ -167,26 +141,36 @@ export async function GET(request: NextRequest) {
       )
     }
 
-    const recurrence = await prisma.classRecurrence.findUnique({
-      where: { classId },
-      include: {
-        class: true
-      }
+    // Note: ClassRecurrence model doesn't exist in schema
+    // Recurrence is handled via Class.recurring and Class.recurringDays fields
+    const classItem = await prisma.class.findUnique({
+      where: { id: classId }
     })
 
-    if (!recurrence) {
+    if (!classItem) {
       return NextResponse.json(
-        { success: false, error: 'Información de recurrencia no encontrada' },
+        { success: false, error: 'Clase no encontrada' },
         { status: 404 }
       )
     }
 
-    // Get all related classes
-    const pattern = JSON.parse(recurrence.class.recurrencePattern || '{}')
+    if (!classItem.recurring) {
+      return NextResponse.json(
+        { success: false, error: 'Esta clase no es recurrente' },
+        { status: 400 }
+      )
+    }
+
+    // Get all classes with same instructor, time, and recurring days
     const relatedClasses = await prisma.class.findMany({
       where: {
-        recurrencePattern: {
-          contains: pattern.originalClassId || classId
+        clubId: classItem.clubId,
+        instructorId: classItem.instructorId,
+        startTime: classItem.startTime,
+        endTime: classItem.endTime,
+        recurring: true,
+        date: {
+          gte: classItem.date
         }
       },
       orderBy: { date: 'asc' }
@@ -194,7 +178,7 @@ export async function GET(request: NextRequest) {
 
     return NextResponse.json({
       success: true,
-      recurrence,
+      class: classItem,
       relatedClasses,
       totalOccurrences: relatedClasses.length
     })
@@ -224,80 +208,41 @@ export async function DELETE(request: NextRequest) {
 
     const result = await prisma.$transaction(async (tx) => {
       if (cancelAll) {
-        // Get recurrence info
-        const recurrence = await tx.classRecurrence.findUnique({
-          where: { classId }
+        // Get class info
+        const classItem = await tx.class.findUnique({
+          where: { id: classId }
         })
-        
-        if (recurrence) {
-          // Cancel all related classes
-          const pattern = JSON.parse((await tx.class.findUnique({
-            where: { id: classId },
-            select: { recurrencePattern: true }
-          }))?.recurrencePattern || '{}')
-          
+
+        if (classItem && classItem.recurring) {
+          // Cancel all related future recurring classes
           const cancelled = await tx.class.updateMany({
             where: {
-              OR: [
-                { id: classId },
-                { recurrencePattern: { contains: pattern.originalClassId || classId } }
-              ],
+              clubId: classItem.clubId,
+              instructorId: classItem.instructorId,
+              startTime: classItem.startTime,
+              endTime: classItem.endTime,
+              recurring: true,
               date: { gte: new Date() } // Only future classes
             },
             data: {
               status: 'CANCELLED',
-              cancelledAt: new Date(),
-              cancelReason: 'Serie de clases cancelada'
+              cancelledAt: new Date()
             }
           })
-          
-          // Deactivate recurrence
-          await tx.classRecurrence.update({
-            where: { classId },
-            data: { active: false }
-          })
-          
+
           return { cancelledCount: cancelled.count }
         }
       }
-      
+
       // Cancel single class
       await tx.class.update({
         where: { id: classId },
         data: {
           status: 'CANCELLED',
-          cancelledAt: new Date(),
-          cancelReason: 'Clase individual cancelada'
+          cancelledAt: new Date()
         }
       })
-      
-      // Add to exceptions if part of recurrence
-      const recurrence = await tx.classRecurrence.findFirst({
-        where: {
-          class: {
-            recurrencePattern: { contains: classId }
-          }
-        }
-      })
-      
-      if (recurrence) {
-        const classData = await tx.class.findUnique({
-          where: { id: classId },
-          select: { date: true }
-        })
-        
-        if (classData) {
-          await tx.classRecurrence.update({
-            where: { id: recurrence.id },
-            data: {
-              exceptions: {
-                push: classData.date
-              }
-            }
-          })
-        }
-      }
-      
+
       return { cancelledCount: 1 }
     })
 

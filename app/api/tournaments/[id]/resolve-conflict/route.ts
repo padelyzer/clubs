@@ -16,6 +16,18 @@ export async function POST(
     const body = await req.json()
     const { matchId, result } = body
 
+    // SEGURIDAD: Verificar que el torneo pertenece al club del usuario
+    const tournament = await prisma.tournament.findFirst({
+      where: {
+        id,
+        clubId: session.clubId
+      }
+    })
+
+    if (!tournament) {
+      return ResponseBuilder.error('Torneo no encontrado o no pertenece a tu club', 404)
+    }
+
     // result debe tener:
     // - team1Sets, team2Sets (arrays de sets)
     // - team1TotalSets, team2TotalSets
@@ -34,7 +46,7 @@ export async function POST(
     }
 
     // Marcar los resultados conflictivos como resueltos
-    await prisma.resultSubmissions.updateMany({
+    await prisma.tournamentMatchResult.updateMany({
       where: {
         matchId,
         conflictStatus: 'pending'
@@ -62,7 +74,7 @@ export async function POST(
     })
 
     // Crear un registro de resultado confirmado por el organizador
-    await prisma.resultSubmissions.create({
+    await prisma.tournamentMatchResult.create({
       data: {
         id: `${matchId}-organizer-${Date.now()}`,
         matchId,

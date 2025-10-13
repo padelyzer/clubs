@@ -35,8 +35,8 @@ export async function POST(
         clubId: session.clubId 
       },
       include: {
-        instructor: true,
-        court: true
+        Instructor: true,
+        Court: true
       }
     })
     
@@ -51,7 +51,7 @@ export async function POST(
     const enrollment = await prisma.classBooking.findUnique({
       where: { id: studentId },
       include: {
-        player: true
+        Player: true
       }
     })
     
@@ -62,68 +62,71 @@ export async function POST(
       )
     }
     
-    // Update attendance
+    // Update attendance (using checkedIn field since attended doesn't exist)
     const updatedEnrollment = await prisma.classBooking.update({
       where: { id: studentId },
       data: {
-        attended: status === 'PRESENT' || status === 'LATE',
-        attendanceStatus: status,
-        attendanceNotes: notes,
+        checkedIn: status === 'PRESENT' || status === 'LATE',
+        checkedInAt: status === 'PRESENT' || status === 'LATE' ? new Date() : null,
+        notes: notes || enrollment.notes,
         updatedAt: new Date()
       }
-    })
-    
+    }) as any
+
+    // Store attendance status in extended object (not in DB)
+    updatedEnrollment.attendanceStatus = status
+
     // If marking as present, register instructor expense
-    if ((status === 'PRESENT' || status === 'LATE') && !enrollment.attended) {
-      if (classItem.instructor) {
+    if ((status === 'PRESENT' || status === 'LATE') && !enrollment.checkedIn) {
+      if (classItem.Instructor) {
         // Calculate instructor payment based on individual instructor configuration
         let instructorPayment = 0
-        
-        if (classItem.instructor.paymentType === 'HOURLY') {
+
+        if (classItem.Instructor.paymentType === 'HOURLY') {
           // Calculate based on class duration and instructor's hourly rate
           const hours = classItem.duration / 60
-          instructorPayment = Math.round((classItem.instructor.hourlyRate || 0) * hours)
-        } else if (classItem.instructor.paymentType === 'MONTHLY') {
-          // Monthly instructors don't get paid per class - skip automatic expense
-          instructorPayment = 0
+          instructorPayment = Math.round((classItem.Instructor.hourlyRate || 0) * hours)
         }
-        
+        // Note: MONTHLY, COMMISSION, and MIXED payment types don't trigger automatic per-class expenses
+
         // Only register expense if this is the first student checking in
         const firstCheckIn = await prisma.classBooking.findFirst({
           where: {
             classId,
-            attended: true,
+            checkedIn: true,
             id: { not: studentId }
           }
         })
-        
+
         if (!firstCheckIn && instructorPayment > 0) {
           // Create expense transaction for instructor payment
           await prisma.transaction.create({
             data: {
+              id: `txn_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
               clubId: classItem.clubId,
               type: 'EXPENSE',
               category: 'SALARY',
               amount: instructorPayment,
               currency: 'MXN',
-              description: `Pago a instructor ${classItem.instructor.name} - Clase: ${classItem.name}`,
+              description: `Pago a instructor ${classItem.Instructor.name} - Clase: ${classItem.name}`,
               date: new Date(),
               reference: `INSTRUCTOR_${classId}`,
               notes: JSON.stringify({
                 classId,
                 instructorId: classItem.instructorId,
-                instructorName: classItem.instructor.name,
+                instructorName: classItem.Instructor.name,
                 className: classItem.name,
                 classDate: classItem.date,
                 classType: classItem.type,
                 classDuration: classItem.duration,
-                paymentType: classItem.instructor.paymentType,
-                hourlyRate: classItem.instructor.hourlyRate,
-                monthlyRate: classItem.instructor.monthlyRate,
-                studentsCount: classItem.currentStudents,
+                paymentType: classItem.Instructor.paymentType,
+                hourlyRate: classItem.Instructor.hourlyRate,
+                fixedSalary: classItem.Instructor.fixedSalary,
                 hours: classItem.duration / 60,
                 attendanceTriggered: true
-              })
+              }),
+              createdAt: new Date(),
+              updatedAt: new Date()
             }
           })
           
@@ -133,39 +136,25 @@ export async function POST(
       
       // Optional: Create a reminder for student payment if pending
       if (enrollment.paymentStatus === 'pending') {
-        console.log(`Payment pending for student ${enrollment.studentName}`)
+        console.log(`Payment pending for student ${enrollment.playerName}`)
       }
     }
-    
-    // Get updated attendance stats for the class
-    const attendanceStats = await prisma.classBooking.groupBy({
-      by: ['attendanceStatus'],
-      where: { classId },
-      _count: true
-    })
-    
-    const stats = {
-      present: 0,
-      late: 0,
-      absent: 0,
-      pending: 0
-    }
-    
-    const totalEnrolled = await prisma.classBooking.count({
+
+    // Get updated attendance stats for the class (using checkedIn field)
+    const allBookings = await prisma.classBooking.findMany({
       where: { classId }
     })
-    
-    attendanceStats.forEach(stat => {
-      if (stat.attendanceStatus === 'PRESENT') stats.present = stat._count
-      else if (stat.attendanceStatus === 'LATE') stats.late = stat._count
-      else if (stat.attendanceStatus === 'ABSENT') stats.absent = stat._count
-    })
-    
-    stats.pending = totalEnrolled - (stats.present + stats.late + stats.absent)
-    
+
+    const stats = {
+      present: allBookings.filter(b => b.checkedIn).length,
+      late: 0, // We don't have late tracking without attendanceStatus field
+      absent: 0, // Would need additional logic or field
+      pending: allBookings.filter(b => !b.checkedIn).length
+    }
+
     return NextResponse.json({
       success: true,
-      message: `Check-in exitoso para ${enrollment.studentName}`,
+      message: `Check-in exitoso para ${enrollment.playerName}`,
       enrollment: updatedEnrollment,
       attendanceStats: stats
     })
@@ -175,7 +164,7 @@ export async function POST(
     
     if (error instanceof z.ZodError) {
       return NextResponse.json(
-        { success: false, error: 'Datos inválidos', details: error.errors },
+        { success: false, error: 'Datos inválidos', details: error.issues },
         { status: 400 }
       )
     }
@@ -205,51 +194,54 @@ export async function GET(
     const { id: classId } = paramData
     
     const classItem = await prisma.class.findFirst({
-      where: { 
+      where: {
         id: classId,
-        clubId: session.clubId 
+        clubId: session.clubId
       },
       include: {
-        instructor: true,
-        court: true,
-        bookings: {
-          include: {
-            player: true
-          },
-          orderBy: { studentName: 'asc' }
-        }
+        Instructor: true,
+        Court: true
       }
     })
-    
+
     if (!classItem) {
       return NextResponse.json(
         { success: false, error: 'Clase no encontrada' },
         { status: 404 }
       )
     }
-    
-    // Calculate attendance statistics
+
+    // Get class bookings separately since ClassBooking relation may not exist on Class
+    const classBookings = await prisma.classBooking.findMany({
+      where: { classId },
+      include: {
+        Player: true
+      },
+      orderBy: { playerName: 'asc' }
+    })
+
+    // Calculate attendance statistics (using checkedIn field)
     const stats = {
-      total: classItem.bookings.length,
-      present: classItem.bookings.filter(b => b.attendanceStatus === 'PRESENT').length,
-      late: classItem.bookings.filter(b => b.attendanceStatus === 'LATE').length,
-      absent: classItem.bookings.filter(b => b.attendanceStatus === 'ABSENT').length,
-      pending: classItem.bookings.filter(b => !b.attendanceStatus).length,
-      paidCount: classItem.bookings.filter(b => b.paymentStatus === 'completed').length,
-      unpaidCount: classItem.bookings.filter(b => b.paymentStatus === 'pending').length
+      total: classBookings.length,
+      present: classBookings.filter((b: any) => b.checkedIn).length,
+      late: 0, // No late tracking without attendanceStatus
+      absent: 0, // Would need additional logic
+      pending: classBookings.filter((b: any) => !b.checkedIn).length,
+      paidCount: classBookings.filter((b: any) => b.paymentStatus === 'completed').length,
+      unpaidCount: classBookings.filter((b: any) => b.paymentStatus === 'pending').length
     }
-    
+
     // Format attendance list
-    const attendanceList = classItem.bookings.map(booking => ({
+    const attendanceList = classBookings.map((booking: any) => ({
       id: booking.id,
-      studentName: booking.studentName,
-      studentPhone: booking.studentPhone,
-      studentEmail: booking.studentEmail,
-      player: booking.player,
-      attended: booking.attended,
-      attendanceStatus: booking.attendanceStatus || 'PENDING',
-      attendanceTime: booking.attendanceTime,
-      attendanceNotes: booking.attendanceNotes,
+      studentName: booking.playerName,
+      studentPhone: booking.playerPhone,
+      studentEmail: booking.playerEmail,
+      player: booking.Player,
+      attended: booking.checkedIn,
+      attendanceStatus: booking.checkedIn ? 'PRESENT' : 'PENDING',
+      attendanceTime: booking.checkedInAt,
+      attendanceNotes: booking.notes,
       paymentStatus: booking.paymentStatus,
       paidAmount: booking.paidAmount,
       enrollmentDate: booking.enrollmentDate
@@ -262,8 +254,8 @@ export async function GET(
         name: classItem.name,
         date: classItem.date,
         time: `${classItem.startTime} - ${classItem.endTime}`,
-        instructor: classItem.instructor?.name,
-        court: classItem.court?.name,
+        instructor: classItem.Instructor?.name || 'Sin instructor',
+        court: classItem.Court?.name || 'Sin cancha',
         status: classItem.status
       },
       attendance: attendanceList,
@@ -319,15 +311,14 @@ export async function PUT(
       notes: z.string().optional()
     })).parse(body.updates)
     
-    // Batch update attendance
-    const updatePromises = updates.map(update => 
+    // Batch update attendance (using checkedIn field)
+    const updatePromises = updates.map(update =>
       prisma.classBooking.update({
         where: { id: update.studentId },
         data: {
-          attended: update.status === 'PRESENT' || update.status === 'LATE',
-          attendanceTime: update.status === 'PRESENT' || update.status === 'LATE' ? new Date() : null,
-          attendanceStatus: update.status,
-          attendanceNotes: update.notes,
+          checkedIn: update.status === 'PRESENT' || update.status === 'LATE',
+          checkedInAt: update.status === 'PRESENT' || update.status === 'LATE' ? new Date() : null,
+          notes: update.notes,
           updatedAt: new Date()
         }
       })
@@ -365,7 +356,7 @@ export async function PUT(
     
     if (error instanceof z.ZodError) {
       return NextResponse.json(
-        { success: false, error: 'Datos inválidos', details: error.errors },
+        { success: false, error: 'Datos inválidos', details: error.issues },
         { status: 400 }
       )
     }

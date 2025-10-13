@@ -53,8 +53,8 @@ export async function GET() {
       })
     ])
 
-    // Get revenue - filtered by club
-    const monthlyRevenue = await prisma.payment.aggregate({
+    // Get revenue - filtered by club via Transaction
+    const monthlyRevenue = await prisma.transaction.aggregate({
       _sum: {
         amount: true
       },
@@ -63,7 +63,8 @@ export async function GET() {
         createdAt: {
           gte: startOfMonth
         },
-        status: 'completed'
+        type: 'INCOME',
+        status: 'COMPLETED'
       }
     })
 
@@ -71,10 +72,7 @@ export async function GET() {
     const [activeUsers, newUsers] = await Promise.all([
       prisma.user.count({
         where: {
-          clubId: session.clubId,
-          lastLoginAt: {
-            gte: startOfWeek
-          }
+          clubId: session.clubId
         }
       }),
       prisma.user.count({
@@ -92,7 +90,7 @@ export async function GET() {
       prisma.booking.count({
         where: {
           clubId: session.clubId,
-          status: 'cancelled',
+          status: 'CANCELLED',
           date: {
             gte: startOfMonth
           }
@@ -101,7 +99,7 @@ export async function GET() {
       prisma.booking.count({
         where: {
           clubId: session.clubId,
-          status: 'completed',
+          status: 'COMPLETED',
           date: {
             gte: startOfMonth
           }
@@ -111,8 +109,8 @@ export async function GET() {
 
     // Calculate completion rate
     const totalBookings = cancelledBookings + completedBookings
-    const completionRate = totalBookings > 0 
-      ? ((completedBookings / totalBookings) * 100).toFixed(1)
+    const completionRate = totalBookings > 0
+      ? parseFloat(((completedBookings / totalBookings) * 100).toFixed(1))
       : 100
 
     // Get court utilization (simplified) - filtered by club
@@ -136,7 +134,7 @@ export async function GET() {
       activeUsers,
       newUsers,
       cancelledBookings,
-      completionRate: parseFloat(completionRate),
+      completionRate,
       courtUtilization,
       noShowBookings: 0 // Placeholder
     })

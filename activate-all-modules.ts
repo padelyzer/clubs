@@ -106,14 +106,13 @@ async function activateAllModules() {
             clubId: club.id,
             moduleId: module.id,
             isEnabled: true,
-            activatedAt: new Date(),
-            expiresAt: null // Sin expiración
+            enabledAt: new Date()
           }
         })
         console.log(`   ✅ Módulo activado: ${module.name}`)
       } else if (!existingActivation.isEnabled) {
         // Reactivar si está deshabilitado
-        await prisma.clubModuleAccess.update({
+        await prisma.clubModule.update({
           where: {
             clubId_moduleId: {
               clubId: club.id,
@@ -122,8 +121,7 @@ async function activateAllModules() {
           },
           data: {
             isEnabled: true,
-            activatedAt: new Date(),
-            expiresAt: null
+            enabledAt: new Date()
           }
         })
         console.log(`   ✅ Módulo reactivado: ${module.name}`)

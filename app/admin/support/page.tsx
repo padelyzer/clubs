@@ -72,7 +72,7 @@ export default async function AdminSupportPage() {
       take: 10,
       orderBy: { createdAt: 'desc' },
       include: {
-        club: {
+        Club: {
           select: { name: true, status: true }
         }
       }
@@ -111,9 +111,9 @@ export default async function AdminSupportPage() {
           ...user,
           name: user.name || 'Sin nombre',
           role: user.role,
-          club: user.club ? {
-            name: user.club.name,
-            status: user.club.status
+          club: user.Club ? {
+            name: user.Club.name,
+            status: user.Club.status
           } : undefined
         }))
       }} />

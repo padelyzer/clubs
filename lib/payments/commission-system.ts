@@ -131,7 +131,7 @@ export async function getClubCommissionSummary(clubId: string, dateRange?: {
 }) {
   try {
     const whereClause: any = {
-      booking: {
+      Booking: {
         clubId,
       },
       status: 'completed',
@@ -148,9 +148,9 @@ export async function getClubCommissionSummary(clubId: string, dateRange?: {
     const completedPayments = await prisma.payment.findMany({
       where: whereClause,
       include: {
-        booking: {
+        Booking: {
           include: {
-            club: true,
+            Club: true,
           },
         },
       },
@@ -160,9 +160,9 @@ export async function getClubCommissionSummary(clubId: string, dateRange?: {
     const completedSplitPayments = await prisma.splitPayment.findMany({
       where: whereClause,
       include: {
-        booking: {
+        Booking: {
           include: {
-            club: true,
+            Club: true,
           },
         },
       },
@@ -179,9 +179,9 @@ export async function getClubCommissionSummary(clubId: string, dateRange?: {
     completedPayments.forEach(payment => {
       const commission = calculateCommission(
         payment.amount,
-        payment.booking.club.stripeCommissionRate / 100
+        payment.Booking.Club.stripeCommissionRate / 100
       )
-      
+
       totalRevenue += payment.amount
       totalPlatformFees += payment.stripeApplicationFee || commission.platformFee
       totalStripeFees += commission.stripeFee
@@ -193,9 +193,9 @@ export async function getClubCommissionSummary(clubId: string, dateRange?: {
     completedSplitPayments.forEach(splitPayment => {
       const commission = calculateCommission(
         splitPayment.amount,
-        splitPayment.booking.club.stripeCommissionRate / 100
+        splitPayment.Booking.Club.stripeCommissionRate / 100
       )
-      
+
       totalRevenue += splitPayment.amount
       totalPlatformFees += splitPayment.stripeApplicationFee || commission.platformFee
       totalStripeFees += commission.stripeFee
@@ -210,7 +210,7 @@ export async function getClubCommissionSummary(clubId: string, dateRange?: {
       totalNetAmount,
       transactionCount,
       averageTransactionValue: transactionCount > 0 ? totalRevenue / transactionCount : 0,
-      platformFeePercentage: completedPayments[0]?.booking.club.stripeCommissionRate / 100 || 2.5,
+      platformFeePercentage: completedPayments[0]?.Booking.Club.stripeCommissionRate / 100 || 2.5,
       effectiveFeePercentage: totalRevenue > 0 ? ((totalPlatformFees + totalStripeFees) / totalRevenue) * 100 : 0,
     }
 
@@ -231,7 +231,7 @@ export async function getPendingTransfers(clubId?: string) {
     }
 
     if (clubId) {
-      whereClause.booking = {
+      whereClause.Booking = {
         clubId,
       }
     }
@@ -239,9 +239,9 @@ export async function getPendingTransfers(clubId?: string) {
     const pendingPayments = await prisma.payment.findMany({
       where: whereClause,
       include: {
-        booking: {
+        Booking: {
           include: {
-            club: true,
+            Club: true,
           },
         },
       },
@@ -250,9 +250,9 @@ export async function getPendingTransfers(clubId?: string) {
     const pendingSplitPayments = await prisma.splitPayment.findMany({
       where: whereClause,
       include: {
-        booking: {
+        Booking: {
           include: {
-            club: true,
+            Club: true,
           },
         },
       },
@@ -284,8 +284,8 @@ export async function processPendingTransfers(clubId: string) {
 
     // Process main payments
     for (const payment of pendingPayments) {
-      const club = payment.booking.club
-      
+      const club = payment.Booking.Club
+
       if (!club.stripeAccountId) {
         continue
       }
@@ -317,8 +317,8 @@ export async function processPendingTransfers(clubId: string) {
 
     // Process split payments
     for (const splitPayment of pendingSplitPayments) {
-      const club = splitPayment.booking.club
-      
+      const club = splitPayment.Booking.Club
+
       if (!club.stripeAccountId) {
         continue
       }
@@ -378,7 +378,7 @@ export async function generateCommissionReport(
     // Get detailed transactions
     const detailedTransactions = await prisma.payment.findMany({
       where: {
-        booking: { clubId },
+        Booking: { clubId },
         status: 'completed',
         completedAt: {
           gte: fromDate,
@@ -386,9 +386,9 @@ export async function generateCommissionReport(
         },
       },
       include: {
-        booking: {
+        Booking: {
           include: {
-            court: true,
+            Court: true,
           },
         },
       },
@@ -399,7 +399,7 @@ export async function generateCommissionReport(
 
     const detailedSplitPayments = await prisma.splitPayment.findMany({
       where: {
-        booking: { clubId },
+        Booking: { clubId },
         status: 'completed',
         completedAt: {
           gte: fromDate,
@@ -407,9 +407,9 @@ export async function generateCommissionReport(
         },
       },
       include: {
-        booking: {
+        Booking: {
           include: {
-            court: true,
+            Court: true,
           },
         },
       },

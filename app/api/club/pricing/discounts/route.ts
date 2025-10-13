@@ -35,15 +35,10 @@ export async function POST(request: NextRequest) {
       data: {
         clubId: session.clubId,
         name: body.name,
-        code: body.code || null,
-        discountType: body.discountType,
-        discountValue: body.discountValue,
-        minBookings: body.minBookings || 1,
-        maxUses: body.maxUses || null,
-        usedCount: 0,
-        validFrom: new Date(body.validFrom),
-        validUntil: new Date(body.validUntil),
-        active: body.active !== false
+        type: body.type || body.discountType,
+        value: body.value || body.discountValue,
+        conditions: body.conditions || {},
+        enabled: body.enabled !== undefined ? body.enabled : (body.active !== false)
       }
     })
 

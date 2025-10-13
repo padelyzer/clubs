@@ -166,7 +166,8 @@ export async function PUT(request: NextRequest) {
             id: `club_settings_${session.clubId}_${Date.now()}`,
             clubId: session.clubId,
             ...defaultSettings,
-            ...validatedSettings
+            ...validatedSettings,
+            updatedAt: new Date()
           }
         })
       }

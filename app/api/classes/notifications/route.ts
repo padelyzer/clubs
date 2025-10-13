@@ -1,14 +1,14 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/config/prisma'
 import { requireAuthAPI } from '@/lib/auth/actions'
-import { addDays, format, isAfter, isBefore, parseISO } from 'date-fns'
+import { addDays } from 'date-fns'
 import { sendWhatsAppMessage } from '@/lib/whatsapp/send-message'
 
 // GET - Send reminder notifications for upcoming classes
 export async function GET(request: NextRequest) {
   try {
     const session = await requireAuthAPI()
-    
+
     if (!session) {
       return NextResponse.json(
         { success: false, error: 'No autorizado' },
@@ -17,13 +17,13 @@ export async function GET(request: NextRequest) {
     }
     const { searchParams } = new URL(request.url)
     const type = searchParams.get('type') || 'reminder'
-    
+
     if (type === 'reminder') {
       // Find classes happening tomorrow
       const tomorrow = addDays(new Date(), 1)
       const startOfTomorrow = new Date(tomorrow.getFullYear(), tomorrow.getMonth(), tomorrow.getDate())
       const endOfTomorrow = addDays(startOfTomorrow, 1)
-      
+
       const upcomingClasses = await prisma.class.findMany({
         where: {
           clubId: session.clubId,
@@ -34,89 +34,52 @@ export async function GET(request: NextRequest) {
           status: 'SCHEDULED'
         },
         include: {
-          bookings: {
+          ClassBooking: {
             where: {
-              status: 'ENROLLED'
+              status: 'CONFIRMED'
             }
           },
-          instructor: true,
-          court: true
+          Instructor: true,
+          Court: true
         }
       })
-      
-      const notifications = []
-      
+
+      // Send notifications directly via WhatsApp
+      const results = []
       for (const cls of upcomingClasses) {
-        for (const booking of cls.bookings) {
-          // Check if reminder was already sent
-          const existingNotification = await prisma.classNotification.findFirst({
-            where: {
-              classId: cls.id,
-              studentId: booking.id,
-              type: 'REMINDER',
-              createdAt: {
-                gte: new Date(new Date().setHours(0, 0, 0, 0))
-              }
+        for (const booking of cls.ClassBooking) {
+          if (booking.playerPhone) {
+            const message = `🎾 Recordatorio: Tienes clase mañana "${cls.name}" a las ${cls.startTime} en ${cls.Court?.name || 'cancha asignada'}. ¡Te esperamos!`
+
+            try {
+              await sendWhatsAppMessage({
+                to: booking.playerPhone,
+                message
+              })
+
+              results.push({
+                playerPhone: booking.playerPhone,
+                playerName: booking.playerName,
+                status: 'sent'
+              })
+            } catch (error) {
+              results.push({
+                playerPhone: booking.playerPhone,
+                playerName: booking.playerName,
+                status: 'failed',
+                error: (error as Error).message
+              })
             }
-          })
-          
-          if (!existingNotification && booking.studentPhone) {
-            const message = `🎾 Recordatorio: Tienes clase "${cls.name}" mañana ${format(cls.date, 'dd/MM')} a las ${cls.startTime}. ${cls.court ? `Cancha: ${cls.court.name}` : ''} ${cls.instructor ? `Instructor: ${cls.instructor.name}` : ''}`
-            
-            const notification = await prisma.classNotification.create({
-              data: {
-                classId: cls.id,
-                studentId: booking.id,
-                studentPhone: booking.studentPhone,
-                studentName: booking.studentName,
-                type: 'REMINDER',
-                message,
-                status: 'pending'
-              }
-            })
-            
-            notifications.push(notification)
           }
         }
       }
-      
-      // Send notifications
-      const results = []
-      for (const notification of notifications) {
-        try {
-          await sendWhatsAppMessage({
-            to: notification.studentPhone,
-            message: notification.message
-          })
-          
-          await prisma.classNotification.update({
-            where: { id: notification.id },
-            data: {
-              status: 'sent',
-              sentAt: new Date()
-            }
-          })
-          
-          results.push({ ...notification, status: 'sent' })
-        } catch (error) {
-          await prisma.classNotification.update({
-            where: { id: notification.id },
-            data: {
-              status: 'failed',
-              error: error instanceof Error ? error.message : 'Unknown error'
-            }
-          })
-          
-          results.push({ ...notification, status: 'failed' })
-        }
-      }
-      
+
       return NextResponse.json({
         success: true,
         message: `Se enviaron ${results.filter(r => r.status === 'sent').length} recordatorios`,
         notifications: results
       })
-      
+
     } else if (type === 'pending-payments') {
       // Find classes with pending payments
       const classesWithPendingPayments = await prisma.class.findMany({
@@ -125,94 +88,58 @@ export async function GET(request: NextRequest) {
           status: { in: ['SCHEDULED', 'COMPLETED'] }
         },
         include: {
-          bookings: {
+          ClassBooking: {
             where: {
               paymentStatus: 'pending',
-              status: 'ENROLLED'
+              status: 'CONFIRMED'
             }
           }
         }
       })
-      
-      const notifications = []
-      
+
+      // Send notifications directly via WhatsApp
+      const results = []
       for (const cls of classesWithPendingPayments) {
-        for (const booking of cls.bookings) {
-          // Check if payment reminder was sent recently (last 3 days)
-          const existingNotification = await prisma.classNotification.findFirst({
-            where: {
-              classId: cls.id,
-              studentId: booking.id,
-              type: 'PAYMENT_REMINDER',
-              createdAt: {
-                gte: addDays(new Date(), -3)
-              }
+        for (const booking of cls.ClassBooking) {
+          if (booking.playerPhone) {
+            const amount = cls.price || 0
+            const message = `💰 Recordatorio de pago: Tienes un pago pendiente de $${amount} MXN por la clase "${cls.name}". Por favor, realiza tu pago.`
+
+            try {
+              await sendWhatsAppMessage({
+                to: booking.playerPhone,
+                message
+              })
+
+              results.push({
+                playerPhone: booking.playerPhone,
+                playerName: booking.playerName,
+                status: 'sent'
+              })
+            } catch (error) {
+              results.push({
+                playerPhone: booking.playerPhone,
+                playerName: booking.playerName,
+                status: 'failed',
+                error: (error as Error).message
+              })
             }
-          })
-          
-          if (!existingNotification && booking.studentPhone) {
-            const message = `💳 Recordatorio de pago: Tienes un pago pendiente de ${formatCurrency(booking.dueAmount / 100)} para la clase "${cls.name}". Por favor realiza tu pago para confirmar tu lugar.`
-            
-            const notification = await prisma.classNotification.create({
-              data: {
-                classId: cls.id,
-                studentId: booking.id,
-                studentPhone: booking.studentPhone,
-                studentName: booking.studentName,
-                type: 'PAYMENT_REMINDER',
-                message,
-                status: 'pending'
-              }
-            })
-            
-            notifications.push(notification)
           }
         }
       }
-      
-      // Send notifications
-      const results = []
-      for (const notification of notifications) {
-        try {
-          await sendWhatsAppMessage({
-            to: notification.studentPhone,
-            message: notification.message
-          })
-          
-          await prisma.classNotification.update({
-            where: { id: notification.id },
-            data: {
-              status: 'sent',
-              sentAt: new Date()
-            }
-          })
-          
-          results.push({ ...notification, status: 'sent' })
-        } catch (error) {
-          await prisma.classNotification.update({
-            where: { id: notification.id },
-            data: {
-              status: 'failed',
-              error: error instanceof Error ? error.message : 'Unknown error'
-            }
-          })
-          
-          results.push({ ...notification, status: 'failed' })
-        }
-      }
-      
+
       return NextResponse.json({
         success: true,
         message: `Se enviaron ${results.filter(r => r.status === 'sent').length} recordatorios de pago`,
         notifications: results
       })
     }
-    
+
     return NextResponse.json({
       success: false,
       error: 'Tipo de notificación no válido'
     })
-    
+
   } catch (error) {
     console.error('Error sending notifications:', error)
     return NextResponse.json(
@@ -247,7 +174,7 @@ export async function POST(request: NextRequest) {
     const cls = await prisma.class.findUnique({
       where: { id: classId },
       include: {
-        bookings: {
+        ClassBooking: {
           where: studentIds ? {
             id: { in: studentIds }
           } : undefined
@@ -264,46 +191,29 @@ export async function POST(request: NextRequest) {
     
     const notifications = []
     const results = []
-    
-    for (const booking of cls.bookings) {
-      if (booking.studentPhone) {
-        const notification = await prisma.classNotification.create({
-          data: {
-            classId: cls.id,
-            studentId: booking.id,
-            studentPhone: booking.studentPhone,
-            studentName: booking.studentName,
-            type: 'CUSTOM',
-            message,
-            status: 'pending'
-          }
-        })
-        
+
+    for (const booking of cls.ClassBooking) {
+      if (booking.playerPhone) {
+        // Note: Notification model requires bookingId (court booking), not classId
+        // For now, send WhatsApp directly without creating Notification record
         try {
           await sendWhatsAppMessage({
-            to: booking.studentPhone,
+            to: booking.playerPhone,
             message
           })
-          
-          await prisma.classNotification.update({
-            where: { id: notification.id },
-            data: {
-              status: 'sent',
-              sentAt: new Date()
-            }
+
+          results.push({
+            playerPhone: booking.playerPhone,
+            playerName: booking.playerName,
+            status: 'sent'
           })
-          
-          results.push({ ...notification, status: 'sent' })
         } catch (error) {
-          await prisma.classNotification.update({
-            where: { id: notification.id },
-            data: {
-              status: 'failed',
-              error: error instanceof Error ? error.message : 'Unknown error'
-            }
+          results.push({
+            playerPhone: booking.playerPhone,
+            playerName: booking.playerName,
+            status: 'failed',
+            error: error instanceof Error ? error.message : 'Unknown error'
           })
-          
-          results.push({ ...notification, status: 'failed' })
         }
       }
     }

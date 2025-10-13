@@ -39,29 +39,19 @@ export async function GET(request: NextRequest) {
           status: true,
           recipient: true,
           recipientPhone: true,
-          title: true,
           message: true,
           whatsappLink: true,
-          linkClicked: true,
-          clickedAt: true,
-          linkExpiredAt: true,
           createdAt: true,
           updatedAt: true,
-          booking: {
+          sentAt: true,
+          Booking: {
             select: {
               id: true,
               date: true,
               startTime: true,
-              court: {
+              Court: {
                 select: { name: true }
               }
-            }
-          },
-          bookingGroup: {
-            select: {
-              id: true,
-              date: true,
-              startTime: true
             }
           }
         },
@@ -85,16 +75,12 @@ export async function GET(request: NextRequest) {
       status: notification.status,
       recipient: notification.recipient,
       recipientPhone: notification.recipientPhone,
-      title: notification.title,
       message: notification.message?.substring(0, 100) + (notification.message && notification.message.length > 100 ? '...' : ''),
       whatsappLink: notification.whatsappLink,
-      linkClicked: notification.linkClicked,
-      clickedAt: notification.clickedAt,
-      linkExpiredAt: notification.linkExpiredAt,
       createdAt: notification.createdAt,
       updatedAt: notification.updatedAt,
-      bookingInfo: notification.booking || notification.bookingGroup,
-      isExpired: notification.linkExpiredAt ? new Date() > notification.linkExpiredAt : false
+      sentAt: notification.sentAt,
+      bookingInfo: notification.Booking
     }))
 
     return NextResponse.json({

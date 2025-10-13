@@ -872,7 +872,6 @@ function PlayersPageContent() {
                 icon={<Shield size={20} />}
                 title="Identificación"
                 description="Número único del cliente"
-                style={{ marginTop: '20px' }}
               >
                 <AppleInput
                   label="Número de cliente"

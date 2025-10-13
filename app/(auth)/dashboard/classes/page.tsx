@@ -1971,10 +1971,10 @@ function ClassesContent() {
                           {availabilityCheck.conflicts && (
                             <div style={{ fontSize: '12px', color: '#7f1d1d', marginBottom: '8px' }}>
                               Conflictos:
-                              {availabilityCheck.conflicts.bookings?.map((b: any, i: number) => (
+                              {(availabilityCheck.conflicts as any).bookings?.map((b: any, i: number) => (
                                 <div key={i}>• Reserva: {b.courtName} ({b.startTime} - {b.endTime})</div>
                               ))}
-                              {availabilityCheck.conflicts.classes?.map((c: any, i: number) => (
+                              {(availabilityCheck.conflicts as any).classes?.map((c: any, i: number) => (
                                 <div key={i}>• Clase: {c.className} ({c.startTime} - {c.endTime})</div>
                               ))}
                             </div>

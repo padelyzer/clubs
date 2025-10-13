@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/config/prisma'
 import { z } from 'zod'
+import { v4 as uuidv4 } from 'uuid'
 
 // Schema para check-in rápido con pago y asistencia
 const quickCheckInSchema = z.object({
@@ -30,8 +31,8 @@ export async function POST(
     const classItem = await prisma.class.findUnique({
       where: { id: classId },
       include: {
-        instructor: true,
-        court: true
+        Instructor: true,
+        Court: true
       }
     })
 
@@ -55,7 +56,8 @@ export async function POST(
         const classBooking = await tx.classBooking.findUnique({
           where: { id: student.classBookingId },
           include: {
-            player: true
+            Player: true,
+            Class: true
           }
         })
 
@@ -67,11 +69,9 @@ export async function POST(
         const updatedBooking = await tx.classBooking.update({
           where: { id: student.classBookingId },
           data: {
-            attended: student.attendanceStatus !== 'ABSENT',
-            attendanceStatus: student.attendanceStatus,
-            attendanceTime: student.attendanceStatus !== 'ABSENT' ? new Date() : null,
-            attendanceNotes: student.notes,
-            status: 'CHECKED_IN',
+            checkedIn: student.attendanceStatus !== 'ABSENT',
+            checkedInAt: student.attendanceStatus !== 'ABSENT' ? new Date() : null,
+            notes: student.notes,
             updatedAt: new Date()
           }
         })
@@ -89,15 +89,18 @@ export async function POST(
             student.paymentMethod && 
             student.paymentMethod !== 'FREE') {
           
-          // Validar monto de pago
-          const paymentAmount = student.paymentAmount || classBooking.dueAmount
-          if (paymentAmount < classBooking.dueAmount) {
-            throw new Error(`PAGO INSUFICIENTE: ${student.studentName} - Se requieren $${classBooking.dueAmount / 100} MXN, se recibieron $${paymentAmount / 100} MXN`)
+          // Validar monto de pago - usar el precio de la clase
+          const classPrice = classBooking.Class.price || 0
+          const amountDue = (classBooking.paidAmount || 0) > 0 ? classPrice - (classBooking.paidAmount || 0) : classPrice
+          const paymentAmount = student.paymentAmount || amountDue
+          if (paymentAmount < amountDue) {
+            throw new Error(`PAGO INSUFICIENTE: ${student.studentName} - Se requieren $${amountDue / 100} MXN, se recibieron $${paymentAmount / 100} MXN`)
           }
 
           // Crear registro de transacción para el pago
           await tx.transaction.create({
             data: {
+              id: uuidv4(),
               clubId: classItem.clubId,
               type: 'INCOME',
               category: 'CLASS',
@@ -106,14 +109,15 @@ export async function POST(
               description: `Pago de clase: ${classItem.name} - ${student.studentName}`,
               date: new Date(),
               reference: student.paymentReference || `${student.paymentMethod}_${Date.now()}`,
-              notes: JSON.stringify({
+              metadata: {
                 classId: classItem.id,
                 classBookingId: student.classBookingId,
                 studentName: student.studentName,
                 paymentMethod: student.paymentMethod,
                 className: classItem.name,
                 attendanceStatus: student.attendanceStatus
-              })
+              },
+              updatedAt: new Date()
             }
           })
 
@@ -133,22 +137,16 @@ export async function POST(
         }
 
         // 3. CREAR NOTIFICACIÓN
-        const notificationMessage = 
-          student.attendanceStatus === 'ABSENT' 
+        const notificationMessage =
+          student.attendanceStatus === 'ABSENT'
             ? `${student.studentName} marcado como ausente en ${classItem.name}`
             : paymentProcessed
               ? `Check-in completo: ${student.studentName} - Asistencia: ${student.attendanceStatus} - Pago: ${student.paymentMethod}`
               : `Check-in completo: ${student.studentName} - Asistencia: ${student.attendanceStatus}`
 
-        await tx.notification.create({
-          data: {
-            clubId: classItem.clubId,
-            type: 'WHATSAPP',
-            recipient: classBooking.studentPhone,
-            template: 'class_quick_checkin',
-            status: 'pending'
-          }
-        })
+        // Note: Notification model requires bookingId, not clubId - create a booking-linked notification
+        // For class bookings, we'd need to extend the Notification model or use a different approach
+        // Skipping notification creation for now as it requires schema changes
 
         processedStudents.push({
           id: student.classBookingId,
@@ -156,7 +154,7 @@ export async function POST(
           attendance: student.attendanceStatus,
           paymentProcessed,
           paymentMethod: student.paymentMethod,
-          amount: student.paymentAmount || classBooking.dueAmount
+          amount: student.paymentAmount || (classBooking.Class.price || 0)
         })
       }
 
@@ -176,36 +174,38 @@ export async function POST(
         const previousCheckIns = await tx.classBooking.count({
           where: {
             classId,
-            attended: true,
-            id: { 
-              notIn: students.map(s => s.classBookingId) 
+            checkedIn: true,
+            id: {
+              notIn: students.map(s => s.classBookingId)
             }
           }
         })
 
-        if (previousCheckIns === 0 && classItem.instructor && classItem.instructor.paymentType === 'HOURLY') {
+        if (previousCheckIns === 0 && classItem.Instructor && classItem.Instructor.paymentType === 'HOURLY') {
           const hours = classItem.duration / 60
-          const instructorPayment = Math.round((classItem.instructor.hourlyRate || 0) * hours)
-          
+          const instructorPayment = Math.round((classItem.Instructor.hourlyRate || 0) * hours)
+
           if (instructorPayment > 0) {
             await tx.transaction.create({
               data: {
+                id: uuidv4(),
                 clubId: classItem.clubId,
                 type: 'EXPENSE',
                 category: 'SALARY',
                 amount: instructorPayment,
                 currency: 'MXN',
-                description: `Pago a instructor ${classItem.instructor.name} - Clase: ${classItem.name}`,
+                description: `Pago a instructor ${classItem.Instructor.name} - Clase: ${classItem.name}`,
                 date: new Date(),
                 reference: `INSTRUCTOR_${classId}`,
-                notes: JSON.stringify({
+                metadata: {
                   classId: classItem.id,
                   instructorId: classItem.instructorId,
-                  instructorName: classItem.instructor.name,
+                  instructorName: classItem.Instructor.name,
                   className: classItem.name,
                   attendanceCount: presentCount + lateCount,
                   duration: classItem.duration
-                })
+                },
+                updatedAt: new Date()
               }
             })
           }
@@ -230,9 +230,9 @@ export async function POST(
       include: {
         _count: {
           select: {
-            bookings: {
+            ClassBooking: {
               where: {
-                attended: true
+                checkedIn: true
               }
             }
           }
@@ -257,7 +257,7 @@ export async function POST(
     
     if (error instanceof z.ZodError) {
       return NextResponse.json(
-        { success: false, error: 'Datos inválidos', details: error.errors },
+        { success: false, error: 'Datos inválidos', details: error.issues },
         { status: 400 }
       )
     }
@@ -289,13 +289,13 @@ export async function GET(
     const classItem = await prisma.class.findUnique({
       where: { id: classId },
       include: {
-        instructor: true,
-        court: true,
-        bookings: {
+        Instructor: true,
+        Court: true,
+        ClassBooking: {
           include: {
-            player: true
+            Player: true
           },
-          orderBy: { studentName: 'asc' }
+          orderBy: { playerName: 'asc' }
         }
       }
     })
@@ -309,30 +309,29 @@ export async function GET(
     
     // Each student pays the full class price
     const classPrice = classItem.price || 0
-    
+
     // Preparar lista para check-in rápido
-    const checkInList = classItem.bookings.map(booking => ({
+    const checkInList = classItem.ClassBooking.map(booking => ({
       classBookingId: booking.id,
-      studentName: booking.studentName,
-      studentPhone: booking.studentPhone,
-      studentEmail: booking.studentEmail,
+      studentName: booking.playerName,
+      studentPhone: booking.playerPhone,
+      studentEmail: booking.playerEmail,
       currentStatus: {
-        attended: booking.attended,
-        attendanceStatus: booking.attendanceStatus || 'PENDING',
+        checkedIn: booking.checkedIn,
         paymentStatus: booking.paymentStatus,
         paidAmount: booking.paidAmount || 0,
-        dueAmount: booking.dueAmount || classPrice  // Each student pays full price
+        dueAmount: classPrice  // Each student pays full price
       },
       needsPayment: booking.paymentStatus === 'pending',
-      suggestedPaymentAmount: (booking.dueAmount || classPrice) - (booking.paidAmount || 0)
+      suggestedPaymentAmount: classPrice - (booking.paidAmount || 0)
     }))
-    
+
     // Estadísticas actuales
     const stats = {
-      totalEnrolled: classItem.bookings.length,
-      checkedIn: classItem.bookings.filter(b => b.attended).length,
-      paid: classItem.bookings.filter(b => b.paymentStatus === 'completed').length,
-      pending: classItem.bookings.filter(b => !b.attended).length
+      totalEnrolled: classItem.ClassBooking.length,
+      checkedIn: classItem.ClassBooking.filter(b => b.checkedIn).length,
+      paid: classItem.ClassBooking.filter(b => b.paymentStatus === 'completed').length,
+      pending: classItem.ClassBooking.filter(b => !b.checkedIn).length
     }
     
     return NextResponse.json({
@@ -342,8 +341,8 @@ export async function GET(
         name: classItem.name,
         date: classItem.date,
         time: `${classItem.startTime} - ${classItem.endTime}`,
-        instructor: classItem.instructor?.name,
-        court: classItem.court?.name,
+        instructor: classItem.Instructor?.name,
+        court: classItem.Court?.name,
         status: classItem.status,
         price: classItem.price
       },

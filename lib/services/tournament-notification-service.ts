@@ -1,4 +1,5 @@
 import { prisma } from '@/lib/config/prisma'
+import { NotificationType } from '@prisma/client'
 
 export interface NotificationRecipient {
   phone?: string
@@ -86,24 +87,26 @@ export class TournamentNotificationService {
       }
 
       // Create notifications in database for tracking
+      // Note: Schema requires bookingId, using empty string as placeholder for tournament notifications
       for (const recipient of validRecipients) {
         await prisma.notification.create({
           data: {
             id: `notif_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
-            clubId,
-            type: 'tournament',
-            title: template.title,
-            message,
+            type: 'WHATSAPP' as NotificationType,
+            template: type,
             recipient: recipient.phone!,
             recipientName: recipient.name,
-            status: 'pending',
-            scheduledFor: new Date(),
-            createdAt: new Date(),
-            updatedAt: new Date(),
-            metadata: {
+            recipientPhone: recipient.phone,
+            message: JSON.stringify({
+              title: template.title,
+              body: message,
               notificationType: type,
               tournamentData: data
-            }
+            }),
+            status: 'pending',
+            bookingId: '', // Required field, using empty string for tournament notifications
+            splitPaymentId: null,
+            updatedAt: new Date()
           }
         })
       }
@@ -150,21 +153,31 @@ export class TournamentNotificationService {
         select: {
           teamName: true,
           player1Name: true,
+          player1Phone: true,
+          player1Email: true,
           player2Name: true,
-          // Note: You'll need to add phone fields to registrations or link to players
-          contactPhone: true, // Assuming this field exists
-          contactEmail: true  // Assuming this field exists
+          player2Phone: true,
+          player2Email: true
         }
       })
 
       const recipients: NotificationRecipient[] = []
-      
+
       for (const reg of registrations) {
-        if (reg.contactPhone) {
+        // Add player 1
+        if (reg.player1Phone) {
           recipients.push({
-            phone: reg.contactPhone,
-            email: reg.contactEmail || undefined,
-            name: reg.player1Name || reg.teamName
+            phone: reg.player1Phone,
+            email: reg.player1Email || undefined,
+            name: reg.player1Name
+          })
+        }
+        // Add player 2 if exists
+        if (reg.player2Phone) {
+          recipients.push({
+            phone: reg.player2Phone,
+            email: reg.player2Email || undefined,
+            name: reg.player2Name || 'Player 2'
           })
         }
       }
@@ -290,18 +303,34 @@ export class TournamentNotificationService {
         },
         select: {
           player1Name: true,
-          contactPhone: true,
-          contactEmail: true
+          player1Phone: true,
+          player1Email: true,
+          player2Name: true,
+          player2Phone: true,
+          player2Email: true
         }
       })
 
-      return registrations
-        .filter(reg => reg.contactPhone)
-        .map(reg => ({
-          phone: reg.contactPhone!,
-          email: reg.contactEmail || undefined,
-          name: reg.player1Name
-        }))
+      const recipients: NotificationRecipient[] = []
+
+      for (const reg of registrations) {
+        if (reg.player1Phone) {
+          recipients.push({
+            phone: reg.player1Phone,
+            email: reg.player1Email || undefined,
+            name: reg.player1Name
+          })
+        }
+        if (reg.player2Phone) {
+          recipients.push({
+            phone: reg.player2Phone,
+            email: reg.player2Email || undefined,
+            name: reg.player2Name || 'Player 2'
+          })
+        }
+      }
+
+      return recipients
 
     } catch (error) {
       console.error('Error getting match participants:', error)
@@ -330,18 +359,34 @@ export class TournamentNotificationService {
         },
         select: {
           player1Name: true,
-          contactPhone: true,
-          contactEmail: true
+          player1Phone: true,
+          player1Email: true,
+          player2Name: true,
+          player2Phone: true,
+          player2Email: true
         }
       })
 
-      return registrations
-        .filter(reg => reg.contactPhone)
-        .map(reg => ({
-          phone: reg.contactPhone!,
-          email: reg.contactEmail || undefined,
-          name: reg.player1Name
-        }))
+      const recipients: NotificationRecipient[] = []
+
+      for (const reg of registrations) {
+        if (reg.player1Phone) {
+          recipients.push({
+            phone: reg.player1Phone,
+            email: reg.player1Email || undefined,
+            name: reg.player1Name
+          })
+        }
+        if (reg.player2Phone) {
+          recipients.push({
+            phone: reg.player2Phone,
+            email: reg.player2Email || undefined,
+            name: reg.player2Name || 'Player 2'
+          })
+        }
+      }
+
+      return recipients
 
     } catch (error) {
       console.error('Error getting players contact info:', error)

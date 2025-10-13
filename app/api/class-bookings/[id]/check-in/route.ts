@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/config/prisma'
 import { z } from 'zod'
+import { v4 as uuidv4 } from 'uuid'
 
 // Validation schema for class booking check-in
 const checkInSchema = z.object({
@@ -25,13 +26,13 @@ export async function POST(
     const classBooking = await prisma.classBooking.findUnique({
       where: { id },
       include: {
-        class: {
+        Class: {
           include: {
-            instructor: true,
-            court: true
+            Instructor: true,
+            Court: true
           }
         },
-        player: true
+        Player: true
       }
     })
 
@@ -43,7 +44,7 @@ export async function POST(
     }
 
     // Check if already checked in
-    if (classBooking.attended) {
+    if (classBooking.checkedIn) {
       return NextResponse.json(
         { success: false, error: 'Este estudiante ya fue registrado' },
         { status: 400 }
@@ -51,44 +52,47 @@ export async function POST(
     }
 
     // Check if class is cancelled
-    if (classBooking.class.status === 'CANCELLED') {
+    if (classBooking.Class.status === 'CANCELLED') {
       return NextResponse.json(
         { success: false, error: 'No se puede hacer check-in de una clase cancelada' },
         { status: 400 }
       )
     }
 
+    // Calculate due amount
+    const dueAmount = classBooking.Class.price - (classBooking.paidAmount || 0)
+
     // Check payment status - STRICT VALIDATION
     const needsPayment = classBooking.paymentStatus === 'pending'
-    
+
     if (needsPayment) {
       // Require payment method and amount for pending payments
       if (!validatedData.paymentMethod) {
         return NextResponse.json(
-          { 
-            success: false, 
+          {
+            success: false,
             error: 'PAGO REQUERIDO: Esta inscripción tiene pago pendiente. Debe registrar el método de pago antes del check-in.',
             needsPayment: true,
-            dueAmount: classBooking.dueAmount,
+            dueAmount: dueAmount,
             paymentDetails: {
-              studentName: classBooking.studentName,
-              className: classBooking.class.name,
-              amountDue: classBooking.dueAmount / 100, // Convert to pesos
+              studentName: classBooking.playerName,
+              className: classBooking.Class.name,
+              amountDue: dueAmount / 100, // Convert to pesos
               currency: 'MXN'
             }
           },
           { status: 402 } // Payment Required
         )
       }
-      
+
       // Validate payment amount if provided
-      if (validatedData.paymentAmount && validatedData.paymentAmount < classBooking.dueAmount) {
+      if (validatedData.paymentAmount && validatedData.paymentAmount < dueAmount) {
         return NextResponse.json(
-          { 
-            success: false, 
-            error: `El monto de pago es insuficiente. Se requieren $${classBooking.dueAmount / 100} MXN, se recibieron $${validatedData.paymentAmount / 100} MXN.`,
+          {
+            success: false,
+            error: `El monto de pago es insuficiente. Se requieren $${dueAmount / 100} MXN, se recibieron $${validatedData.paymentAmount / 100} MXN.`,
             needsPayment: true,
-            dueAmount: classBooking.dueAmount,
+            dueAmount: dueAmount,
             providedAmount: validatedData.paymentAmount
           },
           { status: 400 }
@@ -103,20 +107,22 @@ export async function POST(
         // Create transaction record for payment
         await tx.transaction.create({
           data: {
-            clubId: classBooking.class.clubId,
+            id: uuidv4(),
+            clubId: classBooking.Class.clubId,
             type: 'INCOME',
             category: 'CLASS',
-            amount: validatedData.paymentAmount || classBooking.dueAmount,
+            amount: validatedData.paymentAmount || dueAmount,
             currency: 'MXN',
-            description: `Pago de clase: ${classBooking.class.name} - ${classBooking.studentName}`,
+            description: `Pago de clase: ${classBooking.Class.name} - ${classBooking.playerName}`,
             date: new Date(),
             reference: validatedData.paymentCode || `MANUAL_${Date.now()}`,
+            updatedAt: new Date(),
             notes: JSON.stringify({
               classId: classBooking.classId,
               classBookingId: classBooking.id,
-              studentName: classBooking.studentName,
+              studentName: classBooking.playerName,
               paymentMethod: validatedData.paymentMethod,
-              className: classBooking.class.name
+              className: classBooking.Class.name
             })
           }
         })
@@ -127,7 +133,7 @@ export async function POST(
           data: {
             paymentStatus: 'completed',
             paymentMethod: validatedData.paymentMethod === 'ONLINE' ? 'online' : 'onsite',
-            paidAmount: validatedData.paymentAmount || classBooking.dueAmount,
+            paidAmount: validatedData.paymentAmount || dueAmount,
             updatedAt: new Date()
           }
         })
@@ -137,56 +143,56 @@ export async function POST(
       const updatedBooking = await tx.classBooking.update({
         where: { id },
         data: {
-          attended: true,
-          attendanceStatus: 'PRESENT',
-          attendanceTime: new Date(),
-          attendanceNotes: validatedData.notes,
-          status: 'CHECKED_IN',
+          checkedIn: true,
+          checkedInAt: new Date(),
+          notes: validatedData.notes ? `${classBooking.notes || ''}\n${validatedData.notes}`.trim() : classBooking.notes,
           updatedAt: new Date()
         },
         include: {
-          class: {
+          Class: {
             include: {
-              instructor: true,
-              court: true
+              Instructor: true,
+              Court: true
             }
           },
-          player: true
+          Player: true
         }
       })
 
       // Register instructor payment if this is the first check-in for this class
-      if (classBooking.class.instructor) {
+      if (classBooking.Class.Instructor) {
         const firstCheckIn = await tx.classBooking.findFirst({
           where: {
             classId: classBooking.classId,
-            attended: true,
+            checkedIn: true,
             id: { not: id }
           }
         })
 
-        if (!firstCheckIn && classBooking.class.instructor.paymentType === 'HOURLY') {
-          const hours = classBooking.class.duration / 60
-          const instructorPayment = Math.round((classBooking.class.instructor.hourlyRate || 0) * hours)
-          
+        if (!firstCheckIn && classBooking.Class.Instructor.paymentType === 'HOURLY') {
+          const hours = classBooking.Class.duration / 60
+          const instructorPayment = Math.round((classBooking.Class.Instructor.hourlyRate || 0) * hours)
+
           if (instructorPayment > 0) {
             await tx.transaction.create({
               data: {
-                clubId: classBooking.class.clubId,
+                id: uuidv4(),
+                clubId: classBooking.Class.clubId,
                 type: 'EXPENSE',
                 category: 'SALARY',
                 amount: instructorPayment,
                 currency: 'MXN',
-                description: `Pago a instructor ${classBooking.class.instructor.name} - Clase: ${classBooking.class.name}`,
+                description: `Pago a instructor ${classBooking.Class.Instructor.name} - Clase: ${classBooking.Class.name}`,
                 date: new Date(),
                 reference: `INSTRUCTOR_${classBooking.classId}`,
+                updatedAt: new Date(),
                 notes: JSON.stringify({
                   classId: classBooking.classId,
-                  instructorId: classBooking.class.instructorId,
-                  instructorName: classBooking.class.instructor.name,
-                  className: classBooking.class.name,
+                  instructorId: classBooking.Class.instructorId,
+                  instructorName: classBooking.Class.Instructor.name,
+                  className: classBooking.Class.name,
                   hours: hours,
-                  hourlyRate: classBooking.class.instructor.hourlyRate,
+                  hourlyRate: classBooking.Class.Instructor.hourlyRate,
                   attendanceTriggered: true
                 })
               }
@@ -199,11 +205,11 @@ export async function POST(
       const attendanceCount = await tx.classBooking.count({
         where: {
           classId: classBooking.classId,
-          attended: true
+          checkedIn: true
         }
       })
 
-      if (attendanceCount === 1 && classBooking.class.status === 'SCHEDULED') {
+      if (attendanceCount === 1 && classBooking.Class.status === 'SCHEDULED') {
         await tx.class.update({
           where: { id: classBooking.classId },
           data: { status: 'IN_PROGRESS' }
@@ -213,19 +219,22 @@ export async function POST(
       // Create notification for successful check-in
       await tx.notification.create({
         data: {
+          id: uuidv4(),
+          bookingId: classBooking.id,
           type: 'WHATSAPP',
-          recipient: classBooking.studentPhone,
+          recipient: classBooking.playerPhone,
           template: 'class_checkin_success',
-          status: 'pending'
+          status: 'pending',
+          updatedAt: new Date()
         }
       })
 
       return updatedBooking
     })
 
-    const message = needsPayment 
-      ? `Check-in realizado para ${result.studentName}. Pago registrado: ${validatedData.paymentMethod}`
-      : `Check-in realizado para ${result.studentName}`
+    const message = needsPayment
+      ? `Check-in realizado para ${result.playerName}. Pago registrado: ${validatedData.paymentMethod}`
+      : `Check-in realizado para ${result.playerName}`
 
     return NextResponse.json({ 
       success: true, 
@@ -239,7 +248,7 @@ export async function POST(
     
     if (error instanceof z.ZodError) {
       return NextResponse.json(
-        { success: false, error: 'Datos inválidos', details: error.errors },
+        { success: false, error: 'Datos inválidos', details: error.issues },
         { status: 400 }
       )
     }
@@ -264,7 +273,7 @@ export async function DELETE(
     const classBooking = await prisma.classBooking.findUnique({
       where: { id },
       include: {
-        class: true
+        Class: true
       }
     })
 
@@ -275,7 +284,7 @@ export async function DELETE(
       )
     }
 
-    if (!classBooking.attended) {
+    if (!classBooking.checkedIn) {
       return NextResponse.json(
         { success: false, error: 'Este estudiante no está registrado' },
         { status: 400 }
@@ -286,21 +295,18 @@ export async function DELETE(
     const updatedBooking = await prisma.classBooking.update({
       where: { id },
       data: {
-        attended: false,
-        attendanceStatus: null,
-        attendanceTime: null,
-        attendanceNotes: null,
-        status: 'ENROLLED',
+        checkedIn: false,
+        checkedInAt: null,
         updatedAt: new Date()
       },
       include: {
-        class: {
+        Class: {
           include: {
-            instructor: true,
-            court: true
+            Instructor: true,
+            Court: true
           }
         },
-        player: true
+        Player: true
       }
     })
 
@@ -331,13 +337,13 @@ export async function GET(
     const classBooking = await prisma.classBooking.findUnique({
       where: { id },
       include: {
-        class: {
+        Class: {
           include: {
-            instructor: true,
-            court: true
+            Instructor: true,
+            Court: true
           }
         },
-        player: true
+        Player: true
       }
     })
 
@@ -351,7 +357,7 @@ export async function GET(
     return NextResponse.json({
       success: true,
       booking: classBooking,
-      checkedIn: classBooking.attended,
+      checkedIn: classBooking.checkedIn,
       needsPayment: classBooking.paymentStatus === 'pending'
     })
 

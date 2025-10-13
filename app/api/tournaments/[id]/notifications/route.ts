@@ -21,12 +21,12 @@ export async function POST(
     } = body
 
     if (!type || !recipients || !Array.isArray(recipients)) {
-      return ResponseBuilder.badRequest('Missing required fields: type, recipients')
+      return ResponseBuilder.error('Missing required fields: type, recipients', 400)
     }
 
     // Validate notification type
     if (!Object.values(TournamentNotificationType).includes(type)) {
-      return ResponseBuilder.badRequest('Invalid notification type')
+      return ResponseBuilder.error('Invalid notification type', 400)
     }
 
     await TournamentNotificationService.sendTournamentNotification(

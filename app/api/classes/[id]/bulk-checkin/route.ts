@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/config/prisma'
 import { z } from 'zod'
+import { v4 as uuidv4 } from 'uuid'
 
 // Schema para check-in masivo simplificado
 const bulkCheckInSchema = z.object({
@@ -25,13 +26,13 @@ export async function POST(
     const classItem = await prisma.class.findUnique({
       where: { id: classId },
       include: {
-        bookings: {
+        ClassBooking: {
           where: {
             status: { not: 'CANCELLED' }
           }
         },
-        instructor: true,
-        court: true
+        Instructor: true,
+        Court: true
       }
     })
 
@@ -42,7 +43,7 @@ export async function POST(
       )
     }
 
-    if (classItem.bookings.length === 0) {
+    if (classItem.ClassBooking.length === 0) {
       return NextResponse.json(
         { success: false, error: 'No hay estudiantes inscritos en esta clase' },
         { status: 400 }
@@ -53,38 +54,38 @@ export async function POST(
     const result = await prisma.$transaction(async (tx) => {
       const checkedInStudents = []
       let totalPaymentProcessed = 0
-      
+
       // Process each student enrollment
-      for (const booking of classItem.bookings) {
+      for (const booking of classItem.ClassBooking) {
         // Skip if already checked in
-        if (booking.attended) {
+        if (booking.checkedIn) {
           continue
         }
 
         // Calculate payment amount per student if provided
-        const studentPayment = validatedData.paymentAmount 
-          ? Math.round(validatedData.paymentAmount / classItem.bookings.length)
-          : booking.dueAmount
+        const studentPayment = validatedData.paymentAmount
+          ? Math.round(validatedData.paymentAmount / classItem.ClassBooking.length)
+          : (classItem.price || 0)
 
         // Update booking attendance and payment
         const updated = await tx.classBooking.update({
           where: { id: booking.id },
           data: {
-            attended: true,
-            attendanceStatus: 'PRESENT',
-            attendanceTime: new Date(),
-            status: 'CHECKED_IN',
+            checkedIn: true,
+            checkedInAt: new Date(),
+            status: 'CONFIRMED',
             ...(validatedData.paymentMethod && {
               paymentStatus: 'completed',
-              paymentMethod: 'onsite',
+              paymentMethod: validatedData.paymentMethod,
               paidAmount: studentPayment
-            })
+            }),
+            updatedAt: new Date()
           }
         })
 
         checkedInStudents.push({
           id: updated.id,
-          name: updated.studentName,
+          name: updated.playerName,
           paid: studentPayment
         })
 
@@ -92,22 +93,24 @@ export async function POST(
         if (validatedData.paymentMethod && studentPayment > 0) {
           await tx.transaction.create({
             data: {
+              id: uuidv4(),
               clubId: classItem.clubId,
               type: 'INCOME',
               category: 'CLASS',
               amount: studentPayment,
               currency: 'MXN',
-              description: `Pago de clase: ${classItem.name} - ${updated.studentName}`,
+              description: `Pago de clase: ${classItem.name} - ${updated.playerName}`,
               date: new Date(),
               reference: `CLASS_${classId}_${updated.id}`,
               notes: JSON.stringify({
                 classId,
                 classBookingId: updated.id,
-                studentName: updated.studentName,
+                studentName: updated.playerName,
                 paymentMethod: validatedData.paymentMethod,
                 className: classItem.name,
                 bulkCheckIn: true
-              })
+              }),
+              updatedAt: new Date()
             }
           })
           totalPaymentProcessed += studentPayment
@@ -118,35 +121,37 @@ export async function POST(
       const hasAnyCheckIn = await tx.classBooking.findFirst({
         where: {
           classId,
-          attended: true,
+          checkedIn: true,
           id: { notIn: checkedInStudents.map(s => s.id) }
         }
       })
 
-      if (!hasAnyCheckIn && classItem.instructor?.paymentType === 'HOURLY') {
+      if (!hasAnyCheckIn && classItem.Instructor?.paymentType === 'HOURLY') {
         const hours = classItem.duration / 60
-        const instructorPayment = Math.round((classItem.instructor.hourlyRate || 0) * hours)
-        
+        const instructorPayment = Math.round((classItem.Instructor.hourlyRate || 0) * hours)
+
         if (instructorPayment > 0) {
           await tx.transaction.create({
             data: {
+              id: uuidv4(),
               clubId: classItem.clubId,
               type: 'EXPENSE',
               category: 'SALARY',
               amount: instructorPayment,
               currency: 'MXN',
-              description: `Pago a instructor ${classItem.instructor.name} - Clase: ${classItem.name}`,
+              description: `Pago a instructor ${classItem.Instructor.name} - Clase: ${classItem.name}`,
               date: new Date(),
               reference: `INSTRUCTOR_${classId}`,
               notes: JSON.stringify({
                 classId,
                 instructorId: classItem.instructorId,
-                instructorName: classItem.instructor.name,
+                instructorName: classItem.Instructor.name,
                 className: classItem.name,
                 hours,
-                hourlyRate: classItem.instructor.hourlyRate,
+                hourlyRate: classItem.Instructor.hourlyRate,
                 bulkCheckInTriggered: true
-              })
+              }),
+              updatedAt: new Date()
             }
           })
         }
@@ -155,7 +160,7 @@ export async function POST(
       return {
         checkedInStudents,
         totalPaymentProcessed,
-        instructorPaymentRegistered: !hasAnyCheckIn && classItem.instructor?.paymentType === 'HOURLY'
+        instructorPaymentRegistered: !hasAnyCheckIn && classItem.Instructor?.paymentType === 'HOURLY'
       }
     })
 
@@ -175,7 +180,7 @@ export async function POST(
     
     if (error instanceof z.ZodError) {
       return NextResponse.json(
-        { success: false, error: 'Datos inválidos', details: error.errors },
+        { success: false, error: 'Datos inválidos', details: error.issues },
         { status: 400 }
       )
     }

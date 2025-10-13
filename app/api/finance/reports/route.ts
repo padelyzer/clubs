@@ -327,10 +327,9 @@ async function generateCashFlow(
   })
 
   // Get payment methods breakdown
-  const paymentMethods = await prisma.payment.groupBy({
-    by: ['method'],
+  const payments = await prisma.payment.findMany({
     where: {
-      booking: {
+      Booking: {
         clubId
       },
       createdAt: {
@@ -339,11 +338,27 @@ async function generateCashFlow(
       },
       status: 'completed'
     },
-    _sum: {
+    select: {
+      method: true,
       amount: true
-    },
-    _count: true
+    }
   })
+
+  // Group payments manually
+  const paymentMethodsMap = new Map<string, { amount: number; count: number }>()
+  payments.forEach(payment => {
+    const existing = paymentMethodsMap.get(payment.method) || { amount: 0, count: 0 }
+    paymentMethodsMap.set(payment.method, {
+      amount: existing.amount + payment.amount,
+      count: existing.count + 1
+    })
+  })
+
+  const paymentMethods = Array.from(paymentMethodsMap.entries()).map(([method, data]) => ({
+    method,
+    amount: data.amount,
+    count: data.count
+  }))
 
   return {
     type: 'cash_flow',
@@ -368,11 +383,7 @@ async function generateCashFlow(
         ? Object.values(dailyCashFlow).reduce((sum: number, day: any) => sum + day.expenses, 0) / Object.values(dailyCashFlow).length
         : 0
     },
-    paymentMethods: paymentMethods.map(pm => ({
-      method: pm.method,
-      amount: pm._sum.amount || 0,
-      count: pm._count
-    }))
+    paymentMethods
   }
 }
 
@@ -427,7 +438,7 @@ async function generateBalanceSheet(
   // Get pending payments (accounts receivable)
   const pendingPayments = await prisma.payment.aggregate({
     where: {
-      booking: {
+      Booking: {
         clubId
       },
       status: 'pending'
@@ -450,17 +461,32 @@ async function generateBalanceSheet(
     _count: true
   })
 
-  // Get unpaid expenses
-  const unpaidExpenses = await prisma.expense.aggregate({
+  // Get unpaid expenses (from transactions with pending status in metadata)
+  const unpaidExpensesData = await prisma.transaction.findMany({
     where: {
       clubId,
-      status: { in: ['pending', 'approved'] }
+      type: 'EXPENSE'
     },
-    _sum: {
-      amount: true
-    },
-    _count: true
+    select: {
+      amount: true,
+      metadata: true
+    }
   })
+
+  const unpaidExpenses = {
+    _sum: {
+      amount: unpaidExpensesData
+        .filter(e => {
+          const meta = (e.metadata as any) || {}
+          return meta.status === 'pending' || meta.status === 'approved'
+        })
+        .reduce((sum, e) => sum + e.amount, 0)
+    },
+    _count: unpaidExpensesData.filter(e => {
+      const meta = (e.metadata as any) || {}
+      return meta.status === 'pending' || meta.status === 'approved'
+    }).length
+  }
 
   const income = totalIncome._sum.amount || 0
   const expenses = totalExpenses._sum.amount || 0
@@ -554,14 +580,14 @@ async function generateCustomReport(
       _count: true,
       _sum: {
         price: true,
-        currentStudents: true
+        enrolledCount: true
       }
     }),
     // Active players
     prisma.player.count({
       where: {
         clubId,
-        bookings: {
+        Booking: {
           some: {
             date: {
               gte: startDate,
@@ -596,13 +622,13 @@ async function generateCustomReport(
       classes: {
         count: classes._count,
         revenue: classes._sum.price || 0,
-        totalStudents: classes._sum.currentStudents || 0
+        totalStudents: classes._sum.enrolledCount || 0
       },
       activePlayers: players
     },
     kpis: {
       averageBookingValue: bookings._count > 0 ? (bookings._sum.price || 0) / bookings._count : 0,
-      averageClassSize: classes._count > 0 ? (classes._sum.currentStudents || 0) / classes._count : 0,
+      averageClassSize: classes._count > 0 ? (classes._sum.enrolledCount || 0) / classes._count : 0,
       playerEngagement: players
     }
   }
@@ -620,23 +646,25 @@ export async function POST(request: NextRequest) {
       )
     }
     const body = await request.json()
-    
+
     const { type, period, data } = body
-    
-    const report = await prisma.financialReport.create({
-      data: {
-        clubId: session.clubId,
-        type,
-        period,
-        data,
-        generatedBy: session.userId
-      }
-    })
+
+    // TODO: FinancialReport model doesn't exist in schema yet
+    // For now, return success without saving
+    // const report = await prisma.financialReport.create({
+    //   data: {
+    //     clubId: session.clubId,
+    //     type,
+    //     period,
+    //     data,
+    //     generatedBy: session.userId
+    //   }
+    // })
 
     return NextResponse.json({
       success: true,
-      report,
-      message: 'Reporte guardado exitosamente'
+      report: { type, period, data, clubId: session.clubId },
+      message: 'Reporte generado exitosamente (guardado no implementado)'
     })
 
   } catch (error) {

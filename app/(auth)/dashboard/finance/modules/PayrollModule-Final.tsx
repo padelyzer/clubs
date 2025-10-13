@@ -594,7 +594,7 @@ export default function PayrollModuleFinal({ activeTab = 'payroll-employees' }: 
                             fontSize: '14px',
                             fontWeight: 600
                           }}>
-                            {record.employeeName.split(' ').map(n => n[0]).join('').slice(0, 2).toUpperCase()}
+                            {record.employeeName.split(' ').map((n: string) => n[0]).join('').slice(0, 2).toUpperCase()}
                           </div>
                           <div>
                             <p style={{ fontSize: '14px', fontWeight: 600, color: '#111827' }}>

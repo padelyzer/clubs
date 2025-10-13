@@ -42,13 +42,13 @@ export async function POST(
     const currentClass = await prisma.class.findUnique({
       where: { id: classId },
       include: {
-        bookings: {
+        ClassBooking: {
           include: {
-            player: true
+            Player: true
           }
         },
-        instructor: true,
-        court: true
+        Instructor: true,
+        Court: true
       }
     })
     
@@ -151,7 +151,7 @@ export async function POST(
       date: currentClass.date,
       startTime: currentClass.startTime,
       endTime: currentClass.endTime,
-      court: currentClass.court?.name
+      court: currentClass.Court?.name
     }
     
     // Update class schedule
@@ -165,11 +165,11 @@ export async function POST(
         updatedAt: new Date()
       },
       include: {
-        court: true,
-        instructor: true
+        Court: true,
+        Instructor: true
       }
     })
-    
+
     // Create reschedule log
     await prisma.classHistory.create({
       data: {
@@ -180,27 +180,27 @@ export async function POST(
           date: updatedClass.date,
           startTime: updatedClass.startTime,
           endTime: updatedClass.endTime,
-          court: updatedClass.court?.name
+          court: updatedClass.Court?.name
         },
         reason: validatedData.reason,
-        performedBy: session.user?.email || 'system',
+        performedBy: session.userEmail || 'system',
         performedAt: new Date()
       }
     })
-    
+
     // Notify students if requested
-    if (validatedData.notifyStudents && currentClass.bookings.length > 0) {
+    if (validatedData.notifyStudents && currentClass.ClassBooking.length > 0) {
       const notifications = []
-      
-      for (const booking of currentClass.bookings) {
-        if (booking.studentPhone) {
+
+      for (const booking of currentClass.ClassBooking) {
+        if (booking.playerPhone) {
           notifications.push({
             classId,
             studentId: booking.id,
-            studentPhone: booking.studentPhone,
-            studentName: booking.studentName,
+            studentPhone: booking.playerPhone,
+            studentName: booking.playerName,
             type: 'RESCHEDULE',
-            message: `Hola ${booking.studentName}, tu clase "${currentClass.name}" ha sido reprogramada. Nueva fecha: ${format(newDate, 'dd/MM/yyyy')} de ${validatedData.startTime} a ${validatedData.endTime}. ${validatedData.reason ? `Motivo: ${validatedData.reason}` : ''}`,
+            message: `Hola ${booking.playerName}, tu clase "${currentClass.name}" ha sido reprogramada. Nueva fecha: ${format(newDate, 'dd/MM/yyyy')} de ${validatedData.startTime} a ${validatedData.endTime}. ${validatedData.reason ? `Motivo: ${validatedData.reason}` : ''}`,
             status: 'pending'
           })
         }
@@ -218,7 +218,7 @@ export async function POST(
       success: true,
       message: 'Clase reprogramada exitosamente',
       class: updatedClass,
-      notifiedStudents: validatedData.notifyStudents ? currentClass.bookings.length : 0
+      notifiedStudents: validatedData.notifyStudents ? currentClass.ClassBooking.length : 0
     })
     
   } catch (error) {
@@ -226,7 +226,7 @@ export async function POST(
     
     if (error instanceof z.ZodError) {
       return NextResponse.json(
-        { success: false, error: 'Datos inválidos', details: error.errors },
+        { success: false, error: 'Datos inválidos', details: error.issues },
         { status: 400 }
       )
     }
@@ -261,13 +261,13 @@ export async function DELETE(
     const classToCancel = await prisma.class.findUnique({
       where: { id: classId },
       include: {
-        bookings: {
+        ClassBooking: {
           include: {
-            player: true
+            Player: true
           }
         },
-        instructor: true,
-        court: true
+        Instructor: true,
+        Court: true
       }
     })
     
@@ -291,7 +291,7 @@ export async function DELETE(
       data: {
         status: 'CANCELLED',
         cancelledAt: new Date(),
-        cancelReason: validatedData.reason,
+        notes: validatedData.reason, // Store cancel reason in notes
         updatedAt: new Date()
       }
     })
@@ -304,24 +304,23 @@ export async function DELETE(
         previousData: { status: classToCancel.status },
         newData: { status: 'CANCELLED' },
         reason: validatedData.reason,
-        performedBy: session.user?.email || 'system',
+        performedBy: session.userEmail || 'system',
         performedAt: new Date()
       }
     })
-    
+
     // Handle refunds if requested
     if (validatedData.refundStudents) {
       const refunds = []
-      
-      for (const booking of classToCancel.bookings) {
+
+      for (const booking of classToCancel.ClassBooking) {
         if (booking.paymentStatus === 'completed' && booking.paidAmount > 0) {
           refunds.push({
             classBookingId: booking.id,
-            studentId: booking.playerId,
+            studentId: booking.playerId || '',
             amount: booking.paidAmount,
             status: 'pending',
-            reason: `Cancelación de clase: ${validatedData.reason}`,
-            createdAt: new Date()
+            reason: `Cancelación de clase: ${validatedData.reason}`
           })
           
           // Update booking payment status
@@ -363,11 +362,11 @@ export async function DELETE(
     }
     
     // Notify students if requested
-    if (validatedData.notifyStudents && classToCancel.bookings.length > 0) {
+    if (validatedData.notifyStudents && classToCancel.ClassBooking.length > 0) {
       const notifications = []
-      
-      for (const booking of classToCancel.bookings) {
-        if (booking.studentPhone) {
+
+      for (const booking of classToCancel.ClassBooking) {
+        if (booking.playerPhone) {
           const refundMessage = validatedData.refundStudents && booking.paymentStatus === 'completed' 
             ? ' Tu pago será reembolsado en los próximos días.' 
             : ''
@@ -375,10 +374,10 @@ export async function DELETE(
           notifications.push({
             classId,
             studentId: booking.id,
-            studentPhone: booking.studentPhone,
-            studentName: booking.studentName,
+            studentPhone: booking.playerPhone,
+            studentName: booking.playerName,
             type: 'CANCELLATION',
-            message: `Hola ${booking.studentName}, lamentamos informarte que la clase "${classToCancel.name}" del ${format(classToCancel.date, 'dd/MM/yyyy')} ha sido cancelada. Motivo: ${validatedData.reason}.${refundMessage}`,
+            message: `Hola ${booking.playerName}, lamentamos informarte que la clase "${classToCancel.name}" del ${format(classToCancel.date, 'dd/MM/yyyy')} ha sido cancelada. Motivo: ${validatedData.reason}.${refundMessage}`,
             status: 'pending'
           })
         }
@@ -396,9 +395,9 @@ export async function DELETE(
       success: true,
       message: 'Clase cancelada exitosamente',
       class: cancelledClass,
-      notifiedStudents: validatedData.notifyStudents ? classToCancel.bookings.length : 0,
-      refundedStudents: validatedData.refundStudents ? 
-        classToCancel.bookings.filter(b => b.paymentStatus === 'completed').length : 0
+      notifiedStudents: validatedData.notifyStudents ? classToCancel.ClassBooking.length : 0,
+      refundedStudents: validatedData.refundStudents ?
+        classToCancel.ClassBooking.filter(b => b.paymentStatus === 'completed').length : 0
     })
     
   } catch (error) {
@@ -406,7 +405,7 @@ export async function DELETE(
     
     if (error instanceof z.ZodError) {
       return NextResponse.json(
-        { success: false, error: 'Datos inválidos', details: error.errors },
+        { success: false, error: 'Datos inválidos', details: error.issues },
         { status: 400 }
       )
     }

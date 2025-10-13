@@ -10,7 +10,7 @@ export default function BudgetsPage() {
       userName="Administrador del Club"
       userRole="Administrador"
     >
-      <BudgetsModule activeTab="budgets-current" />
+      <BudgetsModule />
     </DashboardWithNotifications>
   )
 }

@@ -107,7 +107,7 @@ export async function GET(request: NextRequest) {
         results.errors.push({
           id: recurringExpense.id,
           description: recurringExpense.description,
-          error: error.message
+          error: (error as Error).message
         })
       }
     }
@@ -215,7 +215,7 @@ export async function POST(request: NextRequest) {
         results.errors.push({
           id: recurringExpense.id,
           description: recurringExpense.description,
-          error: error.message
+          error: (error as Error).message
         })
       }
     }

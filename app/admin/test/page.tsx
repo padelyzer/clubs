@@ -9,8 +9,8 @@ export default async function TestPage() {
     <div style={{ padding: '20px' }}>
       <h1>Test Dashboard</h1>
       <p>Si puedes ver esto, el sistema funciona correctamente.</p>
-      <p>Usuario: {session?.user?.email}</p>
-      <p>Rol: {session?.user?.role}</p>
+      <p>Usuario: {session?.userEmail}</p>
+      <p>Rol: {session?.role}</p>
       
       <div style={{ marginTop: '20px', padding: '20px', background: '#f0f0f0', borderRadius: '8px' }}>
         <h2>Estado del Sistema</h2>

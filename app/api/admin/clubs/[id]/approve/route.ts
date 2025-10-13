@@ -8,10 +8,10 @@ export async function POST(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
+  const paramData = await params
+  const { id } = paramData
+
   try {
-    const paramData = await params
-    const { id } = paramData
-    
     const session = await requireSuperAdmin()
     
     // Validate club exists and is pending

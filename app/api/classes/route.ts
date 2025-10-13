@@ -68,16 +68,16 @@ export async function GET(request: NextRequest) {
     const classes = await prisma.class.findMany({
       where,
       include: {
-        instructor: true,
-        court: true,
-        bookings: {
+        Instructor: true,
+        Court: true,
+        ClassBooking: {
           include: {
-            player: true
+            Player: true
           }
         },
         _count: {
           select: {
-            bookings: true
+            ClassBooking: true
           }
         }
       },
@@ -86,15 +86,15 @@ export async function GET(request: NextRequest) {
         { startTime: 'asc' }
       ]
     })
-    
+
     // Transform for frontend
     const formattedClasses = classes.map(classItem => ({
       ...classItem,
-      availableSpots: classItem.maxStudents - classItem.currentStudents,
-      enrolledStudents: classItem._count.bookings,
-      revenue: classItem.bookings
+      availableSpots: classItem.maxStudents - classItem.enrolledCount,
+      enrolledStudents: classItem._count.ClassBooking,
+      revenue: classItem.ClassBooking
         .filter(b => b.paymentStatus === 'completed')
-        .reduce((sum, b) => sum + b.paidAmount, 0)
+        .reduce((sum, b) => sum + (b.paidAmount || 0), 0)
     }))
     
     return NextResponse.json({
@@ -333,23 +333,20 @@ export async function POST(request: NextRequest) {
       duration,
       courtId: body.courtId || null,
       maxStudents: body.maxStudents || clubSettings?.defaultMaxStudents || 8,
-      currentStudents: 0,
+      enrolledCount: 0,
       price: priceInCents,
       courtCost,
       instructorCost,
       currency: 'MXN',
       status: 'SCHEDULED',
-      notes: body.notes || null,
-      requirements: body.requirements || null,
-      materials: body.materials || null,
-      createdBy: 'system'
+      notes: body.notes || null
     }
     
     const createdClasses = []
     const unavailableDates = []
     
     // Handle recurrence
-    if (body.isRecurring && body.recurrencePattern) {
+    if (body.recurring && body.recurrencePattern) {
       const pattern = body.recurrencePattern
       // Parse date properly to avoid UTC issues
       const [year, month, day] = body.date.split('-').map(Number)
@@ -373,15 +370,15 @@ export async function POST(request: NextRequest) {
             data: {
               ...baseClassData,
               date: currentDate,
-              isRecurring: true,
-              recurrencePattern: JSON.stringify(pattern)
+              recurring: true,
+              recurringDays: pattern.daysOfWeek || []
             },
             include: {
-              instructor: true,
-              court: true,
+              Instructor: true,
+              Court: true,
               _count: {
                 select: {
-                  bookings: true
+                  ClassBooking: true
                 }
               }
             }
@@ -425,23 +422,23 @@ export async function POST(request: NextRequest) {
         data: {
           ...baseClassData,
           date: classDate,
-          isRecurring: false
+          recurring: false
         },
         include: {
-          instructor: true,
-          court: true,
+          Instructor: true,
+          Court: true,
           _count: {
             select: {
-              bookings: true
+              ClassBooking: true
             }
           }
         }
       })
-      
+
       createdClasses.push(classItem)
     }
     
-    let message = body.isRecurring 
+    let message = body.recurring
       ? `Se crearon ${createdClasses.length} clases recurrentes`
       : 'Clase creada exitosamente'
     
@@ -454,8 +451,8 @@ export async function POST(request: NextRequest) {
       message,
       classes: createdClasses.map(c => ({
         ...c,
-        availableSpots: c.maxStudents - c.currentStudents,
-        enrolledStudents: c._count.bookings,
+        availableSpots: c.maxStudents - c.enrolledCount,
+        enrolledStudents: c._count.ClassBooking,
         revenue: 0
       })),
       unavailableDates
@@ -624,8 +621,6 @@ export async function PUT(request: NextRequest) {
     }
     
     if (body.notes !== undefined) updateData.notes = body.notes || null
-    if (body.requirements !== undefined) updateData.requirements = body.requirements || null
-    if (body.materials !== undefined) updateData.materials = body.materials || null
     
     // Calculate duration if times changed
     if (body.startTime && body.endTime) {
@@ -638,30 +633,30 @@ export async function PUT(request: NextRequest) {
       where: { id: body.id },
       data: updateData,
       include: {
-        instructor: true,
-        court: true,
-        bookings: {
+        Instructor: true,
+        Court: true,
+        ClassBooking: {
           include: {
-            player: true
+            Player: true
           }
         },
         _count: {
           select: {
-            bookings: true
+            ClassBooking: true
           }
         }
       }
     })
-    
+
     return NextResponse.json({
       success: true,
       class: {
         ...classItem,
-        availableSpots: classItem.maxStudents - classItem.currentStudents,
-        enrolledStudents: classItem._count.bookings,
-        revenue: classItem.bookings
+        availableSpots: classItem.maxStudents - classItem.enrolledCount,
+        enrolledStudents: classItem._count.ClassBooking,
+        revenue: classItem.ClassBooking
           .filter(b => b.paymentStatus === 'completed')
-          .reduce((sum, b) => sum + b.paidAmount, 0)
+          .reduce((sum, b) => sum + (b.paidAmount || 0), 0)
       }
     })
 
@@ -702,17 +697,17 @@ export async function DELETE(request: NextRequest) {
         clubId: session.clubId 
       },
       include: {
-        bookings: true
+        ClassBooking: true
       }
     })
-    
+
     if (!classItem) {
       return NextResponse.json(
         { success: false, error: 'Clase no encontrada' },
         { status: 404 }
       )
     }
-    
+
     // Can only delete if class hasn't started and has no bookings
     if (classItem.status === 'IN_PROGRESS' || classItem.status === 'COMPLETED') {
       return NextResponse.json(
@@ -720,8 +715,8 @@ export async function DELETE(request: NextRequest) {
         { status: 400 }
       )
     }
-    
-    if (classItem.bookings.length > 0) {
+
+    if (classItem.ClassBooking.length > 0) {
       return NextResponse.json(
         { success: false, error: 'No se puede eliminar una clase con estudiantes inscritos' },
         { status: 400 }

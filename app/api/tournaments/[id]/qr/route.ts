@@ -135,8 +135,8 @@ export async function POST(
         team1Score,
         team2Score,
         winner,
-        status: 'completed',
-        endTime: now
+        status: 'COMPLETED',
+        actualEndTime: now
       }
     })
 

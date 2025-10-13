@@ -100,7 +100,7 @@ async function getRecentNotifications(clubId: string, limit: number = 10) {
   try {
     const notifications = await prisma.notification.findMany({
       where: {
-        booking: { clubId }
+        Booking: { clubId }
       },
       include: {
         Booking: {

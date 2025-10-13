@@ -15,6 +15,9 @@ interface AppleInputProps {
   multiline?: boolean
   rows?: number
   maxLength?: number
+  min?: string
+  max?: string
+  step?: string
 }
 
 export function AppleInput({
@@ -31,7 +34,10 @@ export function AppleInput({
   suffix,
   multiline = false,
   rows = 3,
-  maxLength
+  maxLength,
+  min,
+  max,
+  step
 }: AppleInputProps) {
   const [isFocused, setIsFocused] = useState(false)
   const hasError = !!error
@@ -66,8 +72,8 @@ export function AppleInput({
     lineHeight: '20px',
     fontFamily: '-apple-system, BlinkMacSystemFont, "SF Pro Display", "SF Pro Icons", "Helvetica Neue", Helvetica, Arial, sans-serif',
     WebkitAppearance: 'none',
-    MozAppearance: 'none'
-  }
+    MozAppearance: 'textfield'
+  } as React.CSSProperties
 
   const InputComponent = multiline ? 'textarea' : 'input'
 
@@ -114,6 +120,9 @@ export function AppleInput({
           required={required}
           maxLength={maxLength}
           {...(multiline ? { rows } : {})}
+          {...(min !== undefined ? { min } : {})}
+          {...(max !== undefined ? { max } : {})}
+          {...(step !== undefined ? { step } : {})}
           style={inputStyles}
           onFocus={() => setIsFocused(true)}
           onBlur={() => setIsFocused(false)}

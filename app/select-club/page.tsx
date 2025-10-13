@@ -13,7 +13,16 @@ export default async function SelectClubPage() {
     redirect('/login')
   }
 
-  let clubs = []
+  let clubs: Array<{
+    id: string
+    name: string
+    slug: string
+    description: string | null
+    _count: {
+      Court: number
+      User: number
+    }
+  }> = []
 
   // Super Admin ve todos los clubs
   if (session.role === 'SUPER_ADMIN') {
@@ -29,8 +38,8 @@ export default async function SelectClubPage() {
         description: true,
         _count: {
           select: {
-            Courts: true,
-            Users: true
+            Court: true,
+            User: true
           }
         }
       },
@@ -43,7 +52,7 @@ export default async function SelectClubPage() {
     const user = await prisma.user.findUnique({
       where: { id: session.userId },
       include: {
-        Club: {
+        club: {
           select: {
             id: true,
             name: true,
@@ -51,8 +60,8 @@ export default async function SelectClubPage() {
             description: true,
             _count: {
               select: {
-                Courts: true,
-                Users: true
+                Court: true,
+                User: true
               }
             }
           }
@@ -60,9 +69,9 @@ export default async function SelectClubPage() {
       }
     })
 
-    if (user?.Club) {
+    if (user?.club) {
       // Si solo tiene un club, redirigir directamente
-      redirect(`/c/${user.Club.slug}/dashboard`)
+      redirect(`/c/${user.club.slug}/dashboard`)
     }
   }
 
@@ -222,7 +231,7 @@ export default async function SelectClubPage() {
                     fontWeight: '600',
                     color: '#333'
                   }}>
-                    {club._count.Courts}
+                    {club._count.Court}
                   </span>
                 </div>
                 <div>
@@ -239,7 +248,7 @@ export default async function SelectClubPage() {
                     fontWeight: '600',
                     color: '#333'
                   }}>
-                    {club._count.Users}
+                    {club._count.User}
                   </span>
                 </div>
               </div>

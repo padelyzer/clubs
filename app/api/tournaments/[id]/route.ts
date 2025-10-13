@@ -24,10 +24,14 @@ export async function GET(
 
 
     // Obtener datos del torneo con toda la información necesaria
+    // IMPORTANTE: Validar que el torneo pertenezca al club del usuario
     const [tournament, registrations, matches, rounds] = await Promise.all([
-      // Información básica del torneo
-      prisma.tournament.findUnique({
-        where: { id: tournamentId }
+      // Información básica del torneo - validar clubId
+      prisma.tournament.findFirst({
+        where: {
+          id: tournamentId,
+          clubId: session.clubId // SEGURIDAD: Solo torneos del club del usuario
+        }
       }),
       
       // Registros de equipos
@@ -187,26 +191,70 @@ export async function GET(
       }
     }))
 
+    // Calcular partidos de hoy
+    const today = new Date()
+    const todayMatches = matches.filter(m => {
+      if (!m.scheduledAt) return false
+      const matchDate = new Date(m.scheduledAt)
+      return matchDate.toDateString() === today.toDateString()
+    })
+
+    // Calcular resultados recientes (últimos 5 partidos completados)
+    const recentResults = matches
+      .filter(m => m.status === 'COMPLETED' && m.team1Name && m.team2Name) // Solo incluir partidos con ambos equipos definidos
+      .sort((a, b) => {
+        const dateA = a.actualEndTime ? new Date(a.actualEndTime).getTime() : 0
+        const dateB = b.actualEndTime ? new Date(b.actualEndTime).getTime() : 0
+        return dateB - dateA // Más recientes primero
+      })
+      .slice(0, 5)
+      .map(m => ({
+        id: m.id,
+        completedAt: m.actualEndTime || m.endTime || new Date(),
+        team1: {
+          name: m.team1Name || 'TBD',
+          score: m.team1Score || 0
+        },
+        team2: {
+          name: m.team2Name || 'TBD',
+          score: m.team2Score || 0
+        },
+        winner: m.winner || null
+      }))
+
     return NextResponse.json({
+      success: true,
       tournament: {
         id: tournament.id,
         name: tournament.name,
         description: tournament.description,
+        type: tournament.type,
         status: tournament.status,
         startDate: tournament.startDate,
         endDate: tournament.endDate,
-        club: club
-      },
-      stats,
-      categories,
-      matches: matches, // Retornar todos los matches como array para compatibilidad
-      matchesSummary: {
-        inProgress: inProgressMatches,
-        upcoming: matches.filter(m => (m.status === 'pending' || m.status === 'SCHEDULED') && m.scheduledAt),
-        total: matches.length
-      },
-      courts: courtsStatus,
-      rounds
+        maxPlayers: tournament.maxPlayers,
+        registrationFee: tournament.registrationFee,
+        prizePool: tournament.prizePool,
+        currency: tournament.currency,
+        club: club,
+        stats,
+        categories,
+        matches: matches, // Retornar todos los matches como array para compatibilidad
+        todayMatches: todayMatches,
+        matchesSummary: {
+          inProgress: inProgressMatches,
+          upcoming: matches.filter(m => (m.status === 'pending' || m.status === 'SCHEDULED') && m.scheduledAt),
+          total: matches.length
+        },
+        courts: courtsStatus,
+        rounds,
+        registrations,
+        recentResults,
+        _count: {
+          TournamentRegistration: registrations.length,
+          TournamentMatch: matches.length
+        }
+      }
     })
 
   } catch (error) {

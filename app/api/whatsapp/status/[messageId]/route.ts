@@ -25,13 +25,13 @@ export async function GET(
     const notification = await prisma.notification.findFirst({
       where: { twilioSid: messageId },
       include: {
-        booking: {
+        Booking: {
           include: {
-            club: true,
-            court: true
+            Club: true,
+            Court: true
           }
         },
-        splitPayment: true
+        SplitPayment: true
       }
     })
 
@@ -56,18 +56,18 @@ export async function GET(
         updatedAt: notification.updatedAt,
         errorMessage: notification.errorMessage,
         booking: {
-          id: notification.booking.id,
-          playerName: notification.booking.playerName,
-          date: notification.booking.date,
-          startTime: notification.booking.startTime,
-          club: notification.booking.club.name,
-          court: notification.booking.court.name
+          id: notification.Booking.id,
+          playerName: notification.Booking.playerName,
+          date: notification.Booking.date,
+          startTime: notification.Booking.startTime,
+          club: notification.Booking.Club.name,
+          court: notification.Booking.Court.name
         },
-        splitPayment: notification.splitPayment ? {
-          id: notification.splitPayment.id,
-          playerName: notification.splitPayment.playerName,
-          amount: notification.splitPayment.amount,
-          status: notification.splitPayment.status
+        splitPayment: notification.SplitPayment ? {
+          id: notification.SplitPayment.id,
+          playerName: notification.SplitPayment.playerName,
+          amount: notification.SplitPayment.amount,
+          status: notification.SplitPayment.status
         } : null
       }
     })

@@ -7,8 +7,8 @@ export const createSubscriptionPlanSchema = z.object({
   description: z.string().max(500).optional(),
   price: z.number().min(0).max(1000000),
   currency: z.enum(['MXN', 'USD']).default('MXN'),
-  interval: z.enum(['month', 'year']).default('month'),
-  features: z.record(z.any()).optional(),
+  interval: z.enum(['MONTH', 'YEAR']).default('MONTH'),
+  features: z.record(z.string(), z.any()).optional(),
   maxClubs: z.number().min(1).max(1000).optional(),
   maxUsers: z.number().min(1).max(10000).optional(),
   maxCourts: z.number().min(1).max(100).optional(),
@@ -48,7 +48,7 @@ export const createInvoiceSchema = z.object({
 
 export const markInvoicePaidSchema = z.object({
   paidAt: z.string().datetime().optional(),
-  paymentMethod: z.enum(['card', 'transfer', 'cash', 'other']).optional(),
+  paymentMethod: z.enum(['CARD', 'TRANSFER', 'CASH', 'OTHER']).optional(),
   transactionId: z.string().max(100).optional(),
   notes: z.string().max(500).optional(),
 })
@@ -59,7 +59,7 @@ export const exportDataSchema = z.object({
   format: z.enum(['csv', 'json', 'xlsx']).default('csv'),
   dateFrom: z.string().datetime().optional(),
   dateTo: z.string().datetime().optional(),
-  filters: z.record(z.any()).optional(),
+  filters: z.record(z.string(), z.any()).optional(),
 })
 
 // Pagination Schema
@@ -87,7 +87,7 @@ export const auditLogSchema = z.object({
   action: z.string().min(1).max(100),
   entityType: z.string().min(1).max(50),
   entityId: z.string(),
-  metadata: z.record(z.any()).optional(),
+  metadata: z.record(z.string(), z.any()).optional(),
   ipAddress: z.string().optional(),
   userAgent: z.string().optional(),
 })
@@ -97,8 +97,8 @@ export const sendNotificationSchema = z.object({
   to: z.array(z.string().email()).min(1).max(100),
   subject: z.string().min(1).max(200),
   message: z.string().min(1).max(5000),
-  template: z.enum(['welcome', 'approved', 'rejected', 'suspended', 'invoice', 'reminder']).optional(),
-  variables: z.record(z.any()).optional(),
+  template: z.enum(['WELCOME', 'APPROVED', 'REJECTED', 'SUSPENDED', 'INVOICE', 'REMINDER']).optional(),
+  variables: z.record(z.string(), z.any()).optional(),
 })
 
 // Validation helper
@@ -117,7 +117,7 @@ export function validateRequest<T>(
 
 // Format validation errors for response
 export function formatValidationErrors(errors: z.ZodError) {
-  return errors.errors.map(err => ({
+  return errors.issues.map((err: z.ZodIssue) => ({
     field: err.path.join('.'),
     message: err.message,
     code: err.code,

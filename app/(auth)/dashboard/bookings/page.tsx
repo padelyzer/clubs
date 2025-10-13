@@ -44,9 +44,6 @@ type Booking = {
   checkedInAt?: string
   type?: 'REGULAR' | 'CLASS' | 'TOURNAMENT'
   classId?: string
-  // BookingGroup fields
-  isGroup?: boolean
-  courtNames?: string
   // Class fields
   isClass?: boolean
 }
@@ -357,7 +354,7 @@ function BookingsPageContent() {
           studentEmail: student.studentEmail,
           attendanceStatus: student.currentStatus?.attendanceStatus || 'PENDING',
           paymentStatus: student.currentStatus?.paymentStatus || 'pending',
-          paymentMethod: undefined,
+          paymentMethod: undefined as any,
           paymentAmount: student.currentStatus?.dueAmount || 0,
           dueAmount: student.currentStatus?.dueAmount || 0,
           paidAmount: student.currentStatus?.paidAmount || 0
@@ -1215,7 +1212,7 @@ function BookingsPageContent() {
                                         studentEmail: student.studentEmail,
                                         attendanceStatus: student.currentStatus?.attendanceStatus || 'PENDING',
                                         paymentStatus: student.currentStatus?.paymentStatus || 'pending',
-                                        paymentMethod: undefined,
+                                        paymentMethod: undefined as any,
                                         paymentAmount: student.currentStatus?.dueAmount || data.class?.price || 0,
                                         dueAmount: student.currentStatus?.dueAmount || data.class?.price || 0,
                                         paidAmount: student.currentStatus?.paidAmount || 0
@@ -1302,7 +1299,15 @@ function BookingsPageContent() {
           onClose={() => setIsCreating(false)}
           onSubmit={handleCreateBooking}
           courts={courts}
-          existingBookings={bookings}
+          existingBookings={bookings.map(b => ({
+            id: b.id,
+            courtId: b.court.id,
+            date: b.date,
+            startTime: b.startTime,
+            endTime: b.endTime,
+            playerName: b.playerName,
+            status: b.status
+          }))}
           operatingHours={operatingHours}
           mode="create"
           paymentSettings={paymentSettings}

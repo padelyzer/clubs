@@ -78,11 +78,11 @@ export async function GET(request: NextRequest) {
     
   } catch (error) {
     console.error('Timezone health check failed:', error)
-    
+
     return NextResponse.json({
       success: false,
       error: 'Timezone health check failed',
-      details: error.message,
+      details: (error as Error).message,
       healthStatus: 'critical',
       timestamp: new Date().toISOString()
     }, { status: 500 })
@@ -113,11 +113,11 @@ export async function POST(request: NextRequest) {
     
   } catch (error) {
     console.error('Timezone repair failed:', error)
-    
+
     return NextResponse.json({
       success: false,
       error: 'Timezone repair failed',
-      details: error.message,
+      details: (error as Error).message,
       timestamp: new Date().toISOString()
     }, { status: 500 })
   }

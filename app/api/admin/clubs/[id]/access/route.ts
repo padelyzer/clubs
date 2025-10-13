@@ -3,7 +3,8 @@ import { getSession } from '@/lib/auth/actions'
 import { prisma } from '@/lib/config/prisma'
 import { lucia, validateRequest } from '@/lib/auth/lucia'
 import { cookies } from 'next/headers'
-import { securityLogger } from '@/lib/auth/security-logger'
+import { securityLogger, SecurityEventType, SecuritySeverity } from '@/lib/auth/security-logger'
+import { v4 as uuidv4 } from 'uuid'
 
 export async function GET(
   request: NextRequest,
@@ -84,13 +85,15 @@ export async function GET(
         
         clubOwner = await prisma.user.create({
           data: {
+            id: uuidv4(),
             email: `admin_access_${club.id}@padelyzer.temp`,
             name: `Super Admin Access - ${club.name}`,
             password: tempPassword,
             role: 'CLUB_OWNER',
             clubId: club.id,
             active: true,
-            emailVerified: new Date()
+            emailVerified: new Date(),
+            updatedAt: new Date()
           }
         })
       }
@@ -107,7 +110,7 @@ export async function GET(
       // Metadata adicional para auditoría
       superAdminAccess: true,
       originalAdminId: session.userId,
-      originalAdminEmail: session.email,
+      originalAdminEmail: session.userEmail,
       accessedAt: new Date().toISOString()
     })
 
@@ -121,10 +124,10 @@ export async function GET(
 
     // Log de auditoría con SecurityLogger
     await securityLogger.log({
-      eventType: 'CLUB_ACCESS',
-      severity: 'WARNING', // Esta es una acción sensible
+      eventType: SecurityEventType.CLUB_ACCESS,
+      severity: SecuritySeverity.WARNING, // Esta es una acción sensible
       userId: session.userId,
-      email: session.email,
+      email: session.userEmail,
       message: `Super Admin accessed club ${club.name} (${club.id})`,
       metadata: {
         action: 'super_admin_club_access',
@@ -172,8 +175,8 @@ export async function DELETE(
 
     // Log de finalización de acceso
     await securityLogger.log({
-      eventType: 'SESSION_INVALIDATED',
-      severity: 'INFO',
+      eventType: SecurityEventType.SESSION_INVALIDATED,
+      severity: SecuritySeverity.INFO,
       userId: session.userId,
       message: `Super admin ended club access session`,
       metadata: {

@@ -94,7 +94,7 @@ export default function QRGeneratorPage() {
             {/* QR Type Selection */}
             <div className="grid grid-cols-3 gap-2">
               <Button
-                variant={qrType === 'whatsapp' ? 'default' : 'outline'}
+                variant={qrType === 'whatsapp' ? 'primary' : 'secondary'}
                 onClick={() => setQrType('whatsapp')}
                 className="w-full"
               >
@@ -102,7 +102,7 @@ export default function QRGeneratorPage() {
                 WhatsApp
               </Button>
               <Button
-                variant={qrType === 'payment' ? 'default' : 'outline'}
+                variant={qrType === 'payment' ? 'primary' : 'secondary'}
                 onClick={() => setQrType('payment')}
                 className="w-full"
                 disabled
@@ -111,7 +111,7 @@ export default function QRGeneratorPage() {
                 Pago
               </Button>
               <Button
-                variant={qrType === 'checkin' ? 'default' : 'outline'}
+                variant={qrType === 'checkin' ? 'primary' : 'secondary'}
                 onClick={() => setQrType('checkin')}
                 className="w-full"
               >
@@ -147,8 +147,8 @@ export default function QRGeneratorPage() {
                   />
                 </div>
 
-                <Button 
-                  variant="outline" 
+                <Button
+                  variant="secondary"
                   onClick={testData}
                   className="w-full"
                 >
@@ -211,8 +211,8 @@ export default function QRGeneratorPage() {
                     {qrType === 'whatsapp' && 'Este QR abrirá WhatsApp con el cliente como destinatario'}
                     {qrType === 'checkin' && 'Este QR permite el check-in de la reserva'}
                   </p>
-                  <Button 
-                    variant="outline"
+                  <Button
+                    variant="secondary"
                     onClick={() => {
                       const link = document.createElement('a')
                       link.download = `qr-${qrType}-${Date.now()}.png`

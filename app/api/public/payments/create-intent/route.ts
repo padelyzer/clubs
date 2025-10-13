@@ -3,11 +3,17 @@ import { prisma } from '@/lib/config/prisma'
 import Stripe from 'stripe'
 import { withRateLimit } from '@/lib/rate-limit'
 
+// Type helper for booking objects with dynamic properties
+type BookingWithFlags = any & {
+  isGroup?: boolean
+  isClass?: boolean
+}
+
 export async function POST(request: NextRequest) {
   try {
     console.log('[PUBLIC PAYMENT] Request received')
     console.log('[PUBLIC PAYMENT] Headers:', Object.fromEntries(request.headers.entries()))
-    
+
     // Apply rate limiting for payment operations
     const rateLimitResponse = await withRateLimit(request, 'api')
     if (rateLimitResponse) {
@@ -17,7 +23,7 @@ export async function POST(request: NextRequest) {
 
     const body = await request.json()
     const { bookingId, splitPaymentId } = body
-    
+
     console.log('=== PUBLIC CREATE PAYMENT INTENT REQUEST ===')
     console.log('BookingId:', bookingId)
     console.log('SplitPaymentId:', splitPaymentId)
@@ -29,7 +35,7 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    let booking
+    let booking: BookingWithFlags
     let amount
     let paymentType
     let clubId
@@ -126,7 +132,7 @@ export async function POST(request: NextRequest) {
           const classBooking = await prisma.classBooking.findUnique({
             where: { id: bookingId },
             include: {
-              class: {
+              Class: {
                 include: {
                   Club: true,
                   Court: true
@@ -134,30 +140,30 @@ export async function POST(request: NextRequest) {
               }
             }
           })
-          
+
           if (classBooking) {
             // Transform classBooking to match expected structure
             booking = {
               id: classBooking.id,
-              date: classBooking.class.date,
-              startTime: classBooking.class.startTime,
-              endTime: classBooking.class.endTime,
-              playerName: classBooking.studentName,
-              playerEmail: classBooking.studentEmail,
-              playerPhone: classBooking.studentPhone,
+              date: classBooking.Class.date,
+              startTime: classBooking.Class.startTime,
+              endTime: classBooking.Class.endTime,
+              playerName: classBooking.playerName,
+              playerEmail: classBooking.playerEmail,
+              playerPhone: classBooking.playerPhone,
               totalPlayers: 1,
-              price: classBooking.dueAmount || classBooking.class.price,
-              Club: classBooking.class.Club,
-              Court: classBooking.class.Court,
-              clubId: classBooking.class.clubId,
-              courtId: classBooking.class.courtId,
+              price: classBooking.paidAmount || classBooking.Class.price,
+              Club: classBooking.Class.Club,
+              Court: classBooking.Class.Court,
+              clubId: classBooking.Class.clubId,
+              courtId: classBooking.Class.courtId,
               splitPaymentEnabled: false,
               splitPaymentCount: 0,
               isClass: true,
               isGroup: false
             }
-            clubId = classBooking.class.clubId
-            amount = classBooking.dueAmount || classBooking.class.price
+            clubId = classBooking.Class.clubId
+            amount = classBooking.paidAmount || classBooking.Class.price
           } else {
             return NextResponse.json(
               { error: 'Reserva no encontrada' },

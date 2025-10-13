@@ -17,8 +17,7 @@ export default async function SystemLogsPage() {
       take: 10,
       orderBy: { createdAt: 'desc' },
       include: {
-        user: { select: { name: true, email: true } },
-        club: { select: { name: true } }
+        Club: { select: { name: true } }
       }
     }),
     prisma.user.findMany({
@@ -74,9 +73,9 @@ export default async function SystemLogsPage() {
       level: 'INFO',
       category: 'Booking',
       message: 'New booking created successfully',
-      details: `Booking ID: ${recentBookings[0]?.id || 'N/A'} for club: ${recentBookings[0]?.club?.name || 'N/A'}`,
+      details: `Booking ID: ${recentBookings[0]?.id || 'N/A'} for club: ${recentBookings[0]?.Club?.name || 'N/A'}`,
       source: 'booking.service',
-      userId: recentBookings[0]?.userId || null,
+      userId: recentBookings[0]?.playerId || null,
       ip: '203.0.113.45'
     },
     {
@@ -109,7 +108,7 @@ export default async function SystemLogsPage() {
       message: 'Failed to send notification email',
       details: 'SMTP timeout for booking confirmation email',
       source: 'email.service',
-      userId: recentBookings[1]?.userId || null,
+      userId: recentBookings[1]?.playerId || null,
       ip: '10.0.0.8'
     },
     {

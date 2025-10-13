@@ -139,8 +139,8 @@ export async function GET(request: NextRequest) {
         error: 'Error interno',
         test: 'exception-caught',
         debug: {
-          errorType: error?.constructor?.name || 'Unknown',
-          errorMessage: error?.message || 'Error desconocido'
+          errorType: (error as any)?.constructor?.name || 'Unknown',
+          errorMessage: (error as Error)?.message || 'Error desconocido'
         }
       },
       { status: 500 }

@@ -31,7 +31,7 @@ export async function GET(
         },
         bookings: {
           include: {
-            court: true
+            Court: true
           }
         }
       }
@@ -44,14 +44,17 @@ export async function GET(
       )
     }
 
+    // Calculate total price from bookings
+    const totalPrice = bookingGroup.bookings.reduce((sum, b) => sum + b.price, 0)
+
     const status = {
-      groupName: bookingGroup.name,
-      totalAmount: bookingGroup.totalPrice,
+      groupName: bookingGroup.playerName,
+      totalAmount: totalPrice,
       splitPaymentEnabled: bookingGroup.splitPaymentEnabled,
       splitPaymentCount: bookingGroup.splitPaymentCount,
       courts: bookingGroup.bookings.map(b => ({
         id: b.courtId,
-        name: b.court.name,
+        name: b.Court.name,
         price: b.price
       })),
       payments: bookingGroup.splitPayments.map(sp => ({
@@ -121,11 +124,11 @@ export async function PUT(
           bookingGroupId
         },
         include: {
-          bookingGroup: {
+          BookingGroup: {
             include: {
               bookings: {
                 include: {
-                  court: true
+                  Court: true
                 }
               }
             }
@@ -169,7 +172,7 @@ export async function PUT(
 
       // Create individual transaction for this split payment
       const paymentMethodForTransaction = paymentMethod?.toLowerCase() || 'manual'
-      const courtNames = splitPayment.bookingGroup!.bookings.map(b => b.court.name).join(', ')
+      const courtNames = splitPayment.BookingGroup!.bookings.map(b => b.Court.name).join(', ')
       const transactionDescription = `Pago dividido grupal - ${splitPayment.playerName} - ${courtNames}`
       const transactionReference = referenceNumber 
         ? `${paymentMethod?.toUpperCase()}_${referenceNumber}`
@@ -179,17 +182,19 @@ export async function PUT(
 
       await prisma.transaction.create({
         data: {
-          clubId: splitPayment.bookingGroup!.clubId,
+          id: crypto.randomUUID(),
+          clubId: splitPayment.BookingGroup!.clubId,
           type: 'INCOME',
           category: 'BOOKING',
           amount: splitPayment.amount,
           currency: 'MXN',
           description: transactionDescription,
           reference: transactionReference,
-          bookingGroupId: bookingGroupId,
+          bookingId: splitPayment.BookingGroup!.bookings[0].id,
           date: new Date(),
           createdBy: 'SPLIT_PAYMENT_GROUP_SYSTEM',
-          notes: `Pago grupal ${paymentMethodForTransaction} - Jugador ${completedCount} de ${allSplitPayments.length}. Grupo: ${splitPayment.bookingGroup!.name}`
+          notes: `Pago grupal ${paymentMethodForTransaction} - Jugador ${completedCount} de ${allSplitPayments.length}. Grupo: ${splitPayment.BookingGroup!.playerName}. BookingGroup: ${bookingGroupId}`,
+          updatedAt: new Date()
         }
       })
 
@@ -197,16 +202,16 @@ export async function PUT(
 
       const allComplete = completedCount === allSplitPayments.length
 
-      // If all payments are complete, update booking group payment status
+      // If all payments are complete, update booking group status
       if (allComplete) {
         await prisma.bookingGroup.update({
           where: { id: bookingGroupId },
           data: {
-            paymentStatus: 'completed',
+            status: 'CONFIRMED',
             updatedAt: new Date()
           }
         })
-        
+
         // Also update all individual bookings in the group
         await prisma.booking.updateMany({
           where: { bookingGroupId },
@@ -215,20 +220,20 @@ export async function PUT(
             updatedAt: new Date()
           }
         })
-        
-        console.log(`✅ All ${allSplitPayments.length} group split payments completed for booking group ${bookingGroupId} - Payment status updated to completed`)
+
+        console.log(`✅ All ${allSplitPayments.length} group split payments completed for booking group ${bookingGroupId} - Status updated to CONFIRMED`)
       }
 
       return NextResponse.json({
         success: true,
-        message: allComplete 
-          ? `¡Todos los pagos del grupo completados! Las ${splitPayment.bookingGroup!.bookings.length} canchas están pagadas` 
+        message: allComplete
+          ? `¡Todos los pagos del grupo completados! Las ${splitPayment.BookingGroup!.bookings.length} canchas están pagadas`
           : `Pago de ${splitPayment.playerName} registrado exitosamente`,
         completedCount,
         totalCount: allSplitPayments.length,
         allComplete,
         paymentCompleted: allComplete,
-        groupName: splitPayment.bookingGroup!.name
+        groupName: splitPayment.BookingGroup!.playerName
       })
     }
 
@@ -275,7 +280,7 @@ export async function POST(
         splitPayments: true,
         bookings: {
           include: {
-            court: true
+            Court: true
           }
         }
       }
@@ -307,12 +312,15 @@ export async function POST(
 
     console.log(`🔗 Generated ${paymentLinks.length} payment links for booking group ${bookingGroupId}`)
 
-    return NextResponse.json({ 
-      success: true, 
+    // Calculate total price from bookings
+    const totalPriceForPost = bookingGroup.bookings.reduce((sum, b) => sum + b.price, 0)
+
+    return NextResponse.json({
+      success: true,
       paymentLinks,
-      groupName: bookingGroup.name,
-      totalAmount: bookingGroup.totalPrice,
-      message: `Links de pago generados para el grupo "${bookingGroup.name}"` 
+      groupName: bookingGroup.playerName,
+      totalAmount: totalPriceForPost,
+      message: `Links de pago generados para el grupo "${bookingGroup.playerName}"`
     })
 
   } catch (error) {

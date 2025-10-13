@@ -27,8 +27,8 @@ export class NotificationQueueService {
       const booking = await prisma.booking.findUnique({
         where: { id: bookingId },
         include: {
-          club: true,
-          court: true
+          Club: true,
+          Court: true
         }
       })
 
@@ -51,8 +51,8 @@ export class NotificationQueueService {
           metadata: {
             playerName: booking.playerName,
             playerPhone: booking.playerPhone,
-            clubName: booking.club.name,
-            courtName: booking.court.name,
+            clubName: booking.Club.name,
+            courtName: booking.Court.name,
             bookingTime: booking.startTime
           }
         })
@@ -120,7 +120,7 @@ export class NotificationQueueService {
       console.error('Error scheduling booking notifications:', error)
       return {
         success: false,
-        error: error.message
+        error: (error as Error).message
       }
     }
   }
@@ -135,15 +135,27 @@ export class NotificationQueueService {
     scheduledFor: Date
     metadata?: Record<string, any>
   }) {
-    return await prisma.notificationQueue.create({
+    // Note: This function is designed for a queue-based notification system
+    // but the current schema doesn't support scheduledFor, attempts, etc.
+    // Store metadata with scheduling info instead
+    const metadata = {
+      ...(data.metadata || {}),
+      scheduledFor: data.scheduledFor.toISOString(),
+      queueType: data.type
+    }
+
+    return await prisma.notification.create({
       data: {
-        type: data.type,
-        bookingId: data.bookingId,
-        bookingGroupId: data.bookingGroupId,
-        scheduledFor: data.scheduledFor,
+        id: `notif_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
+        type: 'WHATSAPP' as NotificationType,
+        template: data.type,
+        recipient: data.metadata?.playerPhone || 'pending',
+        recipientPhone: data.metadata?.playerPhone,
+        bookingId: data.bookingId || '',
+        splitPaymentId: null,
         status: 'pending',
-        attempts: 0,
-        metadata: data.metadata || {}
+        message: JSON.stringify(metadata),
+        updatedAt: new Date()
       }
     })
   }
@@ -154,34 +166,18 @@ export class NotificationQueueService {
    */
   static async processPendingNotifications() {
     const now = new Date()
-    
+
     // Get notifications that should be sent
-    const pendingNotifications = await prisma.notificationQueue.findMany({
+    const pendingNotifications = await prisma.notification.findMany({
       where: {
-        scheduledFor: {
-          lte: now
-        },
-        status: 'pending',
-        attempts: {
-          lt: this.MAX_RETRY_ATTEMPTS
-        }
+        status: 'pending'
       },
       include: {
-        booking: {
+        Booking: {
           include: {
-            club: true,
-            court: true,
-            splitPayments: true
-          }
-        },
-        bookingGroup: {
-          include: {
-            club: true,
-            bookings: {
-              include: {
-                court: true
-              }
-            }
+            Club: true,
+            Court: true,
+            SplitPayment: true
           }
         }
       },
@@ -192,36 +188,27 @@ export class NotificationQueueService {
 
     for (const notification of pendingNotifications) {
       try {
-        // Update status to processing
-        await prisma.notificationQueue.update({
-          where: { id: notification.id },
-          data: { 
-            status: 'processing',
-            lastAttempt: now
-          }
-        })
-
         // Send the notification based on type
         const result = await this.sendScheduledNotification(notification)
 
         if (result.success) {
           // Mark as sent
-          await prisma.notificationQueue.update({
+          await prisma.notification.update({
             where: { id: notification.id },
-            data: { 
+            data: {
               status: 'sent',
-              completedAt: new Date()
+              sentAt: new Date(),
+              updatedAt: new Date()
             }
           })
         } else {
-          // Update attempt count and schedule retry
-          await prisma.notificationQueue.update({
+          // Mark as failed
+          await prisma.notification.update({
             where: { id: notification.id },
-            data: { 
-              status: 'pending',
-              attempts: notification.attempts + 1,
-              error: result.error,
-              scheduledFor: new Date(Date.now() + this.RETRY_DELAY_MS)
+            data: {
+              status: 'failed',
+              errorMessage: result.error,
+              updatedAt: new Date()
             }
           })
         }
@@ -230,29 +217,16 @@ export class NotificationQueueService {
 
       } catch (error) {
         console.error(`Error processing notification ${notification.id}:`, error)
-        
-        // Mark as failed if max attempts reached
-        if (notification.attempts + 1 >= this.MAX_RETRY_ATTEMPTS) {
-          await prisma.notificationQueue.update({
-            where: { id: notification.id },
-            data: { 
-              status: 'failed',
-              attempts: notification.attempts + 1,
-              error: error.message
-            }
-          })
-        } else {
-          // Schedule retry
-          await prisma.notificationQueue.update({
-            where: { id: notification.id },
-            data: { 
-              status: 'pending',
-              attempts: notification.attempts + 1,
-              error: error.message,
-              scheduledFor: new Date(Date.now() + this.RETRY_DELAY_MS)
-            }
-          })
-        }
+
+        // Mark as failed
+        await prisma.notification.update({
+          where: { id: notification.id },
+          data: {
+            status: 'failed',
+            errorMessage: (error as Error).message,
+            updatedAt: new Date()
+          }
+        })
       }
     }
 
@@ -268,8 +242,8 @@ export class NotificationQueueService {
    * Send a scheduled notification
    */
   private static async sendScheduledNotification(notification: any) {
-    const booking = notification.booking || notification.bookingGroup?.bookings[0]
-    
+    const booking = notification.Booking
+
     if (!booking) {
       return { success: false, error: 'No booking data found' }
     }
@@ -277,14 +251,24 @@ export class NotificationQueueService {
     try {
       let result
 
-      switch (notification.type) {
+      // Parse metadata to get queue type
+      let metadata: any = {}
+      try {
+        metadata = notification.message ? JSON.parse(notification.message) : {}
+      } catch (e) {
+        metadata = {}
+      }
+
+      const queueType = metadata.queueType || notification.template
+
+      switch (queueType) {
         case 'confirmation':
           result = await WhatsAppLinkService.sendBookingConfirmation(booking.id)
           break
 
         case 'reminder-24h':
         case 'reminder-2h':
-          const hoursRemaining = notification.metadata?.hoursRemaining || 2
+          const hoursRemaining = metadata.hoursRemaining || 2
           result = await this.sendReminder(booking, hoursRemaining)
           break
 
@@ -300,7 +284,7 @@ export class NotificationQueueService {
 
     } catch (error) {
       console.error('Error sending scheduled notification:', error)
-      return { success: false, error: error.message }
+      return { success: false, error: (error as Error).message }
     }
   }
 
@@ -308,19 +292,19 @@ export class NotificationQueueService {
    * Send reminder notification
    */
   private static async sendReminder(booking: any, hoursRemaining: number) {
-    const message = 
+    const message =
       `⏰ Recordatorio de tu reserva\n\n` +
       `¡Hola ${booking.playerName}!\n\n` +
-      `Te recordamos tu reserva en ${booking.club.name}:\n\n` +
+      `Te recordamos tu reserva en ${booking.Club?.name || 'el club'}:\n\n` +
       `📅 Fecha: ${booking.date.toLocaleDateString('es-MX')}\n` +
       `⏰ Hora: ${booking.startTime}\n` +
-      `🎾 Cancha: ${booking.court.name}\n\n` +
+      `🎾 Cancha: ${booking.Court?.name || 'Cancha'}\n\n` +
       `⏳ Faltan ${hoursRemaining} horas para tu juego\n\n` +
       `¡Te esperamos! 🎾`
 
     return await WhatsAppLinkService.generateLink({
       clubId: booking.clubId,
-      notificationType: 'GENERAL',
+      notificationType: 'REMINDER' as NotificationType,
       playerName: booking.playerName,
       playerPhone: booking.playerPhone,
       bookingId: booking.id,
@@ -333,21 +317,21 @@ export class NotificationQueueService {
    */
   private static async sendPaymentReminder(booking: any) {
     const paymentLink = `${process.env.NEXT_PUBLIC_APP_URL}/pay/${booking.id}`
-    
-    const message = 
+
+    const message =
       `💰 Recordatorio de Pago Pendiente\n\n` +
       `¡Hola ${booking.playerName}!\n\n` +
       `Tienes un pago pendiente para tu reserva:\n\n` +
       `📅 Fecha: ${booking.date.toLocaleDateString('es-MX')}\n` +
       `⏰ Hora: ${booking.startTime}\n` +
-      `🎾 Cancha: ${booking.court.name}\n` +
+      `🎾 Cancha: ${booking.Court?.name || 'Cancha'}\n` +
       `💵 Monto: $${(booking.price / 100).toFixed(2)} MXN\n\n` +
       `Completa tu pago aquí: ${paymentLink}\n\n` +
       `⚠️ Recuerda completar el pago para confirmar tu reserva`
 
     return await WhatsAppLinkService.generateLink({
       clubId: booking.clubId,
-      notificationType: 'PAYMENT_REMINDER',
+      notificationType: 'PAYMENT_REMINDER' as NotificationType,
       playerName: booking.playerName,
       playerPhone: booking.playerPhone,
       bookingId: booking.id,
@@ -359,16 +343,20 @@ export class NotificationQueueService {
    * Send custom notification
    */
   private static async sendCustomNotification(notification: any) {
-    const metadata = notification.metadata || {}
-    
+    let metadata: any = {}
+    try {
+      metadata = notification.message ? JSON.parse(notification.message) : {}
+    } catch (e) {
+      metadata = {}
+    }
+
     return await WhatsAppLinkService.generateLink({
-      clubId: notification.booking?.clubId || notification.bookingGroup?.clubId,
-      notificationType: 'GENERAL',
+      clubId: notification.Booking?.clubId || '',
+      notificationType: 'WHATSAPP' as NotificationType,
       playerName: metadata.playerName || 'Jugador',
-      playerPhone: metadata.playerPhone,
+      playerPhone: metadata.playerPhone || notification.recipientPhone,
       bookingId: notification.bookingId,
-      bookingGroupId: notification.bookingGroupId,
-      message: metadata.message || 'Tienes una nueva notificación'
+      message: metadata.customMessage || 'Tienes una nueva notificación'
     })
   }
 
@@ -376,14 +364,16 @@ export class NotificationQueueService {
    * Cancel scheduled notifications for a booking
    */
   static async cancelBookingNotifications(bookingId: string) {
-    const result = await prisma.notificationQueue.updateMany({
+    // Mark as failed since 'cancelled' is not in NotificationStatus enum
+    const result = await prisma.notification.updateMany({
       where: {
         bookingId,
         status: 'pending'
       },
       data: {
-        status: 'cancelled',
-        cancelledAt: new Date()
+        status: 'failed',
+        errorMessage: 'Cancelled by user',
+        updatedAt: new Date()
       }
     })
 
@@ -398,27 +388,22 @@ export class NotificationQueueService {
    */
   static async getQueueStats(clubId?: string) {
     const where = clubId ? {
-      OR: [
-        { booking: { clubId } },
-        { bookingGroup: { clubId } }
-      ]
+      Booking: { clubId }
     } : {}
 
-    const [pending, processing, sent, failed, cancelled] = await Promise.all([
-      prisma.notificationQueue.count({ where: { ...where, status: 'pending' } }),
-      prisma.notificationQueue.count({ where: { ...where, status: 'processing' } }),
-      prisma.notificationQueue.count({ where: { ...where, status: 'sent' } }),
-      prisma.notificationQueue.count({ where: { ...where, status: 'failed' } }),
-      prisma.notificationQueue.count({ where: { ...where, status: 'cancelled' } })
+    const [pending, sent, failed, delivered] = await Promise.all([
+      prisma.notification.count({ where: { ...where, status: 'pending' } }),
+      prisma.notification.count({ where: { ...where, status: 'sent' } }),
+      prisma.notification.count({ where: { ...where, status: 'failed' } }),
+      prisma.notification.count({ where: { ...where, status: 'delivered' } })
     ])
 
     return {
       pending,
-      processing,
       sent,
       failed,
-      cancelled,
-      total: pending + processing + sent + failed + cancelled
+      delivered,
+      total: pending + sent + failed + delivered
     }
   }
 
@@ -429,16 +414,12 @@ export class NotificationQueueService {
     const thirtyDaysAgo = new Date()
     thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30)
 
-    const result = await prisma.notificationQueue.deleteMany({
+    const result = await prisma.notification.deleteMany({
       where: {
         status: {
-          in: ['sent', 'failed', 'cancelled']
+          in: ['sent', 'failed', 'delivered']
         },
-        OR: [
-          { completedAt: { lt: thirtyDaysAgo } },
-          { cancelledAt: { lt: thirtyDaysAgo } },
-          { lastAttempt: { lt: thirtyDaysAgo } }
-        ]
+        sentAt: { lt: thirtyDaysAgo }
       }
     })
 

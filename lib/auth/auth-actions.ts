@@ -162,7 +162,7 @@ export async function registerAction(formData: FormData) {
     }
   } catch (error) {
     if (error instanceof z.ZodError) {
-      return { error: error.errors[0].message };
+      return { error: error.issues[0].message };
     }
     throw error;
   }

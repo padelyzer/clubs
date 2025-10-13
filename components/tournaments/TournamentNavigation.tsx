@@ -272,9 +272,9 @@ export function TournamentNavigation({
             style={{
               padding: '8px 12px',
               borderRadius: '8px',
-              background: colors.success[50],
-              color: colors.success[700],
-              border: `1px solid ${colors.success[200]}`,
+              background: colors.primary[50],
+              color: colors.primary[700],
+              border: `1px solid ${colors.primary[200]}`,
               fontSize: '12px',
               fontWeight: 500,
               cursor: 'pointer',
@@ -285,12 +285,12 @@ export function TournamentNavigation({
               transition: 'all 0.2s'
             }}
             onMouseEnter={(e) => {
-              e.currentTarget.style.background = colors.success[100]
-              e.currentTarget.style.borderColor = colors.success[300]
+              e.currentTarget.style.background = colors.primary[100]
+              e.currentTarget.style.borderColor = colors.primary[300]
             }}
             onMouseLeave={(e) => {
-              e.currentTarget.style.background = colors.success[50]
-              e.currentTarget.style.borderColor = colors.success[200]
+              e.currentTarget.style.background = colors.primary[50]
+              e.currentTarget.style.borderColor = colors.primary[200]
             }}
           >
             <Target size={14} />

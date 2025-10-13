@@ -65,10 +65,15 @@ export function AdminDashboardLayout({ children, stats, systemMetrics, currentUs
     }
   }, [pathname])
 
-  const mainNavItems = [
-    { 
-      href: '/admin/dashboard', 
-      label: 'Dashboard', 
+  const mainNavItems: Array<{
+    href: string
+    label: string
+    icon: React.ReactNode
+    badge?: number
+  }> = [
+    {
+      href: '/admin/dashboard',
+      label: 'Dashboard',
       icon: <Gauge size={18} />,
       badge: undefined
     },

@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/config/prisma'
 import { z } from 'zod'
 import { requireAuthAPI } from '@/lib/auth/actions'
+import { v4 as uuidv4 } from 'uuid'
 
 const paymentSchema = z.object({
   paymentMethod: z.enum(['CASH', 'CARD', 'TRANSFER', 'ONLINE']),
@@ -26,7 +27,7 @@ export async function POST(
     const classBooking = await prisma.classBooking.findUnique({
       where: { id: classBookingId },
       include: {
-        class: true
+        Class: true
       }
     })
 
@@ -38,7 +39,7 @@ export async function POST(
     }
 
     // Verify user has access to this club
-    if (user.clubId !== classBooking.class.clubId) {
+    if (user.clubId !== classBooking.Class.clubId) {
       return NextResponse.json(
         { success: false, error: 'No autorizado' },
         { status: 403 }
@@ -47,26 +48,28 @@ export async function POST(
 
     // Start transaction to register payment
     const result = await prisma.$transaction(async (tx) => {
-      const amount = paymentAmount || classBooking.dueAmount || classBooking.class.price
+      const amount = paymentAmount || classBooking.Class.price
 
       // Create transaction record
       await tx.transaction.create({
         data: {
-          clubId: classBooking.class.clubId,
+          id: uuidv4(),
+          clubId: classBooking.Class.clubId,
           type: 'INCOME',
           category: 'CLASS',
           amount,
           currency: 'MXN',
-          description: `Pago de clase: ${classBooking.class.name} - ${classBooking.studentName}`,
+          description: `Pago de clase: ${classBooking.Class.name} - ${classBooking.playerName}`,
           date: new Date(),
           reference: paymentReference || `${paymentMethod}_${Date.now()}`,
           notes: JSON.stringify({
-            classId: classBooking.class.id,
+            classId: classBooking.Class.id,
             classBookingId: classBooking.id,
-            studentName: classBooking.studentName,
+            studentName: classBooking.playerName,
             paymentMethod,
-            className: classBooking.class.name
-          })
+            className: classBooking.Class.name
+          }),
+          updatedAt: new Date()
         }
       })
 
@@ -95,7 +98,7 @@ export async function POST(
     
     if (error instanceof z.ZodError) {
       return NextResponse.json(
-        { success: false, error: 'Datos inválidos', details: error.errors },
+        { success: false, error: 'Datos inválidos', details: error.issues },
         { status: 400 }
       )
     }
@@ -129,7 +132,7 @@ export async function DELETE(
     const classBooking = await prisma.classBooking.findUnique({
       where: { id: classBookingId },
       include: {
-        class: true
+        Class: true
       }
     })
 
@@ -141,7 +144,7 @@ export async function DELETE(
     }
 
     // Verify user has access
-    if (user.clubId !== classBooking.class.clubId) {
+    if (user.clubId !== classBooking.Class.clubId) {
       return NextResponse.json(
         { success: false, error: 'No autorizado' },
         { status: 403 }
@@ -153,7 +156,7 @@ export async function DELETE(
       // Find and delete the payment transaction
       const transactions = await tx.transaction.findMany({
         where: {
-          clubId: classBooking.class.clubId,
+          clubId: classBooking.Class.clubId,
           category: 'CLASS',
           notes: {
             contains: classBookingId

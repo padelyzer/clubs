@@ -115,7 +115,7 @@ export default function PackageFormModal({ package: editingPackage, onClose, onS
               moduleId: m.id,
               isIncluded: false,
               isOptional: false,
-              priceOverride: null
+              priceOverride: null as number | null
             }))
           }))
         } else {

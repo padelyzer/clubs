@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { requireAuthAPI } from '@/lib/auth/actions'
 import { prisma } from '@/lib/config/prisma'
 import { z } from 'zod'
+import { v4 as uuidv4 } from 'uuid'
 
 const cancelSchema = z.object({
   reason: z.string().optional(),
@@ -36,10 +37,10 @@ export async function POST(
         clubId: session.clubId 
       },
       include: {
-        payments: {
+        Payment: {
           where: { status: 'completed' }
         },
-        splitPayments: true
+        SplitPayment: true
       }
     })
 
@@ -73,9 +74,9 @@ export async function POST(
 
     // Calculate refund if payments exist
     let refundAmount = 0
-    if (booking.payments.length > 0) {
-      const totalPaid = booking.payments.reduce(
-        (sum, payment) => sum + payment.amount, 
+    if (booking.Payment.length > 0) {
+      const totalPaid = booking.Payment.reduce(
+        (sum, payment) => sum + payment.amount,
         0
       )
 
@@ -91,11 +92,13 @@ export async function POST(
       if (refundAmount > 0) {
         await prisma.payment.create({
           data: {
+            id: uuidv4(),
             bookingId,
             amount: -refundAmount, // Negative amount for refund
             currency: 'MXN',
             method: 'STRIPE', // Or the original payment method
-            status: 'refunded'
+            status: 'refunded',
+            updatedAt: new Date()
           }
         })
       }
@@ -112,7 +115,7 @@ export async function POST(
           : booking.notes
       },
       include: {
-        court: true
+        Court: true
       }
     })
 
@@ -132,11 +135,13 @@ export async function POST(
     // Create cancellation notification
     await prisma.notification.create({
       data: {
+        id: uuidv4(),
         bookingId,
         type: 'WHATSAPP',
         template: 'BOOKING_CANCELLED',
         recipient: booking.playerPhone,
-        status: 'pending'
+        status: 'pending',
+        updatedAt: new Date()
       }
     })
 

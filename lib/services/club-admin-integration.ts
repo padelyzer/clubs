@@ -113,7 +113,7 @@ export class ClubAdminIntegrationService {
           throw new Error(`Timezone functions failed for timezone: ${clubSettings.timezone}`)
         }
       } catch (timezoneError) {
-        throw new Error(`Timezone validation failed: ${timezoneError.message}`)
+        throw new Error(`Timezone validation failed: ${(timezoneError as Error).message}`)
       }
 
       console.log(`✅ Club ${club.name} approved with validated timezone: ${clubSettings.timezone}`)
@@ -130,9 +130,7 @@ export class ClubAdminIntegrationService {
             subscriptionId: subscription.id,
             planId: subscriptionPlanId
           },
-          userId: approvedBy,
-          priority: 'MEDIUM',
-          status: 'UNREAD'
+          userId: approvedBy
         }
       })
 
@@ -152,12 +150,7 @@ export class ClubAdminIntegrationService {
         where: { id: clubId },
         data: {
           status: 'REJECTED',
-          active: false,
-          metadata: {
-            rejectedAt: new Date(),
-            rejectedBy,
-            rejectionReason: reason
-          }
+          active: false
         }
       })
 
@@ -172,9 +165,7 @@ export class ClubAdminIntegrationService {
             clubName: club.name,
             reason
           },
-          userId: rejectedBy,
-          priority: 'LOW',
-          status: 'UNREAD'
+          userId: rejectedBy
         }
       })
 
@@ -210,9 +201,7 @@ export class ClubAdminIntegrationService {
               ownerEmail,
               city
             },
-            userId: admin.id,
-            priority: 'HIGH',
-            status: 'UNREAD'
+            userId: admin.id
           }
         })
       )
@@ -278,9 +267,7 @@ export class ClubAdminIntegrationService {
             newPlan: newPlan.displayName,
             priceChange: newPlan.price - subscription.plan.price
           },
-          userId: changedBy,
-          priority: 'MEDIUM',
-          status: 'UNREAD'
+          userId: changedBy
         }
       })
 
@@ -336,9 +323,7 @@ export class ClubAdminIntegrationService {
             clubName: subscription.club.name,
             reason
           },
-          userId: cancelledBy,
-          priority: 'HIGH',
-          status: 'UNREAD'
+          userId: cancelledBy
         }
       })
 
@@ -386,13 +371,13 @@ export class ClubAdminIntegrationService {
     ])
 
     const plan = subscription.plan
-    const limits = {
+    const limits: { maxUsers: number | null; maxCourts: number | null; maxBookings: number | null } = {
       maxUsers: plan.maxUsers,
       maxCourts: plan.maxCourts,
       maxBookings: plan.maxBookings
     }
 
-    const usage = {
+    const usage: { users: number; courts: number; bookings: number } = {
       users: userCount,
       courts: courtCount,
       bookings: monthlyBookings
@@ -442,14 +427,16 @@ export class ClubAdminIntegrationService {
     const invoice = await prisma.subscriptionInvoice.create({
       data: {
         subscriptionId,
+        clubId: subscription.clubId,
         invoiceNumber: `INV-${nextInvoiceNumber}`,
         amount: subscription.plan.price,
+        total: subscription.plan.price,
         currency: subscription.plan.currency,
         status: 'PENDING',
         dueDate: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000), // 7 days
         billingPeriodStart: subscription.currentPeriodStart,
         billingPeriodEnd: subscription.currentPeriodEnd,
-        metadata: {
+        items: {
           clubName: subscription.club.name,
           planName: subscription.plan.displayName,
           generatedAt: new Date()
@@ -468,9 +455,7 @@ export class ClubAdminIntegrationService {
           invoiceNumber: invoice.invoiceNumber,
           amount: invoice.amount,
           clubName: subscription.club.name
-        },
-        priority: 'MEDIUM',
-        status: 'UNREAD'
+        }
       }
     })
 
@@ -491,7 +476,6 @@ export class ClubAdminIntegrationService {
         data: {
           status: 'PAID',
           paidAt: new Date(),
-          paymentMethod,
           transactionId
         },
         include: {
@@ -521,12 +505,10 @@ export class ClubAdminIntegrationService {
             invoiceId,
             invoiceNumber: invoice.invoiceNumber,
             amount: invoice.amount,
-            clubName: invoice.subscription.club.name,
+            clubId: invoice.clubId,
             paymentMethod,
             transactionId
-          },
-          priority: 'LOW',
-          status: 'UNREAD'
+          }
         }
       })
 

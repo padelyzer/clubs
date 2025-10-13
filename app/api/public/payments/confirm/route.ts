@@ -129,7 +129,7 @@ export async function POST(request: NextRequest) {
           const classBooking = await prisma.classBooking.findUnique({
             where: { id: bookingId },
             include: {
-              class: {
+              Class: {
                 include: {
                   Club: true
                 }

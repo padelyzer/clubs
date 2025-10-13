@@ -98,9 +98,9 @@ export async function GET(request: NextRequest) {
         error: 'Error en endpoint de debug',
         debug: {
           endpoint: '/api/tournaments/debug',
-          errorType: error?.constructor?.name || 'Unknown',
-          errorMessage: error?.message || 'Error desconocido',
-          stack: process.env.NODE_ENV === 'development' ? error?.stack : undefined
+          errorType: (error as any)?.constructor?.name || 'Unknown',
+          errorMessage: (error as Error)?.message || 'Error desconocido',
+          stack: process.env.NODE_ENV === 'development' ? (error as Error)?.stack : undefined
         }
       },
       { status: 500 }

@@ -10,10 +10,10 @@ export async function GET(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
+  const paramData = await params
+  const { id } = paramData
+
   try {
-    const paramData = await params
-    const { id } = paramData
-    
     const session = await requireSuperAdmin()
     
     const rateLimitResult = await rateLimit(request, 'admin')
@@ -50,7 +50,7 @@ export async function GET(
       'saas_package',
       id,
       null,
-      session?.user?.id
+      session?.userId
     )
     
     return NextResponse.json({
@@ -75,10 +75,10 @@ export async function PUT(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
+  const paramData = await params
+  const { id } = paramData
+
   try {
-    const paramData = await params
-    const { id } = paramData
-    
     const session = await requireSuperAdmin()
     
     const rateLimitResult = await rateLimit(request, 'admin')
@@ -159,7 +159,7 @@ export async function PUT(
       'saas_package',
       id,
       body,
-      session?.user?.id
+      session?.userId
     )
     
     return NextResponse.json({
@@ -185,10 +185,10 @@ export async function DELETE(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
+  const paramData = await params
+  const { id } = paramData
+
   try {
-    const paramData = await params
-    const { id } = paramData
-    
     const session = await requireSuperAdmin()
     
     const rateLimitResult = await rateLimit(request, 'admin')
@@ -223,7 +223,7 @@ export async function DELETE(
       'saas_package',
       id,
       null,
-      session?.user?.id
+      session?.userId
     )
     
     return NextResponse.json({

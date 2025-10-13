@@ -15,10 +15,10 @@ export async function GET(request: NextRequest) {
     const expiredCount = await WhatsAppLinkService.markExpiredLinks()
 
     // Calculate metrics
-    const total = Object.values(stats).reduce((sum, count) => sum + count, 0)
-    const clickedCount = stats.delivered || 0
-    const expiredStat = stats.expired || 0
-    const pendingCount = stats.link_generated || stats.pending || 0
+    const total = Object.values(stats).reduce((sum: number, count) => sum + (typeof count === 'number' ? count : 0), 0)
+    const clickedCount = (stats.delivered as number) || 0
+    const expiredStat = (stats.expired as number) || 0
+    const pendingCount = (stats.link_generated as number) || (stats.pending as number) || 0
 
     const clickRate = total > 0 ? ((clickedCount / total) * 100).toFixed(1) : '0.0'
     const expiredRate = total > 0 ? ((expiredStat / total) * 100).toFixed(1) : '0.0'

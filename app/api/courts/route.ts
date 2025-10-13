@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { requireAuthAPI } from '@/lib/auth/actions'
 import { prisma } from '@/lib/config/prisma'
+import { v4 as uuidv4 } from 'uuid'
 
 export async function GET(request: NextRequest) {
   try {
@@ -83,11 +84,14 @@ export async function POST(request: NextRequest) {
 
     const court = await prisma.court.create({
       data: {
+        id: uuidv4(),
         clubId: auth.clubId,
         name,
+        type: 'PADEL',
         indoor: indoor || false,
         order: (lastCourt?.order || 0) + 1,
-        active: true
+        active: true,
+        updatedAt: new Date()
       }
     })
 

@@ -10,10 +10,10 @@ export async function GET(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
+  const paramData = await params
+  const { id } = paramData
+
   try {
-    const paramData = await params
-    const { id } = paramData
-    
     // 1. Authentication
     const session = await requireSuperAdmin()
     
@@ -36,7 +36,7 @@ export async function GET(
       'club_package',
       id,
       { packageId: packageInfo?.packageId },
-      session?.user?.id
+      session?.userId
     )
     
     return NextResponse.json({
@@ -62,10 +62,10 @@ export async function PUT(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
+  const paramData = await params
+  const { id } = paramData
+
   try {
-    const paramData = await params
-    const { id } = paramData
-    
     // 1. Authentication
     const session = await requireSuperAdmin()
     
@@ -106,7 +106,7 @@ export async function PUT(
       'club_package',
       id,
       { packageId, notes },
-      session?.user?.id
+      session?.userId
     )
     
     return NextResponse.json({

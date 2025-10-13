@@ -130,7 +130,7 @@ export default async function RevenueDashboardPage() {
   ]
 
   // Datos para gráfica mensual (últimos 12 meses)
-  const monthlyData = []
+  const monthlyData: any[] = []
   for (let i = 11; i >= 0; i--) {
     const date = new Date()
     date.setMonth(date.getMonth() - i)

@@ -26,6 +26,7 @@ interface Transaction {
   amount: number
   date: string
   reference?: string
+  cleanedReference?: string
   playerName?: string
   courtName?: string
   status: 'completed' | 'pending' | 'processing'
@@ -273,14 +274,17 @@ export default function IncomeModuleProfessional() {
   if (activeView === 'bookings') {
     return <BookingsIncomeModule />
   }
-  
+
   if (activeView === 'classes') {
     return <ClassesIncomeModule />
   }
-  
+
   if (activeView === 'tournaments') {
     return <TournamentsIncomeModule />
   }
+
+  // Type assertion needed after early returns to help TypeScript understand activeView can still be any of the union values
+  const view = activeView as 'general' | 'bookings' | 'classes' | 'tournaments'
 
   return (
     <div style={{ padding: '32px' }}>
@@ -452,10 +456,10 @@ export default function IncomeModuleProfessional() {
             padding: '10px 20px',
             borderRadius: '10px 10px 0 0',
             border: 'none',
-            background: activeView === 'bookings' ? '#E8F7DC' : 'transparent',
-            color: activeView === 'bookings' ? '#182A01' : '#516640',
+            background: view === 'bookings' ? '#E8F7DC' : 'transparent',
+            color: view === 'bookings' ? '#182A01' : '#516640',
             fontSize: '14px',
-            fontWeight: activeView === 'bookings' ? 600 : 500,
+            fontWeight: view === 'bookings' ? 600 : 500,
             cursor: 'pointer',
             display: 'flex',
             alignItems: 'center',
@@ -474,10 +478,10 @@ export default function IncomeModuleProfessional() {
               padding: '10px 20px',
               borderRadius: '10px 10px 0 0',
               border: 'none',
-              background: activeView === 'classes' ? '#E8F7DC' : 'transparent',
-              color: activeView === 'classes' ? '#182A01' : '#516640',
+              background: view === 'classes' ? '#E8F7DC' : 'transparent',
+              color: view === 'classes' ? '#182A01' : '#516640',
               fontSize: '14px',
-              fontWeight: activeView === 'classes' ? 600 : 500,
+              fontWeight: view === 'classes' ? 600 : 500,
               cursor: 'pointer',
               display: 'flex',
               alignItems: 'center',
@@ -497,10 +501,10 @@ export default function IncomeModuleProfessional() {
               padding: '10px 20px',
               borderRadius: '10px 10px 0 0',
               border: 'none',
-              background: activeView === 'tournaments' ? '#E8F7DC' : 'transparent',
-              color: activeView === 'tournaments' ? '#182A01' : '#516640',
+              background: view === 'tournaments' ? '#E8F7DC' : 'transparent',
+            color: view === 'tournaments' ? '#182A01' : '#516640',
               fontSize: '14px',
-              fontWeight: activeView === 'tournaments' ? 600 : 500,
+              fontWeight: view === 'tournaments' ? 600 : 500,
               cursor: 'pointer',
               display: 'flex',
               alignItems: 'center',

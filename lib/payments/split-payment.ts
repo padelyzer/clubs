@@ -4,6 +4,7 @@ import { sendWhatsAppNotification } from './notifications'
 import { onPaymentCompleted } from '@/lib/whatsapp/notification-hooks'
 import { WhatsAppService } from '@/lib/services/whatsapp-service'
 import { nanoid } from 'nanoid'
+import { v4 as uuidv4 } from 'uuid'
 
 interface SplitPaymentData {
   bookingId: string
@@ -32,12 +33,14 @@ export async function createSplitPayments(
   for (let i = 0; i < splitCount; i++) {
     const splitPayment = await prisma.splitPayment.create({
       data: {
+        id: uuidv4(),
         ...(bookingGroupId ? { bookingGroupId } : { bookingId }),
         playerName: i === 0 ? playerInfo.name : `Jugador ${i + 1}`,
-        playerEmail: i === 0 ? playerInfo.email : '',
+        playerEmail: i === 0 ? (playerInfo.email || '') : '',
         playerPhone: i === 0 ? playerInfo.phone : '',
         amount: splitAmount,
-        status: 'pending'
+        status: 'pending',
+        updatedAt: new Date()
       }
     })
 
@@ -123,7 +126,7 @@ export async function processSplitPaymentCompletion(splitPaymentId: string) {
       },
       BookingGroup: {
         include: {
-          SplitPayment: true,
+          splitPayments: true,
           bookings: {
             include: {
               Court: true
@@ -150,12 +153,12 @@ export async function processSplitPaymentCompletion(splitPaymentId: string) {
   })
 
   // Determine if it's a booking or bookingGroup
-  const isGroup = !!splitPayment.bookingGroup
-  const bookingData = isGroup ? splitPayment.bookingGroup : splitPayment.booking
+  const isGroup = !!splitPayment.BookingGroup
+  const bookingData = isGroup ? splitPayment.BookingGroup : splitPayment.Booking
   const clubId = bookingData.clubId
-  const courtInfo = isGroup 
-    ? splitPayment.bookingGroup.bookings.map(b => b.Court.name).join(', ')
-    : splitPayment.booking.Court.name
+  const courtInfo = isGroup
+    ? splitPayment.BookingGroup.bookings.map(b => b.Court.name).join(', ')
+    : splitPayment.Booking.Court.name
 
   // Create transaction in finance module for split payment
   await prisma.transaction.create({
@@ -185,9 +188,9 @@ export async function processSplitPaymentCompletion(splitPaymentId: string) {
   }
 
   // Check if all split payments are completed
-  const allSplitPayments = isGroup 
-    ? splitPayment.bookingGroup.SplitPayment 
-    : splitPayment.booking.SplitPayment
+  const allSplitPayments = isGroup
+    ? splitPayment.BookingGroup.splitPayments
+    : splitPayment.Booking.SplitPayment
   const completedPayments = allSplitPayments.filter(sp => 
     sp.status === 'completed' || sp.id === splitPaymentId
   ).length
@@ -325,11 +328,11 @@ export async function resendSplitPaymentNotification(splitPaymentId: string) {
   const paymentLink = await generatePaymentLink({
     splitPaymentId: splitPayment.id,
     amount: splitPayment.amount,
-    description: `Pago para reserva en ${splitPayment.booking.Court.name} - ${splitPayment.booking.Club.name}`,
+    description: `Pago para reserva en ${splitPayment.Booking.Court.name} - ${splitPayment.Booking.Club.name}`,
     playerName: splitPayment.playerName,
     playerEmail: splitPayment.playerEmail,
     playerPhone: splitPayment.playerPhone,
-    bookingId: splitPayment.booking.id
+    bookingId: splitPayment.Booking.id
   })
 
   // Send WhatsApp notification
@@ -360,10 +363,10 @@ async function sendSplitPaymentNotification(splitPaymentId: string, paymentLink:
 
   const message = `🏓 ¡Hola ${splitPayment.playerName}!
 
-Tu reserva en ${splitPayment.booking.Club.name} está confirmada:
-📅 ${new Date(splitPayment.booking.date).toLocaleDateString('es-MX')}
-🕐 ${splitPayment.booking.startTime} - ${splitPayment.booking.endTime}
-🏟️ ${splitPayment.booking.Court.name}
+Tu reserva en ${splitPayment.Booking.Club.name} está confirmada:
+📅 ${new Date(splitPayment.Booking.date).toLocaleDateString('es-MX')}
+🕐 ${splitPayment.Booking.startTime} - ${splitPayment.Booking.endTime}
+🏟️ ${splitPayment.Booking.Court.name}
 
 💰 Completa tu pago de $${(splitPayment.amount / 100).toFixed(2)} MXN:
 ${paymentLink}
@@ -380,27 +383,31 @@ ${paymentLink}
     // Create notification record
     await prisma.notification.create({
       data: {
-        bookingId: splitPayment.bookingId,
+        id: uuidv4(),
+        bookingId: splitPayment.bookingId!,
         splitPaymentId: splitPayment.id,
         type: 'WHATSAPP',
         template: 'split_payment_reminder',
         recipient: splitPayment.playerPhone,
-        status: 'sent'
+        status: 'sent',
+        updatedAt: new Date()
       }
     })
   } catch (error) {
     console.error('Error sending split payment notification:', error)
-    
+
     // Create failed notification record
     await prisma.notification.create({
       data: {
-        bookingId: splitPayment.bookingId,
+        id: uuidv4(),
+        bookingId: splitPayment.bookingId!,
         splitPaymentId: splitPayment.id,
         type: 'WHATSAPP',
         template: 'split_payment_reminder',
         recipient: splitPayment.playerPhone,
         status: 'failed',
-        errorMessage: error instanceof Error ? error.message : 'Unknown error'
+        errorMessage: error instanceof Error ? error.message : 'Unknown error',
+        updatedAt: new Date()
       }
     })
   }
@@ -440,11 +447,13 @@ async function sendBookingConfirmationNotification(bookingId: string) {
 
     await prisma.notification.create({
       data: {
+        id: uuidv4(),
         bookingId: booking.id,
         type: 'WHATSAPP',
         template: 'booking_confirmation',
         recipient: booking.playerPhone,
-        status: 'sent'
+        status: 'sent',
+        updatedAt: new Date()
       }
     })
   } catch (error) {

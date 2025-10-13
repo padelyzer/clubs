@@ -1,4 +1,5 @@
 import { prisma } from '@/lib/config/prisma'
+import { NotificationType } from '@prisma/client'
 
 /**
  * Simple email service for booking confirmations
@@ -65,19 +66,23 @@ export class EmailService {
       // Store email notification in database for tracking
       await prisma.notification.create({
         data: {
-          type: 'EMAIL_CONFIRMATION',
-          status: 'pending',
+          id: `notif_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
+          type: 'EMAIL_CONFIRMATION' as NotificationType,
+          template: 'booking-confirmation',
+          recipient: booking.playerEmail || booking.playerPhone,
           recipientPhone: booking.playerPhone,
-          recipientEmail: booking.playerEmail,
-          message: `Confirmación de reserva para ${booking.playerName} en ${booking.Club.name}`,
-          metadata: {
+          recipientName: booking.playerName,
+          status: 'pending',
+          message: JSON.stringify({
+            template: 'booking-confirmation',
             bookingId: booking.id,
-            emailTemplate: 'booking-confirmation',
-            clubId: booking.clubId
-          },
+            clubId: booking.clubId,
+            playerName: booking.playerName,
+            clubName: booking.Club.name
+          }),
           bookingId: booking.id,
           splitPaymentId: null,
-          expiresAt: new Date(Date.now() + 24 * 60 * 60 * 1000) // 24 hours
+          updatedAt: new Date()
         }
       })
 
@@ -91,7 +96,7 @@ export class EmailService {
       console.error('[Email Service] Error sending booking confirmation:', error)
       return {
         success: false,
-        error: error.message
+        error: (error as Error).message
       }
     }
   }
@@ -106,11 +111,11 @@ export class EmailService {
       const classBooking = await prisma.classBooking.findUnique({
         where: { id: classBookingId },
         include: {
-          class: {
+          Class: {
             include: {
               Club: true,
               Court: true,
-              instructor: true
+              Instructor: true
             }
           }
         }
@@ -123,28 +128,28 @@ export class EmailService {
 
       // Email template data for class booking
       const emailData = {
-        to: classBooking.studentEmail,
-        subject: `Confirmación de Clase - ${classBooking.class.Club.name}`,
+        to: classBooking.playerEmail || '',
+        subject: `Confirmación de Clase - ${classBooking.Class.Club.name}`,
         template: 'class-booking-confirmation',
         data: {
-          studentName: classBooking.studentName,
-          clubName: classBooking.class.Club.name,
-          className: classBooking.class.name,
-          instructorName: classBooking.class.instructor?.name || 'Por confirmar',
-          courtName: classBooking.class.Court?.name || 'Cancha',
-          date: classBooking.class.date.toLocaleDateString('es-MX', {
+          studentName: classBooking.playerName,
+          clubName: classBooking.Class.Club.name,
+          className: classBooking.Class.name,
+          instructorName: classBooking.Class.Instructor?.name || 'Por confirmar',
+          courtName: classBooking.Class.Court?.name || 'Cancha',
+          date: classBooking.Class.date.toLocaleDateString('es-MX', {
             weekday: 'long',
             year: 'numeric',
             month: 'long',
             day: 'numeric'
           }),
-          startTime: classBooking.class.startTime,
-          endTime: classBooking.class.endTime,
-          price: classBooking.dueAmount || classBooking.class.price,
+          startTime: classBooking.Class.startTime,
+          endTime: classBooking.Class.endTime,
+          price: classBooking.paidAmount || classBooking.Class.price,
           currency: 'MXN',
           classBookingId: classBooking.id,
-          clubAddress: classBooking.class.Club.address,
-          clubPhone: classBooking.class.Club.phone,
+          clubAddress: classBooking.Class.Club.address,
+          clubPhone: classBooking.Class.Club.phone,
           includeQR: true
         }
       }
@@ -159,17 +164,23 @@ export class EmailService {
       // Store email notification for tracking
       await prisma.notification.create({
         data: {
-          type: 'EMAIL_CONFIRMATION',
+          id: `notif_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
+          type: 'EMAIL_CONFIRMATION' as NotificationType,
+          template: 'class-booking-confirmation',
+          recipient: classBooking.playerEmail || classBooking.playerPhone,
+          recipientPhone: classBooking.playerPhone,
+          recipientName: classBooking.playerName,
           status: 'pending',
-          recipientPhone: classBooking.studentPhone,
-          recipientEmail: classBooking.studentEmail,
-          message: `Confirmación de clase para ${classBooking.studentName} en ${classBooking.class.Club.name}`,
-          metadata: {
+          message: JSON.stringify({
+            template: 'class-booking-confirmation',
             classBookingId: classBooking.id,
-            emailTemplate: 'class-booking-confirmation',
-            clubId: classBooking.class.clubId
-          },
-          expiresAt: new Date(Date.now() + 24 * 60 * 60 * 1000)
+            clubId: classBooking.Class.clubId,
+            playerName: classBooking.playerName,
+            clubName: classBooking.Class.Club.name
+          }),
+          bookingId: '', // Required field, using empty string for class bookings
+          splitPaymentId: null,
+          updatedAt: new Date()
         }
       })
 
@@ -183,7 +194,7 @@ export class EmailService {
       console.error('[Email Service] Error sending class booking confirmation:', error)
       return {
         success: false,
-        error: error.message
+        error: (error as Error).message
       }
     }
   }
@@ -250,7 +261,7 @@ export class EmailService {
       console.error('[Email Service] Error sending split payment confirmation:', error)
       return {
         success: false,
-        error: error.message
+        error: (error as Error).message
       }
     }
   }
@@ -265,13 +276,13 @@ export class EmailService {
       const payment = await prisma.payment.findUnique({
         where: { id: paymentId },
         include: {
-          booking: {
+          Booking: {
             include: {
               Club: true,
               Court: true
             }
           },
-          bookingGroup: {
+          BookingGroup: {
             include: {
               Club: true,
               bookings: {
@@ -289,16 +300,24 @@ export class EmailService {
         return { success: false, error: 'Payment not found' }
       }
 
-      const booking = payment.booking || payment.bookingGroup
-      const isGroup = !!payment.bookingGroup
+      const booking = payment.Booking
+      const bookingGroup = payment.BookingGroup
+      const isGroup = !!bookingGroup
+
+      // Get the correct booking data
+      const mainBooking = booking || (bookingGroup ? bookingGroup : null)
+
+      if (!mainBooking) {
+        return { success: false, error: 'No booking data found' }
+      }
 
       const emailData = {
-        to: booking.playerEmail || (isGroup ? booking.contactEmail : null),
-        subject: `Recibo de Pago - ${booking.Club.name}`,
+        to: mainBooking.playerEmail || '',
+        subject: `Recibo de Pago - ${mainBooking.Club.name}`,
         template: 'payment-receipt',
         data: {
-          playerName: booking.playerName || booking.name,
-          clubName: booking.Club.name,
+          playerName: mainBooking.playerName,
+          clubName: mainBooking.Club.name,
           paymentId: payment.id,
           amount: payment.amount,
           currency: payment.currency,
@@ -306,17 +325,17 @@ export class EmailService {
           paymentDate: payment.completedAt?.toLocaleDateString('es-MX') || new Date().toLocaleDateString('es-MX'),
           bookingDetails: {
             isGroup,
-            date: booking.date.toLocaleDateString('es-MX', {
+            date: mainBooking.date.toLocaleDateString('es-MX', {
               weekday: 'long',
               year: 'numeric',
               month: 'long',
               day: 'numeric'
             }),
-            startTime: booking.startTime,
-            endTime: booking.endTime,
-            courts: isGroup 
-              ? booking.bookings.map(b => b.court.name).join(', ')
-              : booking.court?.name || 'Cancha'
+            startTime: mainBooking.startTime,
+            endTime: mainBooking.endTime,
+            courts: isGroup && bookingGroup?.bookings
+              ? bookingGroup.bookings.map((b: any) => b.Court?.name || 'Cancha').join(', ')
+              : (booking?.Court?.name || 'Cancha')
           }
         }
       }
@@ -337,7 +356,7 @@ export class EmailService {
       console.error('[Email Service] Error sending payment receipt:', error)
       return {
         success: false,
-        error: error.message
+        error: (error as Error).message
       }
     }
   }

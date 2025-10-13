@@ -183,15 +183,15 @@ export async function POST(request: NextRequest) {
           await prisma.bookingGroup.update({
             where: { id: payment.bookingGroupId },
             data: {
-              paymentStatus: 'completed',
-              paymentType: 'ONLINE_FULL', // Pagos con Stripe son ONLINE_FULL
+              // Note: BookingGroup doesn't have paymentStatus or paymentType fields in schema
+              // Only update status
               status: 'CONFIRMED'
             }
           })
         }
 
         // Create transaction record (check if not already exists)
-        const booking = payment.booking || payment.bookingGroup
+        const booking = payment.Booking || payment.BookingGroup
         if (booking) {
           // Check if transaction already exists for this payment intent
           const existingTransaction = await prisma.transaction.findFirst({
@@ -298,16 +298,16 @@ export async function POST(request: NextRequest) {
             where: { 
               id: targetBookingId,
               paymentStatus: 'processing',
-              class: {
+              Class: {
                 clubId: session.clubId
               }
             },
             include: {
-              class: {
+              Class: {
                 include: {
                   Club: true,
                   Court: true,
-                  instructor: true
+                  Instructor: true
                 }
               }
             }
@@ -324,11 +324,11 @@ export async function POST(request: NextRequest) {
                 paymentStatus: 'pending'
               },
               include: {
-                class: {
+                Class: {
                   include: {
                     Club: true,
                     Court: true,
-                    instructor: true
+                    Instructor: true
                   }
                 }
               }
@@ -341,17 +341,17 @@ export async function POST(request: NextRequest) {
           if (!classBooking) {
             console.log('🔍 Intentando buscar sin filtro de status...')
             const anyClassBooking = await prisma.classBooking.findFirst({
-              where: { 
+              where: {
                 id: targetBookingId
               },
               select: {
                 id: true,
-                studentName: true,
+                playerName: true,
                 paymentStatus: true,
                 paymentMethod: true
               }
             })
-            
+
             console.log('🔍 ClassBooking (cualquier status):', anyClassBooking)
           }
         }
@@ -368,11 +368,11 @@ export async function POST(request: NextRequest) {
               updatedAt: 'desc' // Get the most recent one
             },
             include: {
-              class: {
+              Class: {
                 include: {
                   Club: true,
                   Court: true,
-                  instructor: true
+                  Instructor: true
                 }
               }
             }
@@ -391,11 +391,11 @@ export async function POST(request: NextRequest) {
                 updatedAt: 'desc' // Get the most recent one
               },
               include: {
-                class: {
+                Class: {
                   include: {
                     Club: true,
                     Court: true,
-                    instructor: true
+                    Instructor: true
                   }
                 }
               }
@@ -411,20 +411,20 @@ export async function POST(request: NextRequest) {
           await prisma.transaction.create({
             data: {
               id: nanoid(),
-              clubId: classBooking.class.clubId,
+              clubId: classBooking.Class.clubId,
               type: 'INCOME',
               category: 'CLASS',
-              amount: classBooking.dueAmount || classBooking.class.price,
+              amount: classBooking.Class.price, // Use class price
               currency: 'MXN',
-              description: `Pago online de clase: ${classBooking.class.name} - ${classBooking.studentName}`,
+              description: `Pago online de clase: ${classBooking.Class.name} - ${classBooking.playerName}`,
               date: new Date(),
               reference: `stripe_${paymentIntentId}`,
               notes: JSON.stringify({
-                classId: classBooking.class.id,
+                classId: classBooking.Class.id,
                 classBookingId: classBooking.id,
-                studentName: classBooking.studentName,
+                studentName: classBooking.playerName,
                 paymentMethod: 'ONLINE',
-                className: classBooking.class.name,
+                className: classBooking.Class.name,
                 stripePaymentIntentId: paymentIntentId
               }),
               createdAt: new Date(),
@@ -438,7 +438,7 @@ export async function POST(request: NextRequest) {
             data: {
               paymentStatus: 'completed',
               paymentMethod: 'online',
-              paidAmount: classBooking.dueAmount || classBooking.class.price,
+              paidAmount: classBooking.Class.price,
               updatedAt: new Date()
             }
           })
@@ -471,9 +471,9 @@ export async function POST(request: NextRequest) {
             type: 'class',
             classBooking: {
               id: classBooking.id,
-              studentName: classBooking.studentName,
-              className: classBooking.class.name,
-              amount: classBooking.dueAmount || classBooking.class.price
+              studentName: classBooking.playerName,
+              className: classBooking.Class.name,
+              amount: classBooking.Class.price
             }
           })
         }

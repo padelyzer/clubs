@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { requireAuthAPI } from '@/lib/auth/actions'
 import { prisma } from '@/lib/config/prisma'
+import { v4 as uuidv4 } from 'uuid'
 
 // GET - Get a specific booking group
 export async function GET(
@@ -27,10 +28,10 @@ export async function GET(
       include: {
         bookings: {
           include: {
-            court: true
+            Court: true
           },
           orderBy: {
-            court: {
+            Court: {
               name: 'asc'
             }
           }
@@ -40,7 +41,7 @@ export async function GET(
           include: {
             _count: {
               select: {
-                notifications: true
+                Notification: true
               }
             }
           }
@@ -67,26 +68,33 @@ export async function GET(
       )
     }
 
+    // Type assertion to include relations
+    type BookingGroupWithRelations = typeof bookingGroup & {
+      bookings: any[]
+      splitPayments: any[]
+    }
+    const group = bookingGroup as BookingGroupWithRelations
+
     // Add computed fields
-    const splitPaymentProgress = bookingGroup.splitPaymentEnabled 
-      ? bookingGroup.splitPayments.filter(sp => sp.status === 'completed').length
+    const splitPaymentProgress = group.splitPaymentEnabled
+      ? group.splitPayments.filter((sp: any) => sp.status === 'completed').length
       : 0
 
     const result = {
-      ...bookingGroup,
+      ...group,
       splitPaymentProgress,
-      splitPaymentComplete: bookingGroup.splitPaymentEnabled 
-        ? splitPaymentProgress === bookingGroup.splitPaymentCount
+      splitPaymentComplete: group.splitPaymentEnabled
+        ? splitPaymentProgress === group.splitPaymentCount
         : true,
-      courtNames: bookingGroup.bookings.map(b => b.court.name).join(', '),
-      totalPaid: bookingGroup.splitPayments
-        .filter(sp => sp.status === 'completed')
-        .reduce((sum, sp) => sum + sp.amount, 0),
+      courtNames: group.bookings.map((b: any) => b.Court.name).join(', '),
+      totalPaid: group.splitPayments
+        .filter((sp: any) => sp.status === 'completed')
+        .reduce((sum: number, sp: any) => sum + sp.amount, 0),
       summary: {
-        courts: bookingGroup.bookings.length,
-        totalPrice: bookingGroup.totalPrice / 100, // Convert to MXN
-        playersExpected: bookingGroup.totalPlayers,
-        splitPayments: bookingGroup.splitPaymentEnabled ? bookingGroup.splitPaymentCount : 0,
+        courts: group.bookings.length,
+        totalPrice: group.price / 100, // Convert to MXN
+        playersExpected: group.totalPlayers,
+        splitPayments: group.splitPaymentEnabled ? group.splitPaymentCount : 0,
         completedPayments: splitPaymentProgress
       }
     }
@@ -164,7 +172,7 @@ export async function PUT(
       include: {
         bookings: {
           include: {
-            court: true
+            Court: true
           }
         },
         splitPayments: true
@@ -287,11 +295,13 @@ export async function DELETE(
       for (const booking of bookingGroup.bookings) {
         await tx.notification.create({
           data: {
+            id: uuidv4(),
             bookingId: booking.id,
             type: 'WHATSAPP',
             template: 'BOOKING_CANCELLED',
             recipient: bookingGroup.playerPhone,
-            status: 'pending'
+            status: 'pending',
+            updatedAt: new Date()
           }
         })
       }
@@ -299,12 +309,12 @@ export async function DELETE(
       return cancelledGroup
     })
 
-    console.log(`🗑️ Cancelled booking group: ${bookingGroup.name} (${bookingGroupId})`)
+    console.log(`🗑️ Cancelled booking group: ${bookingGroup.playerName} (${bookingGroupId})`)
 
     return NextResponse.json({
       success: true,
       bookingGroup: result,
-      message: `Grupo "${bookingGroup.name}" cancelado exitosamente`
+      message: `Grupo de "${bookingGroup.playerName}" cancelado exitosamente`
     })
 
   } catch (error) {

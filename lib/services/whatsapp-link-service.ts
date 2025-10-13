@@ -83,25 +83,22 @@ export class WhatsAppLinkService {
       const notification = await prisma.notification.create({
         data: {
           id: generateId(),
-          clubId: options.clubId,
+          bookingId: options.bookingId || '', // Required field - use empty string if not provided
           type: options.notificationType,
+          template: this.getNotificationTitle(options.notificationType),
           recipient: options.playerName,
           recipientPhone: options.playerPhone,
-          status: 'link_generated',
-          
+          status: 'pending',
+
           // Content
-          title: this.getNotificationTitle(options.notificationType),
           message,
-          
+
           // WhatsApp specific fields
           whatsappLink,
-          linkClicked: false,
-          linkExpiredAt,
-          clubPhone,
-          
+
           // Relations
-          bookingId: options.bookingId,
-          bookingGroupId: options.bookingGroupId,
+          splitPaymentId: undefined, // Optional field
+          updatedAt: new Date()
         }
       })
 
@@ -129,9 +126,9 @@ export class WhatsAppLinkService {
       await prisma.notification.update({
         where: { id: notificationId },
         data: {
-          linkClicked: true,
-          clickedAt: new Date(),
-          status: 'delivered' // Consider it delivered when clicked
+          status: 'delivered', // Consider it delivered when clicked
+          sentAt: new Date(),
+          updatedAt: new Date()
         }
       })
       return true
@@ -149,19 +146,18 @@ export class WhatsAppLinkService {
       const now = new Date()
       const result = await prisma.notification.updateMany({
         where: {
-          linkExpiredAt: {
-            lte: now
+          sentAt: null,
+          createdAt: {
+            lte: new Date(now.getTime() - 24 * 60 * 60 * 1000) // 24 hours ago
           },
-          linkClicked: false,
-          status: {
-            in: ['link_generated', 'pending']
-          }
+          status: 'pending'
         },
         data: {
-          status: 'expired'
+          status: 'failed',
+          updatedAt: new Date()
         }
       })
-      
+
       return result.count
     } catch (error) {
       console.error('Error marking expired links:', error)
@@ -172,7 +168,7 @@ export class WhatsAppLinkService {
   /**
    * Get notification statistics for a club
    */
-  static async getNotificationStats(clubId: string, days: number = 7) {
+  static async getNotificationStats(clubId: string, days: number = 7): Promise<Record<string, number>> {
     try {
       const since = new Date()
       since.setDate(since.getDate() - days)
@@ -180,7 +176,9 @@ export class WhatsAppLinkService {
       const stats = await prisma.notification.groupBy({
         by: ['status'],
         where: {
-          clubId,
+          Booking: {
+            clubId
+          },
           createdAt: {
             gte: since
           },
@@ -193,7 +191,7 @@ export class WhatsAppLinkService {
         }
       })
 
-      return stats.reduce((acc, stat) => {
+      return stats.reduce((acc: Record<string, number>, stat) => {
         acc[stat.status] = stat._count.status
         return acc
       }, {} as Record<string, number>)
@@ -211,58 +209,49 @@ export class WhatsAppLinkService {
     const { notificationType, playerName, bookingId } = options
     const paymentUrl = process.env.NEXT_PUBLIC_APP_URL || 'https://padelyzer.com'
 
-    const messages = {
-      BOOKING_CONFIRMATION: 
-        `¡Hola ${playerName}! 👋\n\n` +
-        `Tu reserva en ${clubName} ha sido confirmada ✅\n\n` +
-        `¡Te esperamos en la cancha! 🎾\n\n` +
-        (bookingId ? `💳 Puedes pagar tu reserva en línea:\n${paymentUrl}/pay/${bookingId}` : ''),
-
+    const messages: Record<string, string> = {
       PAYMENT_REMINDER:
         `¡Hola ${playerName}! 💰\n\n` +
         `Te recordamos que tienes un pago pendiente para tu reserva en ${clubName}.\n\n` +
         (bookingId ? `💳 Puedes pagar en línea:\n${paymentUrl}/pay/${bookingId}\n\n` : '') +
         `Por favor, completa el pago lo antes posible para confirmar tu reserva 🎾`,
 
-      BOOKING_CANCELLATION:
+      CANCELLATION:
         `¡Hola ${playerName}! ❌\n\n` +
         `Tu reserva en ${clubName} ha sido cancelada.\n\n` +
         `Si tienes alguna duda, no dudes en contactarnos 📞`,
 
-      SPLIT_PAYMENT_REQUEST:
-        `¡Hola ${playerName}! 💸\n\n` +
-        `Te han invitado a dividir el pago de una reserva en ${clubName}.\n\n` +
-        (bookingId ? `💳 Puedes pagar tu parte en línea:\n${paymentUrl}/pay/${bookingId}\n\n` : '') +
-        `Por favor, completa tu parte del pago para confirmar tu participación 🎾`,
+      WHATSAPP:
+        `¡Hola ${playerName}! 👋\n\n` +
+        `Tu reserva en ${clubName} ha sido confirmada ✅\n\n` +
+        `¡Te esperamos en la cancha! 🎾\n\n` +
+        (bookingId ? `💳 Puedes pagar tu reserva en línea:\n${paymentUrl}/pay/${bookingId}` : ''),
 
-      SPLIT_PAYMENT_COMPLETED:
-        `¡Hola ${playerName}! ✅\n\n` +
-        `El pago dividido para tu reserva en ${clubName} ha sido completado.\n\n` +
-        `¡Nos vemos en la cancha! 🎾`,
-
-      GENERAL:
+      EMAIL:
         `¡Hola ${playerName}! 👋\n\n` +
         `${clubName} tiene una notificación para ti.\n\n` +
         `¡Gracias por elegirnos! 🎾`
     }
 
-    return messages[notificationType] || messages.GENERAL
+    return messages[notificationType] || messages.EMAIL
   }
 
   /**
    * Get notification title based on type
    */
   private static getNotificationTitle(type: NotificationType): string {
-    const titles = {
-      BOOKING_CONFIRMATION: 'Reserva Confirmada',
+    const titles: Record<string, string> = {
+      WHATSAPP: 'Notificación WhatsApp',
+      EMAIL: 'Notificación Email',
+      SMS: 'Notificación SMS',
+      REMINDER: 'Recordatorio',
       PAYMENT_REMINDER: 'Recordatorio de Pago',
-      BOOKING_CANCELLATION: 'Reserva Cancelada',
-      SPLIT_PAYMENT_REQUEST: 'Solicitud de Pago Dividido',
-      SPLIT_PAYMENT_COMPLETED: 'Pago Dividido Completado',
-      GENERAL: 'Notificación'
+      CANCELLATION: 'Reserva Cancelada',
+      EMAIL_CONFIRMATION: 'Confirmación por Email',
+      PAYMENT_RECEIVED: 'Pago Recibido'
     }
 
-    return titles[type] || titles.GENERAL
+    return titles[type] || titles.EMAIL
   }
 
   /**
@@ -312,8 +301,8 @@ export class WhatsAppLinkService {
       const booking = await prisma.booking.findUnique({
         where: { id: bookingId },
         include: {
-          club: { select: { id: true, name: true } },
-          court: { select: { name: true } }
+          Club: { select: { id: true, name: true } },
+          Court: { select: { name: true } }
         }
       })
 
@@ -322,19 +311,19 @@ export class WhatsAppLinkService {
       }
 
       const paymentUrl = process.env.NEXT_PUBLIC_APP_URL || 'https://padelyzer.com'
-      const customMessage = 
+      const customMessage =
         `¡Hola ${booking.playerName}! 👋\n\n` +
-        `Tu reserva en ${booking.club.name} ha sido confirmada:\n\n` +
+        `Tu reserva en ${booking.Club.name} ha sido confirmada:\n\n` +
         `• Fecha: ${booking.date.toLocaleDateString('es-MX')}\n` +
         `• Hora: ${booking.startTime}\n` +
-        `• Cancha: ${booking.court.name}\n` +
+        `• Cancha: ${booking.Court.name}\n` +
         `• Total: $${(booking.price / 100).toFixed(2)} MXN\n\n` +
         `💳 Puedes pagar tu reserva en línea:\n${paymentUrl}/pay/${booking.id}\n\n` +
         `¡Te esperamos! 🎾`
 
       return await this.generateLink({
         clubId: booking.clubId,
-        notificationType: 'BOOKING_CONFIRMATION',
+        notificationType: 'WHATSAPP',
         playerName: booking.playerName,
         playerPhone: booking.playerPhone,
         bookingId: booking.id,
@@ -364,30 +353,30 @@ export class WhatsAppLinkService {
         }
       })
 
-      if (!splitPayment || !splitPayment.booking) {
+      if (!splitPayment || !splitPayment.Booking) {
         return { success: false, error: 'Pago dividido no encontrado' }
       }
 
       const paymentUrl = process.env.NEXT_PUBLIC_APP_URL || 'https://padelyzer.com'
-      const paymentLink = `${paymentUrl}/pay/${splitPayment.booking.id}?split=${splitPayment.id}`
+      const paymentLink = `${paymentUrl}/pay/${splitPayment.Booking.id}?split=${splitPayment.id}`
       
-      const customMessage = 
+      const customMessage =
         `¡Hola ${splitPayment.playerName}! 💸\n\n` +
         `Te han invitado a dividir el pago de una reserva:\n\n` +
-        `• Club: ${splitPayment.booking.club.name}\n` +
-        `• Fecha: ${splitPayment.booking.date.toLocaleDateString('es-MX')}\n` +
-        `• Hora: ${splitPayment.booking.startTime}\n` +
-        `• Cancha: ${splitPayment.booking.court.name}\n` +
+        `• Club: ${splitPayment.Booking?.Club?.name || 'Club'}\n` +
+        `• Fecha: ${splitPayment.Booking?.date.toLocaleDateString('es-MX') || 'Fecha por confirmar'}\n` +
+        `• Hora: ${splitPayment.Booking?.startTime || 'Hora por confirmar'}\n` +
+        `• Cancha: ${splitPayment.Booking?.Court?.name || 'Cancha por asignar'}\n` +
         `• Tu parte: $${(splitPayment.amount / 100).toFixed(2)} MXN\n\n` +
         `💳 Puedes pagar tu parte en línea:\n${paymentLink}\n\n` +
         `¡Nos vemos en la cancha! 🎾`
 
       return await this.generateLink({
-        clubId: splitPayment.booking.clubId,
-        notificationType: 'SPLIT_PAYMENT_REQUEST',
+        clubId: splitPayment.Booking?.clubId || '',
+        notificationType: 'PAYMENT_REMINDER',
         playerName: splitPayment.playerName,
-        playerPhone: splitPayment.playerPhone,
-        bookingId: splitPayment.bookingId,
+        playerPhone: splitPayment.playerPhone || '',
+        bookingId: splitPayment.bookingId || undefined,
         message: customMessage
       })
 

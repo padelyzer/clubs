@@ -24,7 +24,7 @@ export async function GET(
     
     // Find student bookings by ID, phone or email
     const where: any = {
-      class: {
+      Class: {
         clubId: session.clubId
       }
     }
@@ -32,9 +32,9 @@ export async function GET(
     if (studentId && studentId !== 'search') {
       where.playerId = studentId
     } else if (phone) {
-      where.studentPhone = phone.replace(/\s/g, '')
+      where.playerPhone = phone.replace(/\s/g, '')
     } else if (email) {
-      where.studentEmail = email
+      where.playerEmail = email
     } else {
       return NextResponse.json(
         { success: false, error: 'Debe proporcionar ID, teléfono o email del estudiante' },
@@ -45,16 +45,16 @@ export async function GET(
     const classBookings = await prisma.classBooking.findMany({
       where,
       include: {
-        class: {
+        Class: {
           include: {
-            instructor: true,
-            court: true
+            Instructor: true,
+            Court: true
           }
         },
-        player: true
+        Player: true
       },
       orderBy: {
-        class: {
+        Class: {
           date: 'desc'
         }
       }
@@ -78,9 +78,9 @@ export async function GET(
     
     // Get student info from first booking
     const studentInfo = {
-      name: classBookings[0].studentName,
-      email: classBookings[0].studentEmail,
-      phone: classBookings[0].studentPhone,
+      name: classBookings[0].playerName,
+      email: classBookings[0].playerEmail,
+      phone: classBookings[0].playerPhone,
       playerId: classBookings[0].playerId
     }
     
@@ -107,56 +107,58 @@ export async function GET(
     
     // Process each booking
     const history = classBookings.map(booking => {
-      const classDate = new Date(booking.class.date)
+      const classDate = new Date(booking.Class.date)
       const isPast = classDate < now
       const isUpcoming = classDate >= now
-      
+
       // Update statistics
-      if (booking.class.status === 'COMPLETED' || (isPast && booking.class.status !== 'CANCELLED')) {
+      if (booking.Class.status === 'COMPLETED' || (isPast && booking.Class.status !== 'CANCELLED')) {
         statistics.completedClasses++
-        if (booking.attended || booking.attendanceStatus === 'PRESENT' || booking.attendanceStatus === 'LATE') {
+        if (booking.checkedIn) {
           statistics.attendedClasses++
         }
-      } else if (isUpcoming && booking.class.status !== 'CANCELLED') {
+      } else if (isUpcoming && booking.Class.status !== 'CANCELLED') {
         statistics.upcomingClasses++
-      } else if (booking.class.status === 'CANCELLED' || booking.status === 'CANCELLED') {
+      } else if (booking.Class.status === 'CANCELLED' || booking.status === 'CANCELLED') {
         statistics.cancelledClasses++
       }
-      
-      statistics.totalPaid += booking.paidAmount
-      statistics.totalDue += booking.dueAmount
-      
+
+      const dueAmount = booking.Class.price - (booking.paidAmount || 0)
+
+      statistics.totalPaid += (booking.paidAmount || 0)
+      statistics.totalDue += dueAmount
+
       if (booking.paymentStatus === 'pending') {
-        statistics.pendingPayment += (booking.dueAmount - booking.paidAmount)
+        statistics.pendingPayment += dueAmount
       }
-      
+
       // Track instructor and level preferences
-      if (booking.class.instructor?.name) {
-        instructorCount[booking.class.instructor.name] = (instructorCount[booking.class.instructor.name] || 0) + 1
+      if (booking.Class.Instructor?.name) {
+        instructorCount[booking.Class.Instructor.name] = (instructorCount[booking.Class.Instructor.name] || 0) + 1
       }
-      
-      levelCount[booking.class.level] = (levelCount[booking.class.level] || 0) + 1
-      totalDuration += booking.class.duration
-      
+
+      levelCount[booking.Class.level] = (levelCount[booking.Class.level] || 0) + 1
+      totalDuration += booking.Class.duration
+
       return {
         id: booking.id,
         classId: booking.classId,
-        className: booking.class.name,
-        classType: booking.class.type,
-        level: booking.class.level,
-        date: booking.class.date,
-        time: `${booking.class.startTime} - ${booking.class.endTime}`,
-        duration: booking.class.duration,
-        instructor: booking.class.instructor?.name,
-        court: booking.class.court?.name,
+        className: booking.Class.name,
+        classType: booking.Class.type,
+        level: booking.Class.level,
+        date: booking.Class.date,
+        time: `${booking.Class.startTime} - ${booking.Class.endTime}`,
+        duration: booking.Class.duration,
+        instructor: booking.Class.Instructor?.name,
+        court: booking.Class.Court?.name,
         enrollmentDate: booking.enrollmentDate,
         status: booking.status,
-        classStatus: booking.class.status,
-        attended: booking.attended,
-        attendanceStatus: booking.attendanceStatus,
+        classStatus: booking.Class.status,
+        attended: booking.checkedIn,
+        attendanceStatus: booking.checkedIn ? 'PRESENT' : null,
         paymentStatus: booking.paymentStatus,
         paidAmount: booking.paidAmount,
-        dueAmount: booking.dueAmount,
+        dueAmount: dueAmount,
         isPast,
         isUpcoming
       }
@@ -235,22 +237,22 @@ export async function POST(
     const classBookings = await prisma.classBooking.findMany({
       where: {
         playerId: studentId,
-        class: {
+        Class: {
           clubId: session.clubId,
           status: 'COMPLETED'
         },
         ...(classIds && { classId: { in: classIds } })
       },
       include: {
-        class: {
+        Class: {
           include: {
-            instructor: true
+            Instructor: true
           }
         },
-        player: true
+        Player: true
       },
       orderBy: {
-        class: {
+        Class: {
           date: 'desc'
         }
       }
@@ -264,9 +266,9 @@ export async function POST(
     }
     
     const studentInfo = {
-      name: classBookings[0].studentName,
-      email: classBookings[0].studentEmail,
-      phone: classBookings[0].studentPhone
+      name: classBookings[0].playerName,
+      email: classBookings[0].playerEmail,
+      phone: classBookings[0].playerPhone
     }
     
     // Generate report content based on type
@@ -303,7 +305,7 @@ export async function POST(
 function generateAttendanceReport(student: any, bookings: any[]): string {
   const attendedCount = bookings.filter(b => b.attended || b.attendanceStatus === 'PRESENT' || b.attendanceStatus === 'LATE').length
   const attendanceRate = Math.round((attendedCount / bookings.length) * 100)
-  
+
   return `
 REPORTE DE ASISTENCIA
 
@@ -318,10 +320,10 @@ Tasa de asistencia: ${attendanceRate}%
 
 DETALLE DE CLASES:
 ${bookings.map(b => `
-- ${b.class.name}
-  Fecha: ${new Date(b.class.date).toLocaleDateString('es-MX')}
-  Horario: ${b.class.startTime} - ${b.class.endTime}
-  Instructor: ${b.class.instructor?.name || 'N/A'}
+- ${b.Class.name}
+  Fecha: ${new Date(b.Class.date).toLocaleDateString('es-MX')}
+  Horario: ${b.Class.startTime} - ${b.Class.endTime}
+  Instructor: ${b.Class.Instructor?.name || 'N/A'}
   Asistencia: ${b.attended || b.attendanceStatus === 'PRESENT' ? '✓ Presente' : b.attendanceStatus === 'LATE' ? '⏰ Tarde' : '✗ Ausente'}
 `).join('')}
 
@@ -330,9 +332,9 @@ Fecha de generación: ${new Date().toLocaleString('es-MX')}
 }
 
 function generateParticipationCertificate(student: any, bookings: any[]): string {
-  const uniqueClasses = new Set(bookings.map(b => b.class.name))
-  const totalHours = bookings.reduce((sum, b) => sum + (b.class.duration / 60), 0)
-  
+  const uniqueClasses = new Set(bookings.map(b => b.Class.name))
+  const totalHours = bookings.reduce((sum, b) => sum + (b.Class.duration / 60), 0)
+
   return `
 CERTIFICADO DE PARTICIPACIÓN
 
@@ -356,10 +358,13 @@ Dirección del Club
 }
 
 function generatePaymentHistory(student: any, bookings: any[]): string {
-  const totalPaid = bookings.reduce((sum, b) => sum + b.paidAmount, 0)
-  const totalDue = bookings.reduce((sum, b) => sum + b.dueAmount, 0)
+  const totalPaid = bookings.reduce((sum, b) => sum + (b.paidAmount || 0), 0)
+  const totalDue = bookings.reduce((sum, b) => {
+    const dueAmount = b.Class.price - (b.paidAmount || 0)
+    return sum + dueAmount
+  }, 0)
   const pending = totalDue - totalPaid
-  
+
   return `
 HISTORIAL DE PAGOS
 
@@ -373,13 +378,15 @@ Total adeudado: ${formatCurrency(totalDue / 100)}
 Saldo pendiente: ${formatCurrency(pending / 100)}
 
 DETALLE DE PAGOS:
-${bookings.map(b => `
-- ${b.class.name}
-  Fecha: ${new Date(b.class.date).toLocaleDateString('es-MX')}
-  Costo: ${formatCurrency(b.dueAmount / 100)}
-  Pagado: ${formatCurrency(b.paidAmount / 100)}
+${bookings.map(b => {
+  const dueAmount = b.Class.price - (b.paidAmount || 0)
+  return `
+- ${b.Class.name}
+  Fecha: ${new Date(b.Class.date).toLocaleDateString('es-MX')}
+  Costo: ${formatCurrency(dueAmount / 100)}
+  Pagado: ${formatCurrency((b.paidAmount || 0) / 100)}
   Estado: ${b.paymentStatus === 'completed' ? '✓ Pagado' : b.paymentStatus === 'partial' ? '⚠ Pago parcial' : '✗ Pendiente'}
-`).join('')}
+`}).join('')}
 
 Fecha de generación: ${new Date().toLocaleString('es-MX')}
 `

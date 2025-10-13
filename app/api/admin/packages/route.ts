@@ -28,7 +28,7 @@ export async function GET(request: NextRequest) {
       'package',
       'all',
       { count: packages.length },
-      session?.user?.id
+      session?.userId
     )
     
     return NextResponse.json({
@@ -147,7 +147,7 @@ export async function POST(request: NextRequest) {
       'package',
       result.id,
       { name, displayName },
-      session?.user?.id
+      session?.userId
     )
     
     return NextResponse.json({

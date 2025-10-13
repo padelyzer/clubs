@@ -15,18 +15,18 @@ export default async function NotificationsPage() {
   // Get notifications for this club
   const notifications = await prisma.notification.findMany({
     where: {
-      booking: {
+      Booking: {
         clubId: session.clubId
       }
     },
     include: {
-      booking: {
+      Booking: {
         include: {
-          court: true,
-          club: true
+          Court: true,
+          Club: true
         }
       },
-      splitPayment: true
+      SplitPayment: true
     },
     orderBy: {
       createdAt: 'desc'
@@ -177,8 +177,8 @@ export default async function NotificationsPage() {
         </div>
       </div>
 
-      <NotificationsDashboard 
-        notifications={notifications} 
+      <NotificationsDashboard
+        notifications={notifications as any}
         templateBreakdown={Object.values(templateBreakdown)}
         recentCount={recentNotifications.length}
         clubId={session.clubId}

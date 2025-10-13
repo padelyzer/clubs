@@ -51,7 +51,7 @@ export async function POST(request: NextRequest) {
         ]
       },
       include: {
-        court: true
+        Court: true
       }
     })
 
@@ -84,15 +84,15 @@ export async function POST(request: NextRequest) {
         ]
       },
       include: {
-        court: true,
-        instructor: true
+        Court: true,
+        Instructor: true
       }
     })
 
     const hasConflicts = conflictingBookings.length > 0 || conflictingClasses.length > 0
-    
+
     // Find alternative slots if there are conflicts
-    let alternativeSlots = []
+    let alternativeSlots: any[] = []
     if (hasConflicts) {
       alternativeSlots = await findAlternativeSlots(courtId, date, startTime, endTime)
     }
@@ -103,7 +103,7 @@ export async function POST(request: NextRequest) {
         bookings: conflictingBookings.map(b => ({
           id: b.id,
           type: 'BOOKING',
-          courtName: b.court.name,
+          courtName: b.Court.name,
           startTime: b.startTime,
           endTime: b.endTime,
           playerName: b.playerName
@@ -111,11 +111,11 @@ export async function POST(request: NextRequest) {
         classes: conflictingClasses.map(c => ({
           id: c.id,
           type: 'CLASS',
-          courtName: c.court.name,
+          courtName: c.Court.name,
           startTime: c.startTime,
           endTime: c.endTime,
           className: c.name,
-          instructor: c.instructor?.name
+          instructor: c.Instructor?.name
         }))
       },
       alternativeSlots,

@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
+import { requireAuthAPI } from '@/lib/auth/actions'
 import { prisma } from '@/lib/config/prisma'
 
 // PATCH - Update check-in status for a registration
@@ -7,13 +8,30 @@ export async function PATCH(
   { params }: { params: Promise<{ id: string, registrationId: string }> }
 ) {
   try {
+    // SEGURIDAD: Requerir autenticación
+    const session = await requireAuthAPI()
+
+    if (!session) {
+      return NextResponse.json(
+        { success: false, error: 'No autorizado' },
+        { status: 401 }
+      )
+    }
+
+    if (!session?.clubId) {
+      return NextResponse.json({ error: 'No autorizado' }, { status: 401 })
+    }
+
     const paramData = await params
     const { id, registrationId } = paramData
     const { checkedIn } = await request.json()
-    
-    // Verificar que el torneo existe
-    const tournament = await prisma.tournament.findUnique({
-      where: { id: id }
+
+    // SEGURIDAD: Verificar que el torneo pertenece al club del usuario
+    const tournament = await prisma.tournament.findFirst({
+      where: {
+        id: id,
+        clubId: session.clubId
+      }
     })
     
     if (!tournament) {
@@ -68,10 +86,40 @@ export async function GET(
   { params }: { params: Promise<{ id: string, registrationId: string }> }
 ) {
   try {
+    // SEGURIDAD: Requerir autenticación
+    const session = await requireAuthAPI()
+
+    if (!session) {
+      return NextResponse.json(
+        { success: false, error: 'No autorizado' },
+        { status: 401 }
+      )
+    }
+
+    if (!session?.clubId) {
+      return NextResponse.json({ error: 'No autorizado' }, { status: 401 })
+    }
+
     const paramData = await params
     const { id, registrationId } = paramData
+
+    // SEGURIDAD: Verificar que el torneo pertenece al club del usuario
+    const tournament = await prisma.tournament.findFirst({
+      where: {
+        id: id,
+        clubId: session.clubId
+      }
+    })
+
+    if (!tournament) {
+      return NextResponse.json(
+        { success: false, error: 'Torneo no encontrado o no pertenece a tu club' },
+        { status: 404 }
+      )
+    }
+
     const registration = await prisma.tournamentRegistration.findUnique({
-      where: { 
+      where: {
         id: registrationId,
         tournamentId: id
       },

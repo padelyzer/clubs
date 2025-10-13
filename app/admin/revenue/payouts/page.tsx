@@ -31,7 +31,7 @@ export default async function PayoutsPage() {
     prisma.club.findMany({
       where: {
         status: 'APPROVED',
-        bookings: {
+        Booking: {
           some: {
             status: 'COMPLETED',
             createdAt: { gte: startOfMonth }
@@ -44,7 +44,7 @@ export default async function PayoutsPage() {
         email: true,
         _count: {
           select: {
-            bookings: {
+            Booking: {
               where: {
                 status: 'COMPLETED',
                 createdAt: { gte: startOfMonth }
@@ -447,7 +447,7 @@ export default async function PayoutsPage() {
                         {club.name}
                       </p>
                       <p style={{ fontSize: '12px', color: '#6b7280' }}>
-                        {club._count.bookings} reservas este mes
+                        {club._count.Booking} reservas este mes
                       </p>
                     </div>
                   </div>

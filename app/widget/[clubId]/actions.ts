@@ -87,7 +87,7 @@ export async function createWidgetBooking(data: any) {
 
     // Get club
     const club = await prisma.club.findFirst({
-      where: { 
+      where: {
         OR: [
           { slug: bookingData.clubSlug },
           { id: bookingData.clubSlug }
@@ -95,9 +95,9 @@ export async function createWidgetBooking(data: any) {
         status: 'APPROVED',
         active: true
       },
-      include: { 
-        courts: true,
-        pricing: true 
+      include: {
+        Court: true,
+        Pricing: true
       }
     })
 
@@ -106,7 +106,7 @@ export async function createWidgetBooking(data: any) {
     }
 
     // Verify court belongs to club
-    const court = club.courts.find(c => c.id === bookingData.courtId)
+    const court = club.Court.find(c => c.id === bookingData.courtId)
     if (!court) {
       return { error: 'Cancha no encontrada' }
     }
@@ -154,7 +154,7 @@ export async function createWidgetBooking(data: any) {
     // Calculate price
     const date = new Date(bookingData.date)
     const dayOfWeek = date.getDay()
-    const matchingPrice = club.pricing.find(p => 
+    const matchingPrice = club.Pricing.find(p =>
       (p.dayOfWeek === null || p.dayOfWeek === dayOfWeek) &&
       p.startTime <= bookingData.startTime &&
       p.endTime > bookingData.startTime
@@ -183,7 +183,7 @@ export async function createWidgetBooking(data: any) {
         totalPlayers: 4,
       },
       include: {
-        court: {
+        Court: {
           select: {
             name: true
           }
@@ -213,7 +213,7 @@ export async function createWidgetBooking(data: any) {
       endTime: booking.endTime,
       duration: booking.duration,
       price: Math.round(booking.price / 100), // Convert from cents to MXN
-      court: booking.court,
+      court: booking.Court,
       club: {
         name: club.name,
         phone: club.phone,

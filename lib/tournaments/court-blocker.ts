@@ -16,7 +16,7 @@ export async function createTournamentCourtBlocks(
       scheduledAt: { not: null }
     },
     include: {
-      tournament: {
+      Tournament: {
         select: {
           name: true
         }
@@ -54,7 +54,7 @@ export async function createTournamentCourtBlocks(
           startTime: match.startTime,
           endTime: match.endTime,
           duration: durationMinutes,
-          playerName: `TORNEO: ${match.tournament.name}`,
+          playerName: `TORNEO: ${match.Tournament.name}`,
           playerEmail: 'tournament@system.internal',
           playerPhone: '0000000000',
           totalPlayers: 4, // Standard padel
@@ -62,7 +62,6 @@ export async function createTournamentCourtBlocks(
           currency: 'MXN',
           paymentStatus: 'completed', // Mark as completed so it doesn't show in pending payments
           paymentType: 'ONSITE', // Use correct PaymentType enum
-          type: 'TOURNAMENT', // Use proper BookingType enum
           status: 'CONFIRMED', // Use correct BookingStatus enum
           checkedIn: false,
           splitPaymentEnabled: false,
@@ -150,14 +149,7 @@ export async function checkCourtAvailability(
         lte: new Date((endDate || startDate).toISOString().split('T')[0])
       },
       status: {
-        in: ['confirmed', 'checked_in', 'completed']
-      }
-    },
-    include: {
-      court: {
-        select: {
-          name: true
-        }
+        in: ['CONFIRMED', 'CHECKED_IN', 'COMPLETED']
       }
     }
   })
@@ -165,10 +157,10 @@ export async function checkCourtAvailability(
   for (const booking of existingBookings) {
     conflicts.push({
       courtId: booking.courtId,
-      date: booking.date,
+      date: booking.date.toISOString().split('T')[0],
       startTime: booking.startTime,
       endTime: booking.endTime,
-      conflictWith: `Reserva de ${booking.playerName} en cancha ${booking.court?.name}`
+      conflictWith: `Reserva de ${booking.playerName} en cancha ${booking.courtId}`
     })
   }
 

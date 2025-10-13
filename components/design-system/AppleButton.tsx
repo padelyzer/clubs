@@ -11,6 +11,7 @@ interface AppleButtonProps {
   loading?: boolean
   onClick?: () => void
   type?: 'button' | 'submit' | 'reset'
+  style?: React.CSSProperties
 }
 
 export function AppleButton({
@@ -23,7 +24,8 @@ export function AppleButton({
   disabled = false,
   loading = false,
   onClick,
-  type = 'button'
+  type = 'button',
+  style
 }: AppleButtonProps) {
   const isDisabled = disabled || loading
 
@@ -100,7 +102,8 @@ export function AppleButton({
         opacity: isDisabled ? 0.6 : 1,
         position: 'relative',
         overflow: 'hidden',
-        fontFamily: '-apple-system, BlinkMacSystemFont, "SF Pro Display", "SF Pro Icons", "Helvetica Neue", Helvetica, Arial, sans-serif'
+        fontFamily: '-apple-system, BlinkMacSystemFont, "SF Pro Display", "SF Pro Icons", "Helvetica Neue", Helvetica, Arial, sans-serif',
+        ...style
       }}
       onMouseEnter={(e) => {
         if (!isDisabled) {

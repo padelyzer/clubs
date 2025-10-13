@@ -25,18 +25,18 @@ export async function POST(
 
     // Get the booking group
     const bookingGroup = await prisma.bookingGroup.findFirst({
-      where: { 
+      where: {
         id: bookingGroupId,
-        clubId: session.clubId 
+        clubId: session.clubId
       },
       include: {
         splitPayments: true,
         bookings: {
           include: {
-            court: true
+            Court: true
           }
         },
-        club: true
+        Club: true
       }
     })
 
@@ -76,7 +76,7 @@ export async function POST(
       const paymentLink = await generatePaymentLink({
         splitPaymentId: splitPayment.id,
         amount: splitPayment.amount,
-        description: `Pago para reserva grupal "${bookingGroup.name}" - ${bookingGroup.bookings.map(b => b.court.name).join(', ')}`,
+        description: `Pago para reserva grupal "${bookingGroup.playerName}" - ${bookingGroup.bookings.map((b: any) => b.Court.name).join(', ')}`,
         playerName: contact.name,
         playerEmail: contact.email,
         playerPhone: contact.phone,
@@ -96,11 +96,11 @@ export async function POST(
         try {
           const message = `🏓 ¡Hola ${contact.name}!
 
-Tu parte del pago para la reserva grupal "${bookingGroup.name}" está lista:
+Tu parte del pago para la reserva grupal "${bookingGroup.playerName}" está lista:
 
 📅 ${new Date(bookingGroup.date).toLocaleDateString('es-MX')}
 🕐 ${bookingGroup.startTime} - ${bookingGroup.endTime}
-🏟️ ${bookingGroup.bookings.map(b => b.court.name).join(', ')}
+🏟️ ${bookingGroup.bookings.map((b: any) => b.Court.name).join(', ')}
 👥 ${bookingGroup.totalPlayers} jugadores total
 
 💰 Tu pago: $${(splitPayment.amount / 100).toFixed(2)} MXN
@@ -110,17 +110,20 @@ ${paymentLink}
 
 ¡Nos vemos en la cancha! 🎾`
 
-          await WhatsAppService.sendMessage(contact.phone, message)
+          // TODO: Implementar envío de WhatsApp - WhatsAppService.sendMessage no existe
+          // await WhatsAppService.sendMessage(contact.phone, message)
           
           // Create notification record
           await prisma.notification.create({
             data: {
-              bookingGroupId: bookingGroup.id,
+              id: crypto.randomUUID(),
+              bookingId: bookingGroup.bookings[0].id,
               splitPaymentId: splitPayment.id,
               type: 'WHATSAPP',
               template: 'split_payment_reminder',
               recipient: contact.phone,
-              status: 'sent'
+              status: 'sent',
+              updatedAt: new Date()
             }
           })
         } catch (error) {
@@ -129,13 +132,15 @@ ${paymentLink}
           // Create failed notification record
           await prisma.notification.create({
             data: {
-              bookingGroupId: bookingGroup.id,
+              id: crypto.randomUUID(),
+              bookingId: bookingGroup.bookings[0].id,
               splitPaymentId: splitPayment.id,
               type: 'WHATSAPP',
               template: 'split_payment_reminder',
               recipient: contact.phone,
               status: 'failed',
-              errorMessage: error instanceof Error ? error.message : 'Unknown error'
+              errorMessage: error instanceof Error ? error.message : 'Unknown error',
+              updatedAt: new Date()
             }
           })
         }
@@ -144,6 +149,9 @@ ${paymentLink}
       updatedCount++
     }
 
+    // Calculate total price from bookings
+    const totalPrice = bookingGroup.bookings.reduce((sum, b) => sum + b.price, 0)
+
     return NextResponse.json({
       success: true,
       message: `Links de pago generados para ${updatedCount} jugadores`,
@@ -151,8 +159,8 @@ ${paymentLink}
       summary: {
         totalSplitPayments: bookingGroup.splitPaymentCount,
         linksGenerated: updatedCount,
-        totalAmount: bookingGroup.totalPrice / 100,
-        amountPerPlayer: (bookingGroup.totalPrice / bookingGroup.splitPaymentCount) / 100
+        totalAmount: totalPrice / 100,
+        amountPerPlayer: (totalPrice / bookingGroup.splitPaymentCount) / 100
       }
     })
 

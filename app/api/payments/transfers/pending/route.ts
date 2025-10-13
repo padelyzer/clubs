@@ -20,7 +20,7 @@ export async function GET(request: NextRequest) {
       include: { Club: true }
     })
 
-    if (!user || !user.club || user.club.id !== session.clubId) {
+    if (!user || !user.Club || user.Club.id !== session.clubId) {
       return NextResponse.json(
         { error: 'Club no encontrado' },
         { status: 404 }
@@ -31,7 +31,7 @@ export async function GET(request: NextRequest) {
 
     return NextResponse.json({
       success: true,
-      clubId: user.club.id,
+      clubId: user.Club.id,
       ...pendingTransfers,
     })
 

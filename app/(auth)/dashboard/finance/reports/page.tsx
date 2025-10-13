@@ -10,7 +10,7 @@ export default function ReportsPage() {
       userName="Administrador del Club"
       userRole="Administrador"
     >
-      <ReportsModule activeTab="reports-income" />
+      <ReportsModule />
     </DashboardWithNotifications>
   )
 }

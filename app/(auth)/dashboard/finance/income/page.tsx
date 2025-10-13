@@ -10,7 +10,7 @@ export default function IncomePage() {
       userName="Administrador del Club"
       userRole="Administrador"
     >
-      <IncomeModule activeTab="income-transactions" />
+      <IncomeModule />
     </DashboardWithNotifications>
   )
 }

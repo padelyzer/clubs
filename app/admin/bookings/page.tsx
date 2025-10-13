@@ -60,7 +60,7 @@ export default async function AdminBookingsPage(props: {
       take: limit,
       orderBy: { createdAt: 'desc' },
       include: {
-        club: {
+        Club: {
           select: {
             id: true,
             name: true,
@@ -68,7 +68,7 @@ export default async function AdminBookingsPage(props: {
             state: true
           }
         },
-        court: {
+        Court: {
           select: {
             id: true,
             name: true,

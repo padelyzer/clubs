@@ -14,6 +14,7 @@
  */
 
 import { PrismaClient } from '@prisma/client'
+import { generateId } from '@/lib/utils/generate-id'
 
 const prisma = new PrismaClient()
 
@@ -43,12 +44,11 @@ async function clearDatabase() {
   // Delete in correct order due to foreign key constraints
   await prisma.classBooking.deleteMany()
   await prisma.class.deleteMany()
-  await prisma.classInstructor.deleteMany()
+  await prisma.instructor.deleteMany()
   await prisma.transaction.deleteMany()
   await prisma.booking.deleteMany()
   await prisma.player.deleteMany()
   await prisma.court.deleteMany()
-  await prisma.classPricing.deleteMany()
   await prisma.clubSettings.deleteMany()
   await prisma.user.deleteMany()
   await prisma.club.deleteMany()
@@ -80,7 +80,8 @@ async function createClub() {
       stripePayoutsEnabled: true,
       stripeChargesEnabled: true,
       stripeDetailsSubmitted: true,
-      stripeCommissionRate: 2.9 // 2.9% commission
+      stripeCommissionRate: 2.9, // 2.9% commission
+      updatedAt: new Date()
     }
   })
   
@@ -93,22 +94,22 @@ async function createClubSettings(clubId: string) {
   
   const settings = await prisma.clubSettings.create({
     data: {
+      id: generateId(),
       clubId: clubId,
       currency: 'MXN',
       taxRate: 16.0, // 16% IVA México
       timezone: 'America/Mexico_City',
       // Payment Methods - Todos activados
-      stripeEnabled: true,
-      cashEnabled: true,
+      acceptCash: true,
       transferEnabled: true,
       terminalEnabled: true,
-      acceptCash: true,
       // Banking Details
       bankName: 'BBVA México',
       accountHolder: 'Club Pádel México S.A. de C.V.',
       accountNumber: '0123456789',
       clabe: '012180001234567890',
-      terminalId: 'TERM_001_PADEL_MX'
+      terminalId: 'TERM_001_PADEL_MX',
+      updatedAt: new Date()
     }
   })
   
@@ -126,12 +127,14 @@ async function createCourts(clubId: string) {
   for (let i = 0; i < 5; i++) {
     const court = await prisma.court.create({
       data: {
+        id: generateId(),
         clubId: clubId,
         name: courtNames[i],
         type: courtTypes[i] as any,
         indoor: i < 2, // First 2 courts are indoor
         order: i + 1,
-        active: true
+        active: true,
+        updatedAt: new Date()
       }
     })
     courts.push(court)
@@ -162,6 +165,7 @@ async function createDevClub() {
         country: 'México',
         status: 'APPROVED',
         active: true,
+        updatedAt: new Date(),
       },
     })
     console.log('✅ Club created:', club.name)
@@ -179,6 +183,7 @@ async function createDevClub() {
           indoor: false,
           order: 1,
           active: true,
+          updatedAt: new Date(),
         },
       }),
       prisma.court.upsert({
@@ -192,6 +197,7 @@ async function createDevClub() {
           indoor: true,
           order: 2,
           active: true,
+          updatedAt: new Date(),
         },
       }),
     ])
@@ -202,6 +208,7 @@ async function createDevClub() {
       where: { clubId: club.id },
       update: {},
       create: {
+        id: generateId(),
         clubId: club.id,
         slotDuration: 90,
         bufferTime: 15,
@@ -212,6 +219,7 @@ async function createDevClub() {
         taxRate: 16,
         cancellationFee: 0,
         noShowFee: 50,
+        updatedAt: new Date(),
       },
     })
     console.log('✅ Club settings created')
@@ -221,12 +229,14 @@ async function createDevClub() {
       [0, 1, 2, 3, 4, 5, 6].map((dayOfWeek) =>
         prisma.scheduleRule.create({
           data: {
+            id: generateId(),
             clubId: club.id,
             name: getDayName(dayOfWeek),
             dayOfWeek,
             startTime: '07:00',
             endTime: '22:00',
             enabled: true,
+            updatedAt: new Date(),
           },
         })
       )
@@ -237,37 +247,43 @@ async function createDevClub() {
     const priceRules = await Promise.all([
       prisma.priceRule.create({
         data: {
+          id: generateId(),
           clubId: club.id,
           name: 'Precio Base',
-          type: 'base',
+          type: 'base' as any,
           price: 500,
           conditions: {},
           enabled: true,
+          updatedAt: new Date(),
         },
       }),
       prisma.priceRule.create({
         data: {
+          id: generateId(),
           clubId: club.id,
           name: 'Precio Fin de Semana',
-          type: 'weekend',
+          type: 'weekend' as any,
           price: 700,
           conditions: {
             days: ['Saturday', 'Sunday'],
           },
           enabled: true,
+          updatedAt: new Date(),
         },
       }),
       prisma.priceRule.create({
         data: {
+          id: generateId(),
           clubId: club.id,
           name: 'Precio Hora Pico',
-          type: 'peak',
+          type: 'peak' as any,
           price: 600,
           conditions: {
             timeStart: '18:00',
             timeEnd: '21:00',
           },
           enabled: true,
+          updatedAt: new Date(),
         },
       }),
     ])
@@ -284,6 +300,7 @@ async function createDevClub() {
         },
         update: {},
         create: {
+          id: generateId(),
           clubId: club.id,
           providerId: 'stripe',
           name: 'Stripe',
@@ -295,6 +312,7 @@ async function createDevClub() {
             percentage: 2.9,
             fixed: 3,
           },
+          updatedAt: new Date(),
         },
       }),
       prisma.paymentProvider.upsert({
@@ -306,6 +324,7 @@ async function createDevClub() {
         },
         update: {},
         create: {
+          id: generateId(),
           clubId: club.id,
           providerId: 'cash',
           name: 'Efectivo',
@@ -315,6 +334,7 @@ async function createDevClub() {
             percentage: 0,
             fixed: 0,
           },
+          updatedAt: new Date(),
         },
       }),
     ])
@@ -331,6 +351,7 @@ async function createDevClub() {
         },
         update: {},
         create: {
+          id: generateId(),
           clubId: club.id,
           channelId: 'email',
           name: 'Email',
@@ -338,6 +359,7 @@ async function createDevClub() {
           config: {
             fromEmail: 'noreply@padelyzer.com',
           },
+          updatedAt: new Date(),
         },
       }),
       prisma.notificationChannel.upsert({
@@ -349,6 +371,7 @@ async function createDevClub() {
         },
         update: {},
         create: {
+          id: generateId(),
           clubId: club.id,
           channelId: 'whatsapp',
           name: 'WhatsApp',
@@ -357,6 +380,7 @@ async function createDevClub() {
             twilioSid: '',
             twilioToken: '',
           },
+          updatedAt: new Date(),
         },
       }),
     ])
@@ -373,6 +397,7 @@ async function createDevClub() {
         },
         update: {},
         create: {
+          id: generateId(),
           clubId: club.id,
           templateId: 'booking_confirmation',
           name: 'Confirmación de Reserva',
@@ -383,6 +408,7 @@ async function createDevClub() {
           content: 'Tu reserva para {{date}} a las {{time}} ha sido confirmada.',
           variables: ['court_name', 'date', 'time'],
           enabled: true,
+          updatedAt: new Date(),
         },
       }),
       prisma.notificationTemplate.upsert({
@@ -394,6 +420,7 @@ async function createDevClub() {
         },
         update: {},
         create: {
+          id: generateId(),
           clubId: club.id,
           templateId: 'booking_reminder',
           name: 'Recordatorio de Reserva',
@@ -404,6 +431,7 @@ async function createDevClub() {
           content: 'Recuerda que tienes una reserva a las {{time}} en {{court_name}}.',
           variables: ['court_name', 'time'],
           enabled: true,
+          updatedAt: new Date(),
         },
       }),
     ])
@@ -414,10 +442,11 @@ async function createDevClub() {
       where: { clubId: club.id },
       update: {},
       create: {
+        id: generateId(),
         clubId: club.id,
-        theme: 'light',
+        theme: 'light' as any,
         primaryColor: '#10B981',
-        language: 'es',
+        language: 'es' as any,
         showLogo: true,
         showPrices: true,
         showAvailability: true,
@@ -427,6 +456,7 @@ async function createDevClub() {
         borderRadius: '12px',
         headerText: 'Reserva tu cancha',
         footerText: 'Powered by Padelyzer',
+        updatedAt: new Date(),
       },
     })
     console.log('✅ Widget settings created')

@@ -167,8 +167,8 @@ export async function sendBookingConfirmationWithActions(bookingId: string) {
     const booking = await prisma.booking.findUnique({
       where: { id: bookingId },
       include: {
-        club: true,
-        court: true
+        Club: true,
+        Court: true
       }
     })
 
@@ -176,9 +176,9 @@ export async function sendBookingConfirmationWithActions(bookingId: string) {
       return { success: false, error: 'Booking not found' }
     }
 
-    const bodyText = `¡Hola ${booking.playerName}! Reserva confirmada en ${booking.club.name}
+    const bodyText = `¡Hola ${booking.playerName}! Reserva confirmada en ${booking.Club.name}
 
-Cancha: ${booking.court.name}
+Cancha: ${booking.Court.name}
 Fecha: ${booking.date.toLocaleDateString('es-MX')} a las ${booking.startTime}
 Total: $${(booking.price / 100).toFixed(2)} MXN
 
@@ -195,7 +195,7 @@ Total: $${(booking.price / 100).toFixed(2)} MXN
         id: 'contact_club',
         title: 'Contactar Club',
         type: 'phone_number',
-        phone: booking.club.phone
+        phone: booking.Club.phone
       },
       {
         id: 'add_calendar',
@@ -228,9 +228,9 @@ export async function sendPaymentReminderWithOptions(splitPaymentId: string) {
     const splitPayment = await prisma.splitPayment.findUnique({
       where: { id: splitPaymentId },
       include: {
-        booking: {
+        Booking: {
           include: {
-            club: true
+            Club: true
           }
         }
       }
@@ -242,8 +242,8 @@ export async function sendPaymentReminderWithOptions(splitPaymentId: string) {
 
     const bodyText = `¡Hola ${splitPayment.playerName}! 
 
-${splitPayment.booking.playerName} te invitó a jugar en ${splitPayment.booking.club.name}
-Fecha: ${splitPayment.booking.date.toLocaleDateString('es-MX')}
+${splitPayment.Booking.playerName} te invitó a jugar en ${splitPayment.Booking.Club.name}
+Fecha: ${splitPayment.Booking.date.toLocaleDateString('es-MX')}
 Tu parte: $${(splitPayment.amount / 100).toFixed(2)} MXN`
 
     const quickReplies: QuickReply[] = [
@@ -265,7 +265,7 @@ Tu parte: $${(splitPayment.amount / 100).toFixed(2)} MXN`
       {
         id: 'contact',
         title: 'Contactar Organizador',
-        payload: `contact_${splitPayment.booking.id}`
+        payload: `contact_${splitPayment.Booking.id}`
       }
     ]
 
@@ -292,8 +292,8 @@ export async function sendCheckInReminderWithLocation(bookingId: string) {
     const booking = await prisma.booking.findUnique({
       where: { id: bookingId },
       include: {
-        club: true,
-        court: true
+        Club: true,
+        Court: true
       }
     })
 
@@ -301,10 +301,10 @@ export async function sendCheckInReminderWithLocation(bookingId: string) {
       return { success: false, error: 'Booking not found' }
     }
 
-    const bodyText = `¡Hola ${booking.playerName}! Tu juego en ${booking.club.name} es en 30 minutos
+    const bodyText = `¡Hola ${booking.playerName}! Tu juego en ${booking.Club.name} es en 30 minutos
 
-Cancha: ${booking.court.name}
-Ubicación: ${booking.club.address}, ${booking.club.city}
+Cancha: ${booking.Court.name}
+Ubicación: ${booking.Club.address}, ${booking.Club.city}
 
 ¿Ya llegaste?`
 

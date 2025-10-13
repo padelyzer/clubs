@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/config/prisma'
+import { generateId } from '@/lib/utils/generate-id'
 
 // GET - Get class bookings
 export async function GET(
@@ -12,24 +13,24 @@ export async function GET(
     const classItem = await prisma.class.findUnique({
       where: { id },
       include: {
-        bookings: {
+        ClassBooking: {
           include: {
-            player: true
+            Player: true
           }
         }
       }
     })
-    
+
     if (!classItem) {
       return NextResponse.json(
         { success: false, error: 'Clase no encontrada' },
         { status: 404 }
       )
     }
-    
+
     return NextResponse.json({
       success: true,
-      bookings: classItem.bookings
+      bookings: classItem.ClassBooking
     })
   } catch (error) {
     console.error('Error fetching class bookings:', error)
@@ -51,7 +52,7 @@ export async function POST(
     const body = await request.json()
 
     // Validate required fields
-    if (!body.studentName || !body.studentPhone) {
+    if (!body.playerName || !body.playerPhone) {
       return NextResponse.json(
         { success: false, error: 'Nombre y teléfono son requeridos' },
         { status: 400 }
@@ -64,7 +65,7 @@ export async function POST(
       include: {
         _count: {
           select: {
-            bookings: true
+            ClassBooking: true
           }
         }
       }
@@ -78,7 +79,7 @@ export async function POST(
     }
     
     // Check if class is full
-    if (classItem._count.bookings >= classItem.maxStudents) {
+    if (classItem._count.ClassBooking >= classItem.maxStudents) {
       return NextResponse.json(
         { success: false, error: 'La clase está llena' },
         { status: 400 }
@@ -89,10 +90,10 @@ export async function POST(
     const existingBooking = await prisma.classBooking.findFirst({
       where: {
         classId: id,
-        studentPhone: body.studentPhone
+        playerPhone: body.playerPhone
       }
     })
-    
+
     if (existingBooking) {
       return NextResponse.json(
         { success: false, error: 'El estudiante ya está inscrito en esta clase' },
@@ -115,27 +116,27 @@ export async function POST(
     // Create booking
     const booking = await prisma.classBooking.create({
       data: {
+        id: generateId(),
         classId: id,
-        studentName: body.studentName,
-        studentEmail: body.studentEmail || null,
-        studentPhone: body.studentPhone,
+        playerName: body.playerName,
+        playerEmail: body.playerEmail || null,
+        playerPhone: body.playerPhone,
         playerId,
         notes: body.notes || null,
         paymentStatus: body.paymentMethod === 'CASH' ? 'pending' : 'pending',
         paidAmount: 0, // Will be updated when payment is processed
-        confirmed: false,
-        attended: false
+        updatedAt: new Date()
       },
       include: {
-        player: true
+        Player: true
       }
     })
-    
-    // Update current students count
+
+    // Update enrolled count
     await prisma.class.update({
       where: { id: id },
       data: {
-        currentStudents: classItem._count.bookings + 1
+        enrolledCount: classItem._count.ClassBooking + 1
       }
     })
     
@@ -149,7 +150,7 @@ export async function POST(
     // Send WhatsApp notification (for future implementation)
     if (body.sendNotification) {
       // TODO: Send WhatsApp notification with class details and payment link
-      console.log('Would send WhatsApp to:', body.studentPhone)
+      console.log('Would send WhatsApp to:', body.playerPhone)
     }
     
     return NextResponse.json({
@@ -196,22 +197,16 @@ export async function PUT(
     }
     
     const updateData: any = {}
-    
-    // Update attendance
-    if (body.attended !== undefined) {
-      updateData.attended = body.attended
-    }
-    
+
     // Update payment status
     if (body.paymentStatus !== undefined) {
       updateData.paymentStatus = body.paymentStatus
-      
+
       if (body.paymentStatus === 'completed') {
         const classItem = await prisma.class.findUnique({
           where: { id: id }
         })
         updateData.paidAmount = classItem?.price || 0
-        updateData.confirmed = true
       }
     }
     
@@ -219,7 +214,7 @@ export async function PUT(
       where: { id: body.bookingId },
       data: updateData,
       include: {
-        player: true
+        Player: true
       }
     })
     
@@ -278,23 +273,23 @@ export async function DELETE(
       where: { id: bookingId }
     })
     
-    // Update current students count
+    // Update enrolled count
     const classItem = await prisma.class.findUnique({
       where: { id: id },
       include: {
         _count: {
           select: {
-            bookings: true
+            ClassBooking: true
           }
         }
       }
     })
-    
+
     if (classItem) {
       await prisma.class.update({
         where: { id: id },
         data: {
-          currentStudents: classItem._count.bookings
+          enrolledCount: classItem._count.ClassBooking
         }
       })
     }

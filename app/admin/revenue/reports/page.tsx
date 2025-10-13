@@ -49,7 +49,7 @@ export default async function ReportsPage() {
     prisma.club.findMany({
       where: {
         status: 'APPROVED',
-        bookings: {
+        Booking: {
           some: {
             status: 'COMPLETED',
             createdAt: { gte: startOfMonth }
@@ -62,7 +62,7 @@ export default async function ReportsPage() {
         email: true,
         _count: {
           select: {
-            bookings: {
+            Booking: {
               where: {
                 status: 'COMPLETED',
                 createdAt: { gte: startOfMonth }
@@ -443,7 +443,7 @@ export default async function ReportsPage() {
                         {club.name}
                       </p>
                       <p style={{ fontSize: '12px', color: '#6b7280' }}>
-                        {club._count.bookings} reservas
+                        {club._count.Booking} reservas
                       </p>
                     </div>
                   </div>

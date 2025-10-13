@@ -45,8 +45,8 @@ export async function POST(
         clubId: session.clubId 
       },
       include: {
-        splitPayments: true,
-        payments: true
+        SplitPayment: true,
+        Payment: true
       }
     })
 
@@ -146,12 +146,14 @@ export async function POST(
       // Create payment record
       await prisma.payment.create({
         data: {
+          id: uuidv4(),
           bookingId,
           amount: validatedData.amount,
           currency: 'MXN',
           method: validatedData.method,
           status: 'completed',
-          completedAt: new Date()
+          completedAt: new Date(),
+          updatedAt: new Date()
         }
       })
 
@@ -192,7 +194,8 @@ export async function POST(
           currency: 'MXN',
           method: validatedData.method,
           status: 'completed',
-          completedAt: new Date()
+          completedAt: new Date(),
+          updatedAt: new Date()
         }
       })
 
@@ -204,8 +207,8 @@ export async function POST(
           status: 'CONFIRMED'
         },
         include: {
-          court: true,
-          payments: true
+          Court: true,
+          Payment: true
         }
       })
 
@@ -223,7 +226,7 @@ export async function POST(
           category: 'BOOKING',
           amount: validatedData.amount,
           currency: 'MXN',
-          description: `Pago de reserva - ${booking.playerName} - ${updatedBooking.court?.name || 'Cancha'}`,
+          description: `Pago de reserva - ${booking.playerName} - ${updatedBooking.Court?.name || 'Cancha'}`,
           reference: transactionReference,
           bookingId,
           date: new Date(),
@@ -238,11 +241,13 @@ export async function POST(
       // Create notification for payment confirmation
       await prisma.notification.create({
         data: {
+          id: uuidv4(),
           bookingId,
           type: 'WHATSAPP',
           template: 'PAYMENT_CONFIRMATION',
           recipient: booking.playerPhone,
-          status: 'pending'
+          status: 'pending',
+          updatedAt: new Date()
         }
       })
 
@@ -296,10 +301,10 @@ export async function GET(
         clubId: session.clubId 
       },
       include: {
-        payments: {
+        Payment: {
           orderBy: { createdAt: 'desc' }
         },
-        splitPayments: {
+        SplitPayment: {
           orderBy: { createdAt: 'asc' }
         }
       }
@@ -313,7 +318,7 @@ export async function GET(
     }
 
     // Calculate payment summary
-    const totalPaid = booking.payments.reduce(
+    const totalPaid = booking.Payment.reduce(
       (sum, payment) => sum + (payment.status === 'completed' ? payment.amount : 0), 
       0
     )
@@ -321,9 +326,9 @@ export async function GET(
     const splitPaymentSummary = booking.splitPaymentEnabled ? {
       enabled: true,
       total: booking.splitPaymentCount,
-      completed: booking.splitPayments.filter(sp => sp.status === 'completed').length,
-      pending: booking.splitPayments.filter(sp => sp.status === 'pending').length,
-      details: booking.splitPayments.map(sp => ({
+      completed: booking.SplitPayment.filter(sp => sp.status === 'completed').length,
+      pending: booking.SplitPayment.filter(sp => sp.status === 'pending').length,
+      details: booking.SplitPayment.map(sp => ({
         id: sp.id,
         playerName: sp.playerName,
         amount: sp.amount,
@@ -341,7 +346,7 @@ export async function GET(
         balance: booking.price - totalPaid,
         status: booking.paymentStatus,
         splitPayment: splitPaymentSummary,
-        payments: booking.payments.map(p => ({
+        payments: booking.Payment.map(p => ({
           id: p.id,
           amount: p.amount,
           method: p.method,

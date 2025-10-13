@@ -36,13 +36,9 @@ export async function POST(request: NextRequest) {
         clubId: session.clubId,
         name: body.name,
         type: body.type,
-        priceModifier: body.priceModifier,
-        startTime: body.startTime,
-        endTime: body.endTime,
-        daysOfWeek: body.daysOfWeek,
-        startDate: body.startDate ? new Date(body.startDate) : null,
-        endDate: body.endDate ? new Date(body.endDate) : null,
-        active: body.active !== false
+        price: body.price || body.priceModifier,
+        conditions: body.conditions || {},
+        enabled: body.enabled !== undefined ? body.enabled : (body.active !== false)
       }
     })
 

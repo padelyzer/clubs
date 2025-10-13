@@ -60,9 +60,7 @@ export const clubUpdateSchema = clubRegistrationSchema.partial()
 // Court schemas
 export const courtSchema = z.object({
   name: z.string().min(1, 'Nombre de la cancha es requerido'),
-  type: z.enum(['PADEL', 'TENNIS', 'MULTIPURPOSE'], {
-    errorMap: () => ({ message: 'Tipo de cancha inválido' })
-  }),
+  type: z.enum(['PADEL', 'TENNIS', 'MULTIPURPOSE']),
   indoor: z.boolean(),
   active: z.boolean(),
   order: z.number().int().min(1, 'Orden debe ser mayor a 0').optional()
@@ -83,9 +81,7 @@ export const bookingSchema = z.object({
   playerPhone: phoneSchema,
   totalPlayers: z.number().int().min(2).max(4, 'Máximo 4 jugadores'),
   notes: z.string().optional(),
-  paymentType: z.enum(['FULL', 'ONSITE', 'SPLIT'], {
-    errorMap: () => ({ message: 'Tipo de pago inválido' })
-  })
+  paymentType: z.enum(['FULL', 'ONSITE', 'SPLIT'])
 }).refine(data => {
   const start = new Date(`2000-01-01T${data.startTime}`)
   const end = new Date(`2000-01-01T${data.endTime}`)
@@ -123,16 +119,14 @@ export const pricingSchema = z.object({
   hourlyRate: z.number().positive('Tarifa por hora debe ser positiva'),
   peakHourRate: z.number().positive('Tarifa en hora pico debe ser positiva').optional(),
   weekendRate: z.number().positive('Tarifa de fin de semana debe ser positiva').optional(),
-  currency: z.enum(['MXN', 'USD'], {
-    errorMap: () => ({ message: 'Moneda inválida' })
-  }).default('MXN')
+  currency: z.enum(['MXN', 'USD']).default('MXN')
 })
 
 // Payment schemas
 export const paymentIntentSchema = z.object({
   bookingId: z.string().uuid('ID de reserva inválido'),
   splitPaymentId: z.string().uuid('ID de pago dividido inválido').optional(),
-  paymentMethod: z.enum(['card', 'oxxo', 'spei']).default('card')
+  paymentMethod: z.enum(['CARD', 'OXXO', 'SPEI']).default('CARD')
 })
 
 export const paymentConfirmationSchema = z.object({
@@ -145,7 +139,7 @@ export const whatsappMessageSchema = z.object({
   to: phoneSchema,
   templateName: z.string().min(1, 'Nombre de plantilla es requerido'),
   templateData: z.record(z.string()),
-  priority: z.enum(['low', 'normal', 'high'] as const).default('normal')
+  priority: z.enum(['LOW', 'NORMAL', 'HIGH']).default('NORMAL')
 })
 
 export const bulkWhatsappSchema = z.object({
@@ -162,13 +156,13 @@ export const bulkWhatsappSchema = z.object({
 export const userUpdateSchema = z.object({
   name: z.string().min(2, 'Nombre debe tener al menos 2 caracteres').optional(),
   email: emailSchema.optional(),
-  role: z.enum(['USER', 'CLUB_OWNER', 'CLUB_STAFF', 'SUPER_ADMIN'] as const).optional(),
+  role: z.enum(['USER', 'CLUB_OWNER', 'CLUB_STAFF', 'SUPER_ADMIN']).optional(),
   active: z.boolean().optional(),
   clubId: z.string().uuid('ID de club inválido').optional()
 })
 
 export const clubStatusUpdateSchema = z.object({
-  status: z.enum(['PENDING', 'APPROVED', 'REJECTED', 'SUSPENDED'] as const),
+  status: z.enum(['PENDING', 'APPROVED', 'REJECTED', 'SUSPENDED']),
   reason: z.string().optional()
 })
 
@@ -265,7 +259,7 @@ export function withValidation<T>(schema: z.ZodSchema<T>) {
           return new Response(
             JSON.stringify({
               error: 'Validation failed',
-              details: validation.errors
+              details: 'errors' in validation ? validation.errors : {}
             }),
             {
               status: 400,

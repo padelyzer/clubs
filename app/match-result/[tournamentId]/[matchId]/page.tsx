@@ -34,6 +34,7 @@ export default function MatchResultPage() {
     { team1: '', team2: '' }
   ])
   const [winner, setWinner] = useState<'team1' | 'team2' | null>(null)
+  const [submitterName, setSubmitterName] = useState('')
   
   useEffect(() => {
     loadMatch()
@@ -283,7 +284,7 @@ export default function MatchResultPage() {
             <label style={{ display: 'block', fontSize: '14px', fontWeight: 600, color: '#374151', marginBottom: '12px' }}>
               2. Resultado del partido
             </label>
-            <div style={{ space: '12px' }}>
+            <div style={{ gap: '12px' }}>
               {sets.map((set, index) => (
                 <div key={index} style={{ marginBottom: '12px' }}>
                   <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>

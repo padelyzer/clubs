@@ -26,7 +26,7 @@ export async function GET(request: NextRequest) {
       'saas_module',
       null,
       null,
-      session?.user?.id
+      session?.userId
     )
     
     return NextResponse.json({

@@ -23,11 +23,26 @@ export async function GET(
 
     const { id: tournamentId } = paramData
 
+    // SEGURIDAD: Verificar que el torneo pertenece al club del usuario
+    const tournament = await prisma.tournament.findFirst({
+      where: {
+        id: tournamentId,
+        clubId: session.clubId
+      }
+    })
+
+    if (!tournament) {
+      return NextResponse.json(
+        { success: false, error: 'Torneo no encontrado o no pertenece a tu club' },
+        { status: 404 }
+      )
+    }
+
     // Obtener registros de equipos del torneo
     const registrations = await prisma.tournamentRegistration.findMany({
-      where: { 
+      where: {
         tournamentId,
-        confirmed: true 
+        confirmed: true
       },
       select: {
         id: true,

@@ -1,5 +1,22 @@
 import { prisma } from '@/lib/config/prisma'
 import { NotificationType } from '@prisma/client'
+import { twilioClient, formatPhoneForWhatsApp } from '@/lib/config/twilio'
+import { WhatsAppTemplates, buildTemplateData } from '@/lib/whatsapp/templates'
+
+// Types for WhatsApp messages
+export interface SendWhatsAppMessage {
+  to: string
+  templateName: string
+  templateLanguage: string
+  templateData: Record<string, string>
+}
+
+export interface WhatsAppResponse {
+  success: boolean
+  messageSid?: string
+  status?: string
+  error?: string
+}
 
 export interface WhatsAppLinkOptions {
   clubId: string
@@ -108,9 +125,9 @@ export class WhatsAppService {
       const booking = await prisma.booking.findUnique({
         where: { id: bookingId },
         include: {
-          club: true,
-          court: true,
-          splitPayments: true
+          Club: true,
+          Court: true,
+          SplitPayment: true
         }
       })
 
@@ -120,8 +137,8 @@ export class WhatsAppService {
 
       const templateData = buildTemplateData('BOOKING_CONFIRMATION', {
         playerName: booking.playerName,
-        clubName: booking.club.name,
-        courtName: booking.court.name,
+        clubName: booking.Club.name,
+        courtName: booking.Court.name,
         bookingDate: booking.date.toLocaleDateString('es-MX', {
           day: '2-digit',
           month: '2-digit',
@@ -165,18 +182,18 @@ export class WhatsAppService {
       const splitPayment = await prisma.splitPayment.findUnique({
         where: { id: splitPaymentId },
         include: {
-          booking: {
+          Booking: {
             include: {
-              club: true,
-              court: true
+              Club: true,
+              Court: true
             }
           },
-          bookingGroup: {
+          BookingGroup: {
             include: {
-              club: true,
+              Club: true,
               bookings: {
                 include: {
-                  court: true
+                  Court: true
                 }
               }
             }
@@ -188,15 +205,15 @@ export class WhatsAppService {
         return { success: false, error: 'Split payment not found' }
       }
 
-      const bookingData = splitPayment.bookingGroup || splitPayment.booking
-      const isGroup = !!splitPayment.bookingGroup
-      const courtInfo = isGroup 
-        ? splitPayment.bookingGroup.bookings.map(b => b.court.name).join(', ')
-        : splitPayment.booking.court.name
+      const bookingData = splitPayment.BookingGroup || splitPayment.Booking
+      const isGroup = !!splitPayment.BookingGroup
+      const courtInfo = isGroup
+        ? splitPayment.BookingGroup.bookings.map(b => b.Court.name).join(', ')
+        : splitPayment.Booking.Court.name
 
       const templateData = buildTemplateData('PAYMENT_COMPLETED', {
         playerName: splitPayment.playerName,
-        clubName: bookingData.club.name,
+        clubName: bookingData.Club.name,
         courtName: courtInfo,
         bookingDate: bookingData.date.toLocaleDateString('es-MX', {
           day: '2-digit',
@@ -242,9 +259,9 @@ export class WhatsAppService {
       const booking = await prisma.booking.findUnique({
         where: { id: bookingId },
         include: {
-          club: true,
-          court: true,
-          splitPayments: true
+          Club: true,
+          Court: true,
+          SplitPayment: true
         }
       })
 
@@ -252,26 +269,25 @@ export class WhatsAppService {
         return { success: false, error: 'Booking not found' }
       }
 
-      const completedPayments = booking.splitPayments.filter(sp => sp.status === 'completed')
-      
-      const templateData = buildTemplateData('BOOKING_FULLY_PAID', {
+      const completedPayments = booking.SplitPayment.filter(sp => sp.status === 'completed')
+
+      // Use PAYMENT_COMPLETED template since BOOKING_FULLY_PAID doesn't exist
+      const templateData = buildTemplateData('PAYMENT_COMPLETED', {
         playerName: booking.playerName,
-        clubName: booking.club.name,
-        courtName: booking.court.name,
+        clubName: booking.Club.name,
         bookingDate: booking.date.toLocaleDateString('es-MX', {
           day: '2-digit',
           month: '2-digit',
           year: 'numeric'
         }),
         bookingTime: booking.startTime,
-        totalAmount: (booking.price / 100).toFixed(2),
-        playersCount: completedPayments.length.toString()
+        paymentStatus: `Reserva pagada completamente (${completedPayments.length} jugadores)`
       })
 
       const result = await this.sendTemplateMessage({
         to: booking.playerPhone,
-        templateName: WhatsAppTemplates.BOOKING_FULLY_PAID?.name || 'booking_fully_paid',
-        templateLanguage: WhatsAppTemplates.BOOKING_FULLY_PAID?.language || 'es',
+        templateName: WhatsAppTemplates.PAYMENT_COMPLETED.name,
+        templateLanguage: WhatsAppTemplates.PAYMENT_COMPLETED.language,
         templateData
       })
 
@@ -301,21 +317,21 @@ export class WhatsAppService {
       const booking = await prisma.booking.findUnique({
         where: { id: bookingId },
         include: {
-          club: true,
-          court: true,
-          splitPayments: {
+          Club: true,
+          Court: true,
+          SplitPayment: {
             where: { status: 'pending' }
           }
         }
       })
 
-      if (!booking || booking.splitPayments.length === 0) {
+      if (!booking || booking.SplitPayment.length === 0) {
         return { success: false, error: 'No pending payments found' }
       }
 
       const results = []
 
-      for (const splitPayment of booking.splitPayments) {
+      for (const splitPayment of booking.SplitPayment) {
         // Use stripePaymentIntentId if available, otherwise use local payment page
         const paymentLink = splitPayment.stripePaymentIntentId || 
           `${process.env.NEXT_PUBLIC_APP_URL}/pay/${booking.id}?split=${splitPayment.id}`
@@ -323,7 +339,7 @@ export class WhatsAppService {
         const templateData = buildTemplateData('PAYMENT_PENDING', {
           playerName: splitPayment.playerName,
           organizerName: booking.playerName,
-          clubName: booking.club.name,
+          clubName: booking.Club.name,
           bookingDate: booking.date.toLocaleDateString('es-MX', {
             day: '2-digit',
             month: '2-digit',
@@ -370,8 +386,8 @@ export class WhatsAppService {
       const booking = await prisma.booking.findUnique({
         where: { id: bookingId },
         include: {
-          club: true,
-          court: true
+          Club: true,
+          Court: true
         }
       })
 
@@ -379,24 +395,24 @@ export class WhatsAppService {
         return { success: false, error: 'Booking not found' }
       }
 
-      const templateData = buildTemplateData('PAYMENT_LINK', {
+      // Use PAYMENT_PENDING template since PAYMENT_LINK doesn't exist
+      const templateData = buildTemplateData('PAYMENT_PENDING', {
         playerName: booking.playerName,
-        clubName: booking.club.name,
-        courtName: booking.court.name,
+        organizerName: booking.playerName, // Organizer is same as player for direct bookings
+        clubName: booking.Club.name,
         bookingDate: booking.date.toLocaleDateString('es-MX', {
           day: '2-digit',
           month: '2-digit',
           year: 'numeric'
         }),
-        bookingTime: booking.startTime,
-        totalPrice: (booking.price / 100).toFixed(2),
+        amount: (booking.price / 100).toFixed(2),
         paymentLink
       })
 
       const result = await this.sendTemplateMessage({
         to: booking.playerPhone,
-        templateName: WhatsAppTemplates.PAYMENT_LINK?.name || 'payment_link',
-        templateLanguage: WhatsAppTemplates.PAYMENT_LINK?.language || 'es_MX',
+        templateName: WhatsAppTemplates.PAYMENT_PENDING.name,
+        templateLanguage: WhatsAppTemplates.PAYMENT_PENDING.language,
         templateData
       })
 
@@ -426,9 +442,9 @@ export class WhatsAppService {
       const booking = await prisma.booking.findUnique({
         where: { id: bookingId },
         include: {
-          club: true,
-          court: true,
-          splitPayments: {
+          Club: true,
+          Court: true,
+          SplitPayment: {
             where: { status: 'completed' }
           }
         }
@@ -443,10 +459,10 @@ export class WhatsAppService {
       // Send to organizer
       const organizerTemplateData = buildTemplateData('BOOKING_REMINDER', {
         playerName: booking.playerName,
-        clubName: booking.club.name,
-        courtName: booking.court.name,
+        clubName: booking.Club.name,
+        courtName: booking.Court.name,
         timeRemaining: '2 horas',
-        clubAddress: `${booking.club.address}, ${booking.club.city}`
+        clubAddress: `${booking.Club.address}, ${booking.Club.city}`
       })
 
       const organizerResult = await this.sendTemplateMessage({
@@ -469,13 +485,13 @@ export class WhatsAppService {
       results.push({ type: 'organizer', result: organizerResult })
 
       // Send to split payment players
-      for (const splitPayment of booking.splitPayments) {
+      for (const splitPayment of booking.SplitPayment) {
         const playerTemplateData = buildTemplateData('BOOKING_REMINDER', {
           playerName: splitPayment.playerName,
-          clubName: booking.club.name,
-          courtName: booking.court.name,
+          clubName: booking.Club.name,
+          courtName: booking.Court.name,
           timeRemaining: '2 horas',
-          clubAddress: `${booking.club.address}, ${booking.club.city}`
+          clubAddress: `${booking.Club.address}, ${booking.Club.city}`
         })
 
         const result = await this.sendTemplateMessage({
@@ -507,64 +523,6 @@ export class WhatsAppService {
   }
 
   /**
-   * Send payment completion confirmation
-   */
-  static async sendPaymentCompleted(splitPaymentId: string) {
-    try {
-      const splitPayment = await prisma.splitPayment.findUnique({
-        where: { id: splitPaymentId },
-        include: {
-          booking: {
-            include: {
-              club: true,
-              court: true
-            }
-          }
-        }
-      })
-
-      if (!splitPayment) {
-        return { success: false, error: 'Split payment not found' }
-      }
-
-      const templateData = buildTemplateData('PAYMENT_COMPLETED', {
-        playerName: splitPayment.playerName,
-        clubName: splitPayment.booking.club.name,
-        bookingDate: splitPayment.booking.date.toLocaleDateString('es-MX', {
-          day: '2-digit',
-          month: '2-digit',
-          year: 'numeric'
-        }),
-        bookingTime: splitPayment.booking.startTime,
-        paymentStatus: 'Pagado ✅'
-      })
-
-      const result = await this.sendTemplateMessage({
-        to: splitPayment.playerPhone,
-        templateName: WhatsAppTemplates.PAYMENT_COMPLETED.name,
-        templateLanguage: WhatsAppTemplates.PAYMENT_COMPLETED.language,
-        templateData
-      })
-
-      await this.logNotification({
-        bookingId: splitPayment.bookingId,
-        splitPaymentId: splitPayment.id,
-        type: 'WHATSAPP',
-        template: 'PAYMENT_COMPLETED',
-        recipient: splitPayment.playerPhone,
-        status: result.success ? 'sent' : 'failed',
-        twilioSid: result.messageSid,
-        errorMessage: result.error
-      })
-
-      return result
-    } catch (error: any) {
-      console.error('Payment completed notification error:', error)
-      return { success: false, error: error.message }
-    }
-  }
-
-  /**
    * Send booking cancellation notification
    */
   static async sendBookingCancellation(bookingId: string) {
@@ -572,9 +530,9 @@ export class WhatsAppService {
       const booking = await prisma.booking.findUnique({
         where: { id: bookingId },
         include: {
-          club: true,
-          court: true,
-          splitPayments: true
+          Club: true,
+          Court: true,
+          SplitPayment: true
         }
       })
 
@@ -590,7 +548,7 @@ export class WhatsAppService {
       // Send to organizer
       const organizerTemplateData = buildTemplateData('BOOKING_CANCELLED', {
         playerName: booking.playerName,
-        clubName: booking.club.name,
+        clubName: booking.Club.name,
         bookingDate: booking.date.toLocaleDateString('es-MX', {
           day: '2-digit',
           month: '2-digit',
@@ -620,10 +578,10 @@ export class WhatsAppService {
       results.push({ type: 'organizer', result: organizerResult })
 
       // Send to split payment players
-      for (const splitPayment of booking.splitPayments) {
+      for (const splitPayment of booking.SplitPayment) {
         const playerTemplateData = buildTemplateData('BOOKING_CANCELLED', {
           playerName: splitPayment.playerName,
-          clubName: booking.club.name,
+          clubName: booking.Club.name,
           bookingDate: booking.date.toLocaleDateString('es-MX', {
             day: '2-digit',
             month: '2-digit',
@@ -720,15 +678,17 @@ export class WhatsAppService {
     try {
       await prisma.notification.create({
         data: {
+          id: `notif_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
           bookingId: data.bookingId,
           splitPaymentId: data.splitPaymentId,
-          type: data.type,
+          type: data.type as any, // Cast to handle NotificationType enum
           template: data.template,
           recipient: data.recipient,
-          status: data.status,
+          status: data.status as any, // Cast to handle NotificationStatus enum
           twilioSid: data.twilioSid,
           errorMessage: data.errorMessage,
-          sentAt: data.status === 'sent' ? new Date() : null
+          sentAt: data.status === 'sent' ? new Date() : undefined,
+          updatedAt: new Date()
         }
       })
     } catch (error) {

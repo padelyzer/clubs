@@ -20,7 +20,7 @@ export async function GET(
         }
       },
       include: {
-        club: {
+        Club: {
           select: {
             id: true,
             name: true,
@@ -76,9 +76,10 @@ export async function GET(
         player2Name: true,
         status: true,
         winner: true,
-        score: true,
+        team1Score: true,
+        team2Score: true,
         scheduledAt: true,
-        court: {
+        Court: {
           select: {
             name: true
           }
@@ -117,7 +118,7 @@ export async function GET(
         currency: tournament.currency,
         prizePool: tournament.prizePool,
         rules: tournament.rules,
-        club: tournament.club,
+        club: tournament.Club,
         createdAt: tournament.createdAt,
         stats
       },

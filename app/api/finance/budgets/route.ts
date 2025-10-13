@@ -333,11 +333,13 @@ export async function PUT(request: NextRequest) {
         // Create new categories
         await tx.budgetCategory.createMany({
           data: validatedData.categories.map(cat => ({
+            id: nanoid(),
             budgetId: id,
             category: cat.category,
             budgetAmount: cat.budgetAmount,
-            actualAmount: 0,
-            notes: cat.notes
+            notes: cat.notes,
+            createdAt: new Date(),
+            updatedAt: new Date()
           }))
         })
       }
@@ -346,7 +348,7 @@ export async function PUT(request: NextRequest) {
       return await tx.budget.findUnique({
         where: { id },
         include: {
-          categories: true
+          BudgetCategory: true
         }
       })
     })

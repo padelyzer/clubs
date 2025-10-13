@@ -156,13 +156,13 @@ export async function POST(
         // Create a booking-like object for compatibility
         booking = {
           ...bookingGroup,
-          court: { 
-            id: 'multiple', 
-            name: bookingGroup.bookings.map(b => b.Court.name).join(', ') 
+          court: {
+            id: 'multiple',
+            name: bookingGroup.bookings.map(b => b.Court.name).join(', ')
           },
-          Court: { 
-            id: 'multiple', 
-            name: bookingGroup.bookings.map(b => b.Court.name).join(', ') 
+          Court: {
+            id: 'multiple',
+            name: bookingGroup.bookings.map(b => b.Court.name).join(', ')
           },
           playerName: bookingGroup.playerName,
           price: bookingGroup.price,
@@ -228,7 +228,7 @@ export async function POST(
 
     if (shouldProcessPayment) {
       // Create or update payment record
-      const existingPayment = (isGroup ? booking.payments : booking.Payment) ? (isGroup ? booking.payments[0] : booking.Payment[0]) : null
+      const existingPayment = !isGroup && 'Payment' in booking && booking.Payment && booking.Payment.length > 0 ? booking.Payment[0] : null
       
       if (existingPayment) {
         // Update existing payment
@@ -250,23 +250,24 @@ export async function POST(
         try {
           const paymentData = {
             id: uuidv4(),
-            ...(isGroup 
+            ...(isGroup
               ? { bookingGroupId: bookingId }
               : { bookingId: bookingId }),
             amount: booking.price,
             currency: 'MXN',
-            method: paymentMethod === 'cash' ? 'CASH' : 
-                   paymentMethod === 'terminal' ? 'TERMINAL' : 
+            method: paymentMethod === 'cash' ? 'CASH' :
+                   paymentMethod === 'terminal' ? 'TERMINAL' :
                    paymentMethod === 'transfer' ? 'SPEI' : 'CASH',
             status: 'completed' as const,
             completedAt: new Date(),
-            ...(referenceNumber && { 
+            updatedAt: new Date(),
+            ...(referenceNumber && {
               stripeChargeId: referenceNumber // Using this field for reference
             })
           }
-          
+
           console.log('Creating payment with data:', JSON.stringify(paymentData, null, 2))
-          
+
           await prisma.payment.create({
             data: paymentData
           })
@@ -308,20 +309,21 @@ export async function POST(
           amount: booking.price,
           currency: 'MXN',
           description: `Pago de reserva${isGroup ? ' grupal' : ''} - ${booking.playerName} - ${
-            isGroup 
-              ? booking.court?.name || 'Múltiples canchas' 
+            isGroup
+              ? booking.Court?.name || 'Múltiples canchas'
               : booking.Court?.name || 'Sin cancha'
           }`,
           reference: transactionReference,
-          ...(isGroup 
+          ...(isGroup
             ? { bookingGroupId: bookingId }
             : { bookingId: bookingId }),
           date: new Date(),
           createdBy: session.userId,
           notes: `Pago en sitio vía ${
-            paymentMethod === 'cash' ? 'efectivo' : 
+            paymentMethod === 'cash' ? 'efectivo' :
             paymentMethod === 'terminal' ? 'terminal' : 'transferencia'
-          }. Fecha: ${new Date(booking.date).toLocaleDateString('es-MX')} Hora: ${booking.startTime}`
+          }. Fecha: ${new Date(booking.date).toLocaleDateString('es-MX')} Hora: ${booking.startTime}`,
+          updatedAt: new Date()
         }
         
         console.log('Creating transaction with data:', JSON.stringify(transactionData, null, 2))
@@ -345,7 +347,7 @@ export async function POST(
 
         if (!existingTransaction) {
           // Get payment method from existing payment record
-          const existingPayment = booking.Payment?.[0]
+          const existingPayment = 'Payment' in booking ? booking.Payment?.[0] : null
           const paymentMethodFromRecord = existingPayment?.method || 'CASH'
 
           const transactionData = {
@@ -360,7 +362,8 @@ export async function POST(
             bookingId: bookingId,
             date: new Date(),
             createdBy: session.userId,
-            notes: `Transacción creada automáticamente durante check-in. Pago: ${paymentMethodFromRecord}. Fecha reserva: ${new Date(booking.date).toLocaleDateString('es-MX')} Hora: ${booking.startTime}`
+            notes: `Transacción creada automáticamente durante check-in. Pago: ${paymentMethodFromRecord}. Fecha reserva: ${new Date(booking.date).toLocaleDateString('es-MX')} Hora: ${booking.startTime}`,
+            updatedAt: new Date()
           }
 
           console.log('Creating missing transaction for completed booking:', JSON.stringify(transactionData, null, 2))
@@ -405,13 +408,13 @@ export async function POST(
       // Format as booking-like object for response
       updatedBooking = {
         ...updatedBooking,
-        court: { 
-          id: 'multiple', 
-          name: updatedBooking.bookings.map(b => b.Court.name).join(', ') 
+        court: {
+          id: 'multiple',
+          name: updatedBooking.bookings.map(b => b.Court.name).join(', ')
         },
-        Court: { 
-          id: 'multiple', 
-          name: updatedBooking.bookings.map(b => b.Court.name).join(', ') 
+        Court: {
+          id: 'multiple',
+          name: updatedBooking.bookings.map(b => b.Court.name).join(', ')
         },
         playerName: updatedBooking.playerName,
         price: updatedBooking.price,

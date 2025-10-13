@@ -78,20 +78,20 @@ export async function GET(request: NextRequest) {
           where: {
             clubId: session.clubId,
             ...(dateFilter.gte && { date: dateFilter }),
-            ...(category && { category })
+            ...(category && { category: category as any })
           },
           include: {
-            booking: {
+            Booking: {
               select: {
                 playerName: true,
-                court: {
+                Court: {
                   select: {
                     name: true
                   }
                 }
               }
             },
-            player: {
+            Player: {
               select: {
                 name: true
               }
@@ -120,12 +120,12 @@ export async function GET(request: NextRequest) {
         break
 
       case 'expenses':
-        // Export expenses
-        const expenses = await prisma.expense.findMany({
+        // Expenses are tracked as transactions with type EXPENSE
+        const expensesOnly = await prisma.transaction.findMany({
           where: {
             clubId: session.clubId,
-            ...(dateFilter.gte && { date: dateFilter }),
-            ...(category && { category })
+            type: 'EXPENSE',
+            ...(dateFilter.gte && { date: dateFilter })
           },
           orderBy: {
             date: 'desc'
@@ -135,90 +135,70 @@ export async function GET(request: NextRequest) {
         headers = [
           'date',
           'category',
-          'subcategory',
           'description',
           'amount',
-          'vendor',
-          'invoiceNumber',
-          'status',
+          'reference',
           'notes'
         ]
 
-        data = expenses
+        data = expensesOnly
         filename = `gastos_${format === 'csv' ? 'export' : 'data'}_${Date.now()}.${format}`
         break
 
       case 'payroll':
-        // Export payroll
-        const payroll = await prisma.payroll.findMany({
+        // Payroll transactions
+        const payrollTransactions = await prisma.transaction.findMany({
           where: {
             clubId: session.clubId,
-            ...(startDate && endDate && {
-              period: {
-                gte: format(new Date(startDate), 'yyyy-MM'),
-                lte: format(new Date(endDate), 'yyyy-MM')
-              }
-            })
+            category: 'SALARY',
+            ...(dateFilter.gte && { date: dateFilter })
           },
           orderBy: {
-            period: 'desc'
+            date: 'desc'
           }
         })
 
         headers = [
-          'period',
-          'employeeName',
-          'employeeRole',
-          'baseSalary',
-          'bonuses',
-          'deductions',
-          'netAmount',
-          'status',
-          'paidAt',
+          'date',
+          'description',
+          'amount',
+          'reference',
           'notes'
         ]
 
-        data = payroll
+        data = payrollTransactions
         filename = `nomina_${format === 'csv' ? 'export' : 'data'}_${Date.now()}.${format}`
         break
 
       case 'budgets':
-        // Export budgets with comparison
-        const budgets = await prisma.budget.findMany({
+        // Budget summary from transactions
+        const budgetTransactions = await prisma.transaction.findMany({
           where: {
-            clubId: session.clubId
-          },
-          include: {
-            categories: true
+            clubId: session.clubId,
+            ...(dateFilter.gte && { date: dateFilter })
           },
           orderBy: {
-            period: 'desc'
+            date: 'desc'
           }
         })
 
-        // Flatten budget data with categories
-        data = []
-        for (const budget of budgets) {
-          for (const category of budget.categories) {
-            data.push({
-              period: budget.period,
-              totalBudget: budget.totalBudget,
-              category: category.category,
-              budgetAmount: category.budgetAmount,
-              actualAmount: category.actualAmount,
-              variance: category.budgetAmount - category.actualAmount,
-              notes: category.notes || budget.notes
-            })
-          }
-        }
+        data = budgetTransactions.map(t => ({
+          date: t.date,
+          type: t.type,
+          category: t.category,
+          amount: t.amount,
+          description: t.description,
+          reference: t.reference || '',
+          notes: t.notes || ''
+        }))
 
         headers = [
-          'period',
-          'totalBudget',
+          'date',
+          'type',
           'category',
-          'budgetAmount',
-          'actualAmount',
-          'variance',
+          'amount',
+          'description',
+          'reference',
           'notes'
         ]
 
@@ -326,13 +306,13 @@ export async function GET(request: NextRequest) {
             ...(dateFilter.gte && { date: dateFilter })
           },
           include: {
-            booking: {
+            Booking: {
               select: {
                 playerName: true,
-                court: { select: { name: true } }
+                Court: { select: { name: true } }
               }
             },
-            player: { select: { name: true } }
+            Player: { select: { name: true } }
           },
           orderBy: { date: 'desc' }
         })
@@ -344,13 +324,13 @@ export async function GET(request: NextRequest) {
             ...(dateFilter.gte && { date: dateFilter })
           },
           include: {
-            booking: {
+            Booking: {
               select: {
                 playerName: true,
-                court: { select: { name: true } }
+                Court: { select: { name: true } }
               }
             },
-            player: { select: { name: true } }
+            Player: { select: { name: true } }
           },
           orderBy: { date: 'desc' }
         })
@@ -396,8 +376,8 @@ export async function GET(request: NextRequest) {
           profitMargin: '',
           date: t.date,
           reference: t.reference || '',
-          player: t.player?.name || t.booking?.playerName || '',
-          court: t.booking?.court?.name || '',
+          player: ('Player' in t && t.Player) ? t.Player.name : (('Booking' in t && t.Booking) ? t.Booking.playerName : ''),
+          court: ('Booking' in t && t.Booking && 'Court' in t.Booking) ? t.Booking.Court.name : '',
           notes: t.notes || ''
         }))
 
@@ -418,8 +398,8 @@ export async function GET(request: NextRequest) {
           profitMargin: '',
           date: t.date,
           reference: t.reference || '',
-          player: t.player?.name || t.booking?.playerName || '',
-          court: t.booking?.court?.name || '',
+          player: ('Player' in t && t.Player) ? t.Player.name : (('Booking' in t && t.Booking) ? t.Booking.playerName : ''),
+          court: ('Booking' in t && t.Booking && 'Court' in t.Booking) ? t.Booking.Court.name : '',
           notes: t.notes || ''
         }))
 

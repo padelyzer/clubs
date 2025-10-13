@@ -602,7 +602,7 @@ export default function BudgetsModuleProfessional() {
                     </p>
                     <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '16px' }}>
                       {(() => {
-                        const currentMonthTotal = budgets.reduce((sum, b) => sum + b.totalBudget, 0)
+                        const currentMonthTotal = budgets.reduce((sum, b) => sum + b.allocated, 0)
                         const quarterProjection = currentMonthTotal * 3
                         const yearProjection = currentMonthTotal * 12
                         

@@ -20,7 +20,7 @@ export default async function AdminCommunicationsPage() {
         email: true,
         _count: {
           select: {
-            users: true
+            User: true
           }
         }
       },

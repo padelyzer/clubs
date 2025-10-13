@@ -3,6 +3,7 @@ import { requireAuthAPI } from '@/lib/auth/actions'
 import { prisma } from '@/lib/config/prisma'
 import { z } from 'zod'
 import { startOfMonth, endOfMonth, startOfYear, endOfYear } from 'date-fns'
+import { v4 as uuidv4 } from 'uuid'
 
 // Validation schemas
 const createExpenseSchema = z.object({
@@ -178,41 +179,29 @@ export async function POST(request: NextRequest) {
     
     const validatedData = createExpenseSchema.parse(body)
     
-    // Create expense record
-    const expense = await prisma.expense.create({
+    // Create expense transaction record
+    const expense = await prisma.transaction.create({
       data: {
+        id: uuidv4(),
         clubId: session.clubId,
-        category: validatedData.category,
-        subcategory: validatedData.subcategory,
-        description: validatedData.description,
+        type: 'EXPENSE',
+        category: validatedData.category as any,
         amount: validatedData.amount,
+        currency: 'MXN',
+        description: validatedData.description,
+        reference: validatedData.invoiceNumber,
         date: new Date(validatedData.date),
-        vendor: validatedData.vendor,
-        invoiceNumber: validatedData.invoiceNumber,
-        attachmentUrl: validatedData.attachmentUrl,
-        status: 'pending',
         notes: validatedData.notes,
-        createdBy: session.userId
+        metadata: {
+          subcategory: validatedData.subcategory,
+          vendor: validatedData.vendor,
+          invoiceNumber: validatedData.invoiceNumber,
+          attachmentUrl: validatedData.attachmentUrl,
+          status: 'pending'
+        },
+        updatedAt: new Date()
       }
     })
-
-    // Automatically create a transaction if expense is approved
-    if (expense.status === 'approved' || expense.status === 'paid') {
-      await prisma.transaction.create({
-        data: {
-          clubId: session.clubId,
-          type: 'EXPENSE',
-          category: expense.category,
-          amount: expense.amount,
-          currency: 'MXN',
-          description: expense.description,
-          reference: expense.id,
-          date: expense.date,
-          createdBy: session.userId,
-          notes: `Gasto: ${expense.vendor ? `Proveedor: ${expense.vendor}` : ''} ${expense.invoiceNumber ? `Factura: ${expense.invoiceNumber}` : ''}`
-        }
-      })
-    }
 
     return NextResponse.json({ 
       success: true, 
@@ -260,11 +249,12 @@ export async function PUT(request: NextRequest) {
 
     const validatedData = updateExpenseSchema.parse(updateData)
     
-    // Check if expense exists and belongs to club
-    const existingExpense = await prisma.expense.findFirst({
+    // Check if transaction exists and belongs to club
+    const existingExpense = await prisma.transaction.findFirst({
       where: {
         id,
-        clubId: session.clubId
+        clubId: session.clubId,
+        type: 'EXPENSE'
       }
     })
 
@@ -275,14 +265,26 @@ export async function PUT(request: NextRequest) {
       )
     }
 
-    // Update expense
-    const updatedExpense = await prisma.expense.update({
+    // Update expense transaction
+    const currentMetadata = (existingExpense.metadata as any) || {}
+    const updatedExpense = await prisma.transaction.update({
       where: { id },
       data: {
-        ...validatedData,
+        category: validatedData.category as any,
+        description: validatedData.description,
+        amount: validatedData.amount,
         date: validatedData.date ? new Date(validatedData.date) : undefined,
-        approvedBy: validatedData.status === 'approved' ? session.userId : existingExpense.approvedBy,
-        approvedAt: validatedData.status === 'approved' ? new Date() : existingExpense.approvedAt
+        reference: validatedData.invoiceNumber,
+        notes: validatedData.notes,
+        metadata: {
+          ...currentMetadata,
+          subcategory: validatedData.subcategory,
+          vendor: validatedData.vendor,
+          invoiceNumber: validatedData.invoiceNumber,
+          attachmentUrl: validatedData.attachmentUrl,
+          status: validatedData.status || currentMetadata.status
+        },
+        updatedAt: new Date()
       }
     })
 
@@ -295,10 +297,12 @@ export async function PUT(request: NextRequest) {
         }
       })
 
+      const metadata = (updatedExpense.metadata as any) || {}
       if ((validatedData.status === 'approved' || validatedData.status === 'paid') && !existingTransaction) {
         // Create transaction when expense is approved
         await prisma.transaction.create({
           data: {
+            id: uuidv4(),
             clubId: session.clubId,
             type: 'EXPENSE',
             category: updatedExpense.category,
@@ -308,7 +312,8 @@ export async function PUT(request: NextRequest) {
             reference: updatedExpense.id,
             date: updatedExpense.date,
             createdBy: session.userId,
-            notes: `Gasto aprobado: ${updatedExpense.vendor ? `Proveedor: ${updatedExpense.vendor}` : ''} ${updatedExpense.invoiceNumber ? `Factura: ${updatedExpense.invoiceNumber}` : ''}`
+            notes: `Gasto aprobado: ${metadata.vendor ? `Proveedor: ${metadata.vendor}` : ''} ${metadata.invoiceNumber ? `Factura: ${metadata.invoiceNumber}` : ''}`,
+            updatedAt: new Date()
           }
         })
       } else if (validatedData.status === 'rejected' && existingTransaction) {
@@ -363,11 +368,12 @@ export async function DELETE(request: NextRequest) {
       )
     }
 
-    // Check if expense exists and belongs to club
-    const expense = await prisma.expense.findFirst({
+    // Check if transaction exists and belongs to club
+    const expense = await prisma.transaction.findFirst({
       where: {
         id,
-        clubId: session.clubId
+        clubId: session.clubId,
+        type: 'EXPENSE'
       }
     })
 
@@ -378,24 +384,17 @@ export async function DELETE(request: NextRequest) {
       )
     }
 
-    // Don't delete if already approved or paid
-    if (expense.status === 'approved' || expense.status === 'paid') {
+    // Don't delete if already completed (check metadata status)
+    const expenseMetadata = (expense.metadata as any) || {}
+    if (expenseMetadata.status === 'completed' || expenseMetadata.status === 'paid') {
       return NextResponse.json(
-        { success: false, error: 'No se puede eliminar un gasto aprobado o pagado' },
+        { success: false, error: 'No se puede eliminar un gasto completado' },
         { status: 400 }
       )
     }
 
-    // Delete expense and related transaction if exists
-    await Promise.all([
-      prisma.expense.delete({ where: { id } }),
-      prisma.transaction.deleteMany({
-        where: {
-          reference: id,
-          category: expense.category
-        }
-      })
-    ])
+    // Delete expense transaction
+    await prisma.transaction.delete({ where: { id } })
 
     return NextResponse.json({
       success: true,

@@ -39,8 +39,8 @@ export async function POST(
         clubId: session.clubId
       },
       include: {
-        court: true,
-        splitPayments: true
+        Court: true,
+        SplitPayment: true
       }
     })
 
@@ -122,17 +122,17 @@ export async function POST(
           updatedAt: new Date()
         },
         include: {
-          court: true,
-          splitPayments: true
+          Court: true,
+          SplitPayment: true
         }
       })
 
       return booking
     })
 
-    const message = needsPayment 
-      ? `Check-in realizado para ${existingBooking.playerName} en ${existingBooking.court.name}. Pago registrado: ${validatedData.paymentMethod}${validatedData.paymentCode ? ` (${validatedData.paymentCode})` : ''}`
-      : `Check-in realizado para ${existingBooking.playerName} en ${existingBooking.court.name}`
+    const message = needsPayment
+      ? `Check-in realizado para ${existingBooking.playerName} en ${existingBooking.Court.name}. Pago registrado: ${validatedData.paymentMethod}${validatedData.paymentCode ? ` (${validatedData.paymentCode})` : ''}`
+      : `Check-in realizado para ${existingBooking.playerName} en ${existingBooking.Court.name}`
 
     return NextResponse.json({ 
       success: true, 
@@ -200,7 +200,7 @@ export async function DELETE(
         updatedAt: new Date()
       },
       include: {
-        court: true
+        Court: true
       }
     })
 

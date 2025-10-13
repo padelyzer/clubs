@@ -11,9 +11,9 @@ export default async function SetupPage() {
   const club = await prisma.club.findUnique({
     where: { id: session.clubId },
     include: {
-      courts: { orderBy: { order: 'asc' } },
-      schedules: { orderBy: { dayOfWeek: 'asc' } },
-      pricing: true,
+      Court: { orderBy: { order: 'asc' } },
+      Schedule: { orderBy: { dayOfWeek: 'asc' } },
+      Pricing: true,
     }
   })
 
@@ -23,9 +23,9 @@ export default async function SetupPage() {
 
   // Check setup status
   const setupStatus = {
-    courts: club.courts.length > 0,
-    schedules: club.schedules.length > 0,
-    pricing: club.pricing.length > 0,
+    courts: club.Court.length > 0,
+    schedules: club.Schedule.length > 0,
+    pricing: club.Pricing.length > 0,
   }
 
   const isComplete = Object.values(setupStatus).every(Boolean)

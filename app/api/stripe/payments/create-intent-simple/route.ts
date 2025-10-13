@@ -41,20 +41,20 @@ export async function POST(request: NextRequest) {
     if (splitPaymentId) {
       // Handle split payment
       const splitPayment = await prisma.splitPayment.findFirst({
-        where: { 
+        where: {
           id: splitPaymentId,
-          booking: {
+          Booking: {
             clubId: session.clubId
           }
         },
         include: {
-          booking: {
+          Booking: {
             include: {
               Club: true,
               Court: true
             }
           },
-          bookingGroup: {
+          BookingGroup: {
             include: {
               Club: true,
               bookings: {
@@ -85,18 +85,18 @@ export async function POST(request: NextRequest) {
       // If payment is in processing status and has a Payment Intent, verify it's still valid
       if (splitPayment.status === 'processing' && splitPayment.stripePaymentIntentId) {
         console.log('Split payment already has Payment Intent, checking if it\'s still valid:', splitPayment.stripePaymentIntentId)
-        
+
         // We'll check this Payment Intent later in the flow to see if it's still valid
         // Don't return early here - let the main flow handle it
       }
 
       // Check if it's for a booking or bookingGroup
-      if (splitPayment.bookingGroup) {
-        booking = splitPayment.bookingGroup
-        booking.isGroup = true
-      } else if (splitPayment.booking) {
-        booking = splitPayment.booking
-        booking.isGroup = false
+      if (splitPayment.BookingGroup) {
+        booking = splitPayment.BookingGroup as any
+        (booking as any).isGroup = true
+      } else if (splitPayment.Booking) {
+        booking = splitPayment.Booking as any
+        (booking as any).isGroup = false
       } else {
         return NextResponse.json(
           { error: 'Pago dividido sin reserva asociada' },
@@ -136,17 +136,17 @@ export async function POST(request: NextRequest) {
             }
           }
         })
-        
+
         if (bookingGroup) {
-          booking = bookingGroup
-          booking.isGroup = true
-          amount = bookingGroup.totalPrice
+          booking = bookingGroup as any
+          (booking as any).isGroup = true
+          amount = (bookingGroup as any).totalPrice || bookingGroup.price
         } else {
           // Try as classBooking
           const classBooking = await prisma.classBooking.findUnique({
             where: { id: bookingId },
             include: {
-              class: {
+              Class: {
                 include: {
                   Club: true,
                   Court: true
@@ -154,29 +154,29 @@ export async function POST(request: NextRequest) {
               }
             }
           })
-          
+
           if (classBooking) {
             // Transform classBooking to match expected structure
             booking = {
               id: classBooking.id,
-              date: classBooking.class.date,
-              startTime: classBooking.class.startTime,
-              endTime: classBooking.class.endTime,
-              playerName: classBooking.studentName,
-              playerEmail: classBooking.studentEmail,
-              playerPhone: classBooking.studentPhone,
+              date: classBooking.Class.date,
+              startTime: classBooking.Class.startTime,
+              endTime: classBooking.Class.endTime,
+              playerName: classBooking.playerName,
+              playerEmail: classBooking.playerEmail,
+              playerPhone: classBooking.playerPhone,
               totalPlayers: 1,
-              price: classBooking.dueAmount || classBooking.class.price,
-              Club: classBooking.class.Club,
-              Court: classBooking.class.Court,
-              clubId: classBooking.class.clubId,
-              courtId: classBooking.class.courtId,
+              price: classBooking.Class.price,
+              Club: classBooking.Class.Club,
+              Court: classBooking.Class.Court,
+              clubId: classBooking.Class.clubId,
+              courtId: classBooking.Class.courtId,
               splitPaymentEnabled: false,
               splitPaymentCount: 0,
               isClass: true,
               isGroup: false
-            }
-            amount = classBooking.dueAmount || classBooking.class.price
+            } as any
+            amount = classBooking.Class.price
           } else {
             return NextResponse.json(
               { error: 'Reserva no encontrada' },
@@ -185,14 +185,14 @@ export async function POST(request: NextRequest) {
           }
         }
       } else {
-        booking.isGroup = false
+        (booking as any).isGroup = false
         amount = booking.price
       }
-      
+
       paymentType = 'full'
     }
 
-    const club = booking.Club || booking.club
+    const club = (booking as any).Club
     
     if (!club) {
       return NextResponse.json(
@@ -230,7 +230,7 @@ export async function POST(request: NextRequest) {
 
     // Inicializar Stripe con la llave correspondiente
     const stripe = new Stripe(stripeSecretKey, {
-      apiVersion: '2024-11-20.acacia'
+      apiVersion: '2025-08-27.basil'
     })
 
     // Check if there's already a payment with a valid Payment Intent
@@ -245,15 +245,15 @@ export async function POST(request: NextRequest) {
         console.log('Found existing Payment Intent for split payment:', splitPayment.stripePaymentIntentId)
         existingPaymentIntent = splitPayment.stripePaymentIntentId
       }
-    } else if (!booking.isClass) {
+    } else if (!(booking as any).isClass) {
       // Check if regular payment already has a payment intent
       const existingPayment = await prisma.payment.findFirst({
-        where: booking.isGroup 
+        where: (booking as any).isGroup
           ? { bookingGroupId: booking.id }
           : { bookingId: booking.id },
         orderBy: { createdAt: 'desc' } // Get the most recent payment
       })
-      console.log('Checking for existing payment for booking:', booking.id, 'isGroup:', booking.isGroup)
+      console.log('Checking for existing payment for booking:', booking.id, 'isGroup:', (booking as any).isGroup)
       console.log('Found existing payment:', existingPayment ? {
         id: existingPayment.id,
         status: existingPayment.status,
@@ -280,16 +280,16 @@ export async function POST(request: NextRequest) {
           existingPaymentIntent = null // Force creation of new payment intent
         }
       } catch (error) {
-        console.log('Could not retrieve Payment Intent, creating new one:', error.message)
+        console.log('Could not retrieve Payment Intent, creating new one:', (error as Error).message)
         existingPaymentIntent = null // Force creation of new payment intent
       }
     }
     
     if (!existingPaymentIntent) {
       // Create new payment intent only if needed
-      const courtInfo = booking.isGroup 
-        ? booking.bookings.map(b => b.court.name).join(', ')
-        : booking.court?.name || 'Cancha'
+      const courtInfo = (booking as any).isGroup
+        ? (booking as any).bookings.map((b: any) => b.Court?.name || b.court?.name || 'Cancha').join(', ')
+        : ((booking as any).Court?.name || (booking as any).court?.name || 'Cancha')
       
       paymentIntent = await stripe.paymentIntents.create({
         amount: amount, // Amount should be in cents (centavos)
@@ -302,9 +302,9 @@ export async function POST(request: NextRequest) {
           court_name: courtInfo,
           club_name: club.name,
           payment_type: paymentType,
-          is_group: booking.isGroup ? 'true' : 'false',
-          is_class: booking.isClass ? 'true' : 'false',
-          ...(booking.isClass && { class_booking_id: booking.id }),
+          is_group: (booking as any).isGroup ? 'true' : 'false',
+          is_class: (booking as any).isClass ? 'true' : 'false',
+          ...((booking as any).isClass && { class_booking_id: booking.id }),
           ...(splitPaymentId && { split_payment_id: splitPaymentId }),
         }
       })
@@ -330,10 +330,10 @@ export async function POST(request: NextRequest) {
       }
     } else {
       // For ClassBooking, we don't create a Payment record, we'll update the classBooking directly
-      if (!booking.isClass) {
+      if (!(booking as any).isClass) {
         // Create or update main payment record for regular bookings and groups
         const existingPayment = await prisma.payment.findFirst({
-          where: booking.isGroup 
+          where: (booking as any).isGroup
             ? { bookingGroupId: booking.id }
             : { bookingId: booking.id },
           orderBy: { createdAt: 'desc' }
@@ -359,7 +359,7 @@ export async function POST(request: NextRequest) {
           await prisma.payment.create({
             data: {
               id: `payment_${club.id}_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
-              ...(booking.isGroup 
+              ...((booking as any).isGroup
                 ? { bookingGroupId: booking.id }
                 : { bookingId: booking.id }),
               amount,
@@ -375,7 +375,7 @@ export async function POST(request: NextRequest) {
       }
 
       // Update booking, bookingGroup, or classBooking status
-      if (booking.isClass) {
+      if ((booking as any).isClass) {
         await prisma.classBooking.update({
           where: { id: booking.id },
           data: {
@@ -383,7 +383,7 @@ export async function POST(request: NextRequest) {
             paymentMethod: 'online',
           }
         })
-      } else if (booking.isGroup) {
+      } else if ((booking as any).isGroup) {
         await prisma.bookingGroup.update({
           where: { id: booking.id },
           data: {
@@ -411,13 +411,13 @@ export async function POST(request: NextRequest) {
         startTime: booking.startTime,
         endTime: booking.endTime,
         clubName: club.name,
-        courtName: booking.isGroup ? booking.bookings.map(b => b.court.name).join(', ') : booking.court?.name,
-        playerName: booking.isGroup ? booking.name : booking.playerName,
-        totalPlayers: booking.totalPlayers || 1,
-        price: booking.price,
-        splitPaymentEnabled: booking.splitPaymentEnabled || false,
-        splitPaymentCount: booking.splitPaymentCount || 0,
-        isGroup: booking.isGroup || false
+        courtName: (booking as any).isGroup ? (booking as any).bookings.map((b: any) => b.Court?.name || b.court?.name).join(', ') : ((booking as any).Court?.name || (booking as any).court?.name),
+        playerName: (booking as any).isGroup ? (booking as any).name : (booking as any).playerName,
+        totalPlayers: (booking as any).totalPlayers || 1,
+        price: (booking as any).price,
+        splitPaymentEnabled: (booking as any).splitPaymentEnabled || false,
+        splitPaymentCount: (booking as any).splitPaymentCount || 0,
+        isGroup: (booking as any).isGroup || false
       }
     })
 

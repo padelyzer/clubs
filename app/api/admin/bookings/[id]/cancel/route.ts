@@ -15,8 +15,8 @@ export async function POST(
     const booking = await prisma.booking.findUnique({
       where: { id },
       include: {
-        club: true,
-        court: true
+        Club: true,
+        Court: true
       }
     })
     

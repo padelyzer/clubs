@@ -41,14 +41,14 @@ export async function GET(
     const matchesWithConflicts = await prisma.tournamentMatch.findMany({
       where: {
         tournamentId: id,
-        resultSubmissions: {
+        ResultSubmissions: {
           some: {
             conflictStatus: 'pending'
           }
         }
       },
       include: {
-        resultSubmissions: {
+        ResultSubmissions: {
           where: {
             conflictStatus: 'pending'
           },
@@ -61,7 +61,7 @@ export async function GET(
 
     // Formatear los conflictos
     const conflicts = matchesWithConflicts.map(match => {
-      const results = match.resultSubmissions || []
+      const results = match.ResultSubmissions || []
       const team1Result = results.find((r: any) => r.submittedBy === 'team1')
       const team2Result = results.find((r: any) => r.submittedBy === 'team2')
 
@@ -92,7 +92,7 @@ export async function GET(
       where: {
         tournamentId: id,
         status: 'IN_PROGRESS',
-        resultSubmissions: {
+        ResultSubmissions: {
           some: {
             confirmed: false,
             conflictStatus: null
@@ -100,7 +100,7 @@ export async function GET(
         }
       },
       include: {
-        resultSubmissions: {
+        ResultSubmissions: {
           where: {
             confirmed: false
           }
@@ -110,10 +110,10 @@ export async function GET(
     })
 
     // Filtrar para obtener solo los que tienen exactamente 1 resultado
-    const pendingConfirmation = pendingResults.filter(match => 
-      match.resultSubmissions.length === 1
+    const pendingConfirmation = pendingResults.filter(match =>
+      match.ResultSubmissions.length === 1
     ).map(match => {
-      const result = match.resultSubmissions[0]
+      const result = match.ResultSubmissions[0]
       return {
         matchId: match.id,
         team1Name: match.team1Name,

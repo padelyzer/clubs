@@ -64,11 +64,11 @@ export async function GET(request: NextRequest) {
     const classes = await prisma.class.findMany({
       where,
       include: {
-        instructor: true,
-        court: true,
-        bookings: {
+        Instructor: true,
+        Court: true,
+        ClassBooking: {
           include: {
-            player: true
+            Player: true
           }
         }
       },
@@ -80,8 +80,8 @@ export async function GET(request: NextRequest) {
     
     classes.forEach(cls => {
       const instructorId = cls.instructorId || 'unassigned'
-      const instructorName = cls.instructor?.name || 'Sin asignar'
-      
+      const instructorName = cls.Instructor?.name || 'Sin asignar'
+
       if (!instructorStats.has(instructorId)) {
         instructorStats.set(instructorId, {
           id: instructorId,
@@ -99,26 +99,26 @@ export async function GET(request: NextRequest) {
           classes: []
         })
       }
-      
+
       const stats = instructorStats.get(instructorId)
       stats.totalClasses++
-      
+
       if (cls.status === 'COMPLETED') {
         stats.completedClasses++
       } else if (cls.status === 'CANCELLED') {
         stats.cancelledClasses++
       }
-      
+
       // Calculate attendance and revenue
       let classRevenue = 0
       let collectedRevenue = 0
       let presentCount = 0
       let absentCount = 0
       let lateCount = 0
-      
-      cls.bookings.forEach(booking => {
+
+      cls.ClassBooking.forEach((booking: any) => {
         stats.totalStudents++
-        
+
         if (booking.attendanceStatus === 'PRESENT') {
           stats.totalAttended++
           presentCount++
@@ -129,38 +129,40 @@ export async function GET(request: NextRequest) {
           stats.totalLate++
           lateCount++
         }
-        
-        classRevenue += booking.dueAmount || cls.price
+
+        // Use class price instead of dueAmount
+        const dueAmount = cls.price
+        classRevenue += dueAmount
         if (booking.paymentStatus === 'completed') {
           collectedRevenue += booking.paidAmount || 0
         }
       })
-      
+
       stats.totalRevenue += classRevenue
       stats.collectedRevenue += collectedRevenue
       stats.pendingRevenue += (classRevenue - collectedRevenue)
-      
+
       // Add class details
       stats.classes.push({
         id: cls.id,
         name: cls.name,
         date: cls.date,
         time: `${cls.startTime} - ${cls.endTime}`,
-        court: cls.court?.name,
+        court: cls.Court?.name,
         status: cls.status,
-        students: cls.bookings.length,
+        students: cls.ClassBooking.length,
         maxStudents: cls.maxStudents,
         attendance: {
           present: presentCount,
           absent: absentCount,
           late: lateCount,
-          pending: cls.bookings.length - (presentCount + absentCount + lateCount)
+          pending: cls.ClassBooking.length - (presentCount + absentCount + lateCount)
         },
         revenue: classRevenue,
         collected: collectedRevenue,
         pending: classRevenue - collectedRevenue,
-        attendanceRate: cls.bookings.length > 0 
-          ? Math.round(((presentCount + lateCount) / cls.bookings.length) * 100)
+        attendanceRate: cls.ClassBooking.length > 0
+          ? Math.round(((presentCount + lateCount) / cls.ClassBooking.length) * 100)
           : 0
       })
     })
@@ -216,7 +218,7 @@ export async function GET(request: NextRequest) {
     
     if (error instanceof z.ZodError) {
       return NextResponse.json(
-        { success: false, error: 'Parámetros inválidos', details: error.errors },
+        { success: false, error: 'Parámetros inválidos', details: error.issues },
         { status: 400 }
       )
     }

@@ -17,7 +17,7 @@ interface BracketMatch {
     winner?: boolean
   }
   date?: string
-  court?: any
+  court?: { name: string }
   courtName?: string
   scheduledAt?: string
   startTime?: string
@@ -25,12 +25,31 @@ interface BracketMatch {
   status: 'pending' | 'in_progress' | 'completed'
 }
 
+interface Tournament {
+  id: string
+  name: string
+  [key: string]: unknown
+}
+
+interface Jornada {
+  id: string
+  stage: string
+  modality: string
+  category: string
+  division: string
+  date: string
+  startTime: string
+  endTime: string
+  courtNames?: string[]
+  status: 'pending' | 'in_progress' | 'completed'
+}
+
 interface TournamentBracketModalProps {
   isOpen: boolean
   onClose: () => void
-  tournament: any
+  tournament: Tournament
   matches?: BracketMatch[]
-  jornadas?: any[]
+  jornadas?: Jornada[]
 }
 
 export function TournamentBracketModal({
@@ -46,8 +65,8 @@ export function TournamentBracketModal({
   if (!isOpen || !tournament) return null
 
   // Generar estructura de bracket con datos reales
-  const generateBracketStructure = () => {
-    const rounds = {
+  const generateBracketStructure = (): Record<string, BracketMatch[]> => {
+    const rounds: Record<string, BracketMatch[]> = {
       'Grupos': [],
       'Octavos': [],
       'Cuartos': [],
@@ -57,28 +76,33 @@ export function TournamentBracketModal({
 
     // Usar matches reales si existen
     console.log('First match data:', matches[0]) // Debug log
-    const realMatches: BracketMatch[] = matches.map(match => {
-      const bracketMatch = {
-        id: match.id,
-        round: match.round || 'Grupos',
+    const realMatches: BracketMatch[] = matches.map((match: unknown) => {
+      const m = match as Record<string, unknown>
+      const team1 = m.team1 as Record<string, unknown> | undefined
+      const team2 = m.team2 as Record<string, unknown> | undefined
+      const court = m.court as Record<string, unknown> | undefined
+
+      const bracketMatch: BracketMatch = {
+        id: String(m.id || ''),
+        round: String(m.round || 'Grupos'),
         team1: {
-          name: match.team1?.teamName || 'Por definir',
-          score: match.team1Score,
-          winner: match.winner === match.team1?.teamName
+          name: String(team1?.teamName || 'Por definir'),
+          score: m.team1Score as number | undefined,
+          winner: m.winner === team1?.teamName
         },
         team2: {
-          name: match.team2?.teamName || 'Por definir',
-          score: match.team2Score,
-          winner: match.winner === match.team2?.teamName
+          name: String(team2?.teamName || 'Por definir'),
+          score: m.team2Score as number | undefined,
+          winner: m.winner === team2?.teamName
         },
-        date: match.matchDate,
-        court: match.court,
-        courtName: match.court?.name,
-        scheduledAt: match.scheduledAt || match.matchDate,
-        startTime: match.startTime,
-        endTime: match.endTime,
-        status: match.status === 'completed' ? 'completed' : 
-                match.status === 'in_progress' ? 'in_progress' : 'pending'
+        date: m.matchDate as string | undefined,
+        court: court ? { name: String(court.name || '') } : undefined,
+        courtName: court?.name as string | undefined,
+        scheduledAt: (m.scheduledAt || m.matchDate) as string | undefined,
+        startTime: m.startTime as string | undefined,
+        endTime: m.endTime as string | undefined,
+        status: m.status === 'completed' ? 'completed' :
+                m.status === 'in_progress' ? 'in_progress' : 'pending'
       }
       console.log('Bracket match:', { 
         id: bracketMatch.id, 
@@ -287,7 +311,7 @@ export function TournamentBracketModal({
             {['all', 'masculine', 'feminine', 'mixed'].map(modality => (
               <button
                 key={modality}
-                onClick={() => setSelectedModality(modality as any)}
+                onClick={() => setSelectedModality(modality as 'all' | 'masculine' | 'feminine' | 'mixed')}
                 style={{
                   padding: '6px 12px',
                   background: selectedModality === modality ? '#182A01' : 'white',

@@ -1140,7 +1140,7 @@ export function CalendarView() {
                   Check-in
                 </ButtonModern>
                 <ButtonModern
-                  variant="danger"
+                  variant="ghost"
                   onClick={() => {
                     // TODO: Implement cancel
                     notify.error('Reserva cancelada')

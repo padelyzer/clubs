@@ -134,9 +134,9 @@ export function handleApiError(error: unknown): NextResponse {
   // Log unexpected errors with full details
   console.error('[API Error] Unexpected error in handleApiError:', {
     error,
-    message: error?.message || 'Unknown error',
-    stack: error?.stack,
-    type: error?.constructor?.name,
+    message: (error as Error)?.message || 'Unknown error',
+    stack: (error as Error)?.stack,
+    type: (error as Error)?.constructor?.name,
   })
   
   // In production, send to Sentry
@@ -150,13 +150,13 @@ export function handleApiError(error: unknown): NextResponse {
   return NextResponse.json(
     {
       error: {
-        message: error?.message || 'An unexpected error occurred',
+        message: (error as Error)?.message || 'An unexpected error occurred',
         code: 'INTERNAL_SERVER_ERROR',
-        ...(isDev && { 
+        ...(isDev && {
           details: {
-            message: error?.message,
-            stack: error?.stack?.split('\n').slice(0, 5),
-            type: error?.constructor?.name
+            message: (error as Error)?.message,
+            stack: (error as Error)?.stack?.split('\n').slice(0, 5),
+            type: (error as Error)?.constructor?.name
           }
         })
       }

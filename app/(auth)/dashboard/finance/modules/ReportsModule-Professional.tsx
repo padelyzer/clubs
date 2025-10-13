@@ -638,7 +638,7 @@ export default function ReportsModuleProfessional() {
                     Indicadores Clave (KPIs)
                   </h3>
                   <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '16px' }}>
-                    {kpis.map((kpi, index) => (
+                    {kpis.map((kpi: any, index: number) => (
                       <div
                         key={index}
                         style={{

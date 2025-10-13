@@ -59,7 +59,7 @@ export class PaymentService {
       
       if (!this.stripeInstances.has(cacheKey)) {
         const stripe = new Stripe(stripeProvider.config.secretKey, {
-          apiVersion: '2024-12-18.acacia'
+          apiVersion: '2025-08-27.basil'
         })
         this.stripeInstances.set(cacheKey, stripe)
       }
@@ -122,28 +122,28 @@ export class PaymentService {
           {
             key: 'player1_name',
             label: {
-              type: 'text',
-              text: 'Nombre Jugador 1'
+              type: 'custom',
+              custom: 'Nombre Jugador 1'
             },
             type: 'text'
           },
           {
-            key: 'player2_name', 
+            key: 'player2_name',
             label: {
-              type: 'text',
-              text: 'Nombre Jugador 2'
+              type: 'custom',
+              custom: 'Nombre Jugador 2'
             },
             type: 'text'
           }
         ]
       }
 
-      // Add expiration if specified
-      if (options.expiresAfter) {
-        const expirationDate = new Date()
-        expirationDate.setMinutes(expirationDate.getMinutes() + options.expiresAfter)
-        linkOptions.expires_at = Math.floor(expirationDate.getTime() / 1000)
-      }
+      // Add expiration if specified (removed due to API changes)
+      // if (options.expiresAfter) {
+      //   const expirationDate = new Date()
+      //   expirationDate.setMinutes(expirationDate.getMinutes() + options.expiresAfter)
+      //   linkOptions.expires_at = Math.floor(expirationDate.getTime() / 1000)
+      // }
 
       // Add marketplace configuration
       if (club?.stripeAccountId && applicationFee > 0) {

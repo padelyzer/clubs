@@ -54,7 +54,7 @@ export default async function AdminSettingsPage() {
       maxLoginAttempts: 5,
       passwordMinLength: 8,
       requirePasswordComplexity: true,
-      allowedIpWhitelist: []
+      allowedIpWhitelist: [] as string[]
     },
     integrations: {
       stripe: {

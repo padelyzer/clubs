@@ -216,7 +216,7 @@ export default function PaymentSuccessPage() {
                 </div>
                 <div className="flex gap-3 justify-center">
                   <Link href={`/tournament/${params.slug}`}>
-                    <Button variant="outline">Ver Torneo</Button>
+                    <Button variant="secondary">Ver Torneo</Button>
                   </Link>
                   <Link href="/">
                     <Button>Ir al Inicio</Button>
@@ -232,7 +232,7 @@ export default function PaymentSuccessPage() {
                     ⏳ Tu pago está siendo procesado. Te notificaremos una vez que se confirme.
                   </p>
                 </div>
-                <Button onClick={fetchPaymentStatus} variant="outline">
+                <Button onClick={fetchPaymentStatus} variant="secondary">
                   Verificar Estado
                 </Button>
               </div>
@@ -253,7 +253,7 @@ export default function PaymentSuccessPage() {
                     <Button>Intentar Nuevamente</Button>
                   </Link>
                   <Link href={`/tournament/${params.slug}`}>
-                    <Button variant="outline">Ver Torneo</Button>
+                    <Button variant="secondary">Ver Torneo</Button>
                   </Link>
                 </div>
               </div>

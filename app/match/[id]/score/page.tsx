@@ -26,9 +26,12 @@ type Match = {
   court?: {
     name: string
   }
-  tournament: {
+  Court?: {
     name: string
-    club: {
+  }
+  Tournament: {
+    name: string
+    Club: {
       name: string
     }
   }
@@ -371,10 +374,10 @@ export default function MatchScorePage() {
             color: '#182A01',
             marginBottom: '8px'
           }}>
-            {match?.tournament.name}
+            {match?.Tournament.name}
           </h1>
           <p style={{ color: '#516640', marginBottom: '24px' }}>
-            {match?.tournament.club.name}
+            {match?.Tournament.Club.name}
           </p>
 
           {/* Match Info */}

@@ -71,7 +71,7 @@ export async function GET(request: NextRequest) {
         ...(Object.keys(dateFilter).length > 0 && { date: dateFilter })
       },
       include: {
-        booking: {
+        Booking: {
           select: {
             id: true,
             date: true,
@@ -80,7 +80,7 @@ export async function GET(request: NextRequest) {
             paymentStatus: true,
           }
         },
-        bookingGroup: {
+        BookingGroup: {
           select: {
             id: true,
             date: true,
@@ -98,22 +98,22 @@ export async function GET(request: NextRequest) {
     // Get split payments for the period
     const splitPayments = await prisma.splitPayment.findMany({
       where: {
-        booking: {
+        Booking: {
           clubId: session.clubId
         },
         status: 'completed',
-        ...(Object.keys(dateFilter).length > 0 && { 
-          completedAt: dateFilter 
+        ...(Object.keys(dateFilter).length > 0 && {
+          completedAt: dateFilter
         })
       },
       include: {
-        booking: {
+        Booking: {
           select: {
             id: true,
             date: true,
             startTime: true,
             playerName: true,
-            court: {
+            Court: {
               select: { name: true }
             }
           }
@@ -177,7 +177,7 @@ export async function GET(request: NextRequest) {
         date: t.date,
         description: t.description,
         reference: t.reference,
-        bookingInfo: t.booking || t.bookingGroup,
+        bookingInfo: t.Booking || t.BookingGroup,
       })),
       ...splitPayments.slice(0, 10).map(sp => ({
         id: sp.id,
@@ -186,7 +186,7 @@ export async function GET(request: NextRequest) {
         date: sp.completedAt!,
         description: `Pago dividido - ${sp.playerName}`,
         reference: sp.stripeChargeId,
-        bookingInfo: sp.booking,
+        bookingInfo: sp.Booking,
       }))
     ].sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()).slice(0, 15)
 

@@ -59,6 +59,8 @@ interface CheckInModalProps {
     splitPayments?: SplitPayment[]
     // For groups
     isGroup?: boolean
+    name?: string // Group name
+    courtNames?: string // Multiple courts for groups
     // For classes
     isClass?: boolean
     className?: string
@@ -107,8 +109,8 @@ export function CheckInModal({
   
   // For class split view
   const [studentCheckIns, setStudentCheckIns] = useState<Record<string, {
-    attendance: 'PRESENT' | 'LATE' | 'ABSENT'
-    paymentMethod?: 'CASH' | 'CARD' | 'TRANSFER' | 'ONLINE'
+    attendance?: 'PRESENT' | 'LATE' | 'ABSENT'
+    paymentMethod?: 'CASH' | 'CARD' | 'TRANSFER' | 'ONLINE' | 'SAVED'
     paymentReference?: string
     paymentAmount?: number
   }>>({})

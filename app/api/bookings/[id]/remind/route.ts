@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/config/prisma'
 import { z } from 'zod'
+import { v4 as uuidv4 } from 'uuid'
 
 const remindSchema = z.object({
   splitPaymentId: z.string().optional(),
@@ -24,8 +25,8 @@ export async function POST(
     const booking = await prisma.booking.findUnique({
       where: { id: bookingId },
       include: {
-        court: true,
-        splitPayments: true
+        Court: true,
+        SplitPayment: true
       }
     })
 
@@ -70,18 +71,20 @@ export async function POST(
       // Create reminder notification for specific player
       const notification = await prisma.notification.create({
         data: {
+          id: uuidv4(),
           bookingId,
           splitPaymentId: splitPayment.id,
           type: 'WHATSAPP',
           template: 'SPLIT_PAYMENT_REMINDER',
           recipient: splitPayment.playerPhone,
-          status: 'pending'
+          status: 'pending',
+          updatedAt: new Date()
         }
       })
 
       // Format reminder message
-      const reminderMessage = validatedData.message || 
-        `Hola ${splitPayment.playerName}, tienes un pago pendiente de $${(splitPayment.amount / 100).toFixed(2)} MXN para la reserva de pádel el ${booking.date.toLocaleDateString('es-MX')} a las ${booking.startTime} en ${booking.court.name}. Por favor realiza tu pago lo antes posible.`
+      const reminderMessage = validatedData.message ||
+        `Hola ${splitPayment.playerName}, tienes un pago pendiente de $${(splitPayment.amount / 100).toFixed(2)} MXN para la reserva de pádel el ${booking.date.toLocaleDateString('es-MX')} a las ${booking.startTime} en ${booking.Court.name}. Por favor realiza tu pago lo antes posible.`
 
       return NextResponse.json({
         success: true,
@@ -103,7 +106,7 @@ export async function POST(
         )
       }
 
-      const pendingPayments = booking.splitPayments.filter(
+      const pendingPayments = booking.SplitPayment.filter(
         sp => sp.status === 'pending' && sp.playerPhone
       )
 
@@ -116,15 +119,17 @@ export async function POST(
 
       // Create notifications for all pending payments
       const notifications = await Promise.all(
-        pendingPayments.map(sp => 
+        pendingPayments.map(sp =>
           prisma.notification.create({
             data: {
+              id: uuidv4(),
               bookingId,
               splitPaymentId: sp.id,
               type: 'WHATSAPP',
               template: 'SPLIT_PAYMENT_REMINDER',
               recipient: sp.playerPhone,
-              status: 'pending'
+              status: 'pending',
+              updatedAt: new Date()
             }
           })
         )
@@ -178,7 +183,7 @@ export async function GET(
         }
       },
       include: {
-        splitPayment: {
+        SplitPayment: {
           select: {
             playerName: true,
             amount: true
@@ -197,8 +202,8 @@ export async function GET(
         recipient: n.recipient,
         status: n.status,
         sentAt: n.sentAt,
-        playerName: n.splitPayment?.playerName,
-        amount: n.splitPayment?.amount,
+        playerName: n.SplitPayment?.playerName,
+        amount: n.SplitPayment?.amount,
         type: n.template
       })),
       total: notifications.length

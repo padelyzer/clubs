@@ -6,7 +6,7 @@ import { QrCode, Check, X, Camera, UserCheck, Download, Share2, Smartphone } fro
 import { Card } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
-import { useToast } from '@/hooks/use-toast'
+import { useNotify } from '@/hooks/use-notify'
 
 interface Registration {
   id: string
@@ -32,7 +32,7 @@ export function QRCheckIn({ tournamentId, registrations, onCheckIn }: QRCheckInP
   const [checkInCode, setCheckInCode] = useState('')
   const videoRef = useRef<HTMLVideoElement>(null)
   const streamRef = useRef<MediaStream | null>(null)
-  const { toast } = useToast()
+  const { notify } = useNotify()
 
   useEffect(() => {
     generateQRCodes()
@@ -85,11 +85,7 @@ export function QRCheckIn({ tournamentId, registrations, onCheckIn }: QRCheckInP
       }
     } catch (error) {
       console.error('Error accessing camera:', error)
-      toast({
-        title: 'Error',
-        description: 'No se pudo acceder a la cámara',
-        variant: 'destructive'
-      })
+      notify.error('No se pudo acceder a la cámara')
       setScanning(false)
     }
   }
@@ -109,18 +105,11 @@ export function QRCheckIn({ tournamentId, registrations, onCheckIn }: QRCheckInP
       const data = JSON.parse(checkInCode)
       if (data.tournamentId === tournamentId && data.registrationId) {
         await onCheckIn(data.registrationId)
-        toast({
-          title: 'Check-in exitoso',
-          description: 'El jugador ha sido registrado correctamente'
-        })
+        notify.success('El jugador ha sido registrado correctamente')
         setCheckInCode('')
       }
     } catch (error) {
-      toast({
-        title: 'Código inválido',
-        description: 'El código QR no es válido para este torneo',
-        variant: 'destructive'
-      })
+      notify.error('El código QR no es válido para este torneo')
     }
   }
 
@@ -149,10 +138,7 @@ export function QRCheckIn({ tournamentId, registrations, onCheckIn }: QRCheckInP
       // Fallback: copiar enlace
       const checkInUrl = `${window.location.origin}/checkin/${tournamentId}/${registration.id}`
       await navigator.clipboard.writeText(checkInUrl)
-      toast({
-        title: 'Enlace copiado',
-        description: 'El enlace de check-in ha sido copiado al portapapeles'
-      })
+      notify.success('El enlace de check-in ha sido copiado al portapapeles')
     }
   }
 

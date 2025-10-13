@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/config/prisma'
 import { syncClassStudentCounter } from '@/lib/utils/class-counter'
+import { v4 as uuidv4 } from 'uuid'
 
 // GET - Get class booking details
 export async function GET(
@@ -14,13 +15,13 @@ export async function GET(
     const classBooking = await prisma.classBooking.findUnique({
       where: { id },
       include: {
-        class: {
+        Class: {
           include: {
-            instructor: true,
-            court: true
+            Instructor: true,
+            Court: true
           }
         },
-        player: true
+        Player: true
       }
     })
 
@@ -58,7 +59,7 @@ export async function DELETE(
     const classBooking = await prisma.classBooking.findUnique({
       where: { id },
       include: {
-        class: true
+        Class: true
       }
     })
 
@@ -69,8 +70,8 @@ export async function DELETE(
       )
     }
 
-    // Check if already attended - cannot cancel after attendance
-    if (classBooking.attended) {
+    // Check if already checked in - cannot cancel after attendance
+    if (classBooking.checkedIn) {
       return NextResponse.json(
         { success: false, error: 'No se puede cancelar una inscripción después de asistir a la clase' },
         { status: 400 }
@@ -92,35 +93,27 @@ export async function DELETE(
       if (classBooking.paymentStatus === 'completed' && classBooking.paidAmount > 0) {
         await tx.transaction.create({
           data: {
-            clubId: classBooking.class.clubId,
+            id: uuidv4(),
+            clubId: classBooking.Class.clubId,
             type: 'EXPENSE',
-            category: 'REFUND',
+            category: 'CLASS',
             amount: classBooking.paidAmount,
             currency: 'MXN',
-            description: `Reembolso por cancelación: ${classBooking.class.name} - ${classBooking.studentName}`,
+            description: `Reembolso por cancelación: ${classBooking.Class.name} - ${classBooking.playerName}`,
             date: new Date(),
             reference: `REFUND_${classBooking.id}`,
             notes: JSON.stringify({
               classId: classBooking.classId,
               classBookingId: classBooking.id,
-              studentName: classBooking.studentName,
-              className: classBooking.class.name,
+              studentName: classBooking.playerName,
+              className: classBooking.Class.name,
               originalAmount: classBooking.paidAmount,
               reason: 'CANCELLATION'
-            })
+            }),
+            updatedAt: new Date()
           }
         })
       }
-
-      // Create notification for cancellation
-      await tx.notification.create({
-        data: {
-          type: 'WHATSAPP',
-          recipient: classBooking.studentPhone,
-          template: 'class_booking_cancelled',
-          status: 'pending'
-        }
-      })
     })
 
     // Sync class student counter after cancellation
@@ -128,7 +121,7 @@ export async function DELETE(
 
     return NextResponse.json({
       success: true,
-      message: `Inscripción cancelada para ${classBooking.studentName}`,
+      message: `Inscripción cancelada para ${classBooking.playerName}`,
       refund: classBooking.paymentStatus === 'completed' ? classBooking.paidAmount : 0
     })
 
@@ -158,13 +151,13 @@ export async function PUT(
         updatedAt: new Date()
       },
       include: {
-        class: {
+        Class: {
           include: {
-            instructor: true,
-            court: true
+            Instructor: true,
+            Court: true
           }
         },
-        player: true
+        Player: true
       }
     })
 

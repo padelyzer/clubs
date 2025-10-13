@@ -44,6 +44,7 @@ type Booking = {
   // BookingGroup fields
   isGroup?: boolean
   courtNames?: string
+  name?: string // Group or class name
   // Class fields
   isClass?: boolean
 }
@@ -338,7 +339,7 @@ function BookingsPageContent() {
           studentEmail: student.studentEmail,
           attendanceStatus: student.currentStatus?.attendanceStatus || 'PENDING',
           paymentStatus: student.currentStatus?.paymentStatus || 'pending',
-          paymentMethod: undefined,
+          paymentMethod: undefined as string | undefined,
           paymentAmount: student.currentStatus?.dueAmount || 0,
           dueAmount: student.currentStatus?.dueAmount || 0,
           paidAmount: student.currentStatus?.paidAmount || 0
@@ -362,7 +363,7 @@ function BookingsPageContent() {
         } else {
           notify.info({
             title: 'Sin link de WhatsApp',
-            description: 'No hay notificación de WhatsApp para esta reserva'
+            message: 'No hay notificación de WhatsApp para esta reserva'
           })
         }
       }
@@ -476,13 +477,13 @@ function BookingsPageContent() {
     try {
       // Convert payment method to uppercase if present
       if (checkInData.paymentMethod) {
-        const methodMap: { [key: string]: string } = {
+        const methodMap: Record<string, string> = {
           'cash': 'CASH',
           'terminal': 'CARD',
           'transfer': 'TRANSFER',
           'online': 'ONLINE'
         }
-        checkInData.paymentMethod = methodMap[checkInData.paymentMethod] || checkInData.paymentMethod.toUpperCase()
+        checkInData.paymentMethod = methodMap[checkInData.paymentMethod as string] || (checkInData.paymentMethod as string).toUpperCase()
       }
 
       // Check if this is a class booking and use the appropriate endpoint
@@ -502,8 +503,8 @@ function BookingsPageContent() {
           endpoint = `/api/classes/${classId}/bulk-checkin`
           // For classes, adapt the check-in data format
           requestBody = {
-            paymentMethod: checkInData.paymentMethod,
-            paymentAmount: checkInData.paymentAmount || checkInData.price,
+            paymentMethod: checkInData.paymentMethod as string,
+            paymentAmount: checkInData.paymentAmount || (checkInData as any).price,
             markAllPresent: true,
             notes: checkInData.notes || 'Check-in masivo desde reservas'
           }
@@ -1170,7 +1171,7 @@ function BookingsPageContent() {
                                         studentEmail: student.studentEmail,
                                         attendanceStatus: student.currentStatus?.attendanceStatus || 'PENDING',
                                         paymentStatus: student.currentStatus?.paymentStatus || 'pending',
-                                        paymentMethod: undefined,
+                                        paymentMethod: undefined as string | undefined,
                                         paymentAmount: student.currentStatus?.dueAmount || data.class?.price || 0,
                                         dueAmount: student.currentStatus?.dueAmount || data.class?.price || 0,
                                         paidAmount: student.currentStatus?.paidAmount || 0
@@ -1265,7 +1266,15 @@ function BookingsPageContent() {
           onClose={() => setIsCreating(false)}
           onSubmit={handleCreateBooking}
           courts={courts}
-          existingBookings={bookings}
+          existingBookings={bookings.map(b => ({
+            id: b.id,
+            courtId: b.court.id,
+            date: b.date,
+            startTime: b.startTime,
+            endTime: b.endTime,
+            playerName: b.playerName,
+            status: b.status
+          }))}
           operatingHours={operatingHours}
           mode="create"
           paymentSettings={paymentSettings}

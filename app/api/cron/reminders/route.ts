@@ -24,7 +24,7 @@ export async function GET(request: NextRequest) {
           lte: new Date(Date.now() + 24 * 60 * 60 * 1000) // Within next 24 hours
         },
         // Check if reminder not already sent
-        notifications: {
+        Notification: {
           none: {
             template: 'BOOKING_REMINDER',
             status: {
@@ -34,8 +34,8 @@ export async function GET(request: NextRequest) {
         }
       },
       include: {
-        club: true,
-        court: true
+        Club: true,
+        Court: true
       }
     })
 
@@ -53,14 +53,14 @@ export async function GET(request: NextRequest) {
         const isInReminderWindow = timeDiff >= (1.5 * 60 * 60 * 1000) && timeDiff <= (2.5 * 60 * 60 * 1000)
         
         if (isInReminderWindow) {
-          console.log(`[Cron] Sending reminder for booking: ${booking.id} (${booking.club.name} - ${booking.court.name})`)
-          
+          console.log(`[Cron] Sending reminder for booking: ${booking.id} (${booking.Club.name} - ${booking.Court.name})`)
+
           const result = await WhatsAppService.sendBookingReminder(booking.id)
-          
+
           results.push({
             bookingId: booking.id,
-            clubName: booking.club.name,
-            courtName: booking.court.name,
+            clubName: booking.Club.name,
+            courtName: booking.Court.name,
             playerName: booking.playerName,
             bookingTime: booking.startTime,
             timeDiff: Math.round(timeDiff / (60 * 1000)), // minutes
@@ -85,13 +85,13 @@ export async function GET(request: NextRequest) {
         createdAt: {
           lte: new Date(Date.now() - 24 * 60 * 60 * 1000) // Created more than 24h ago
         },
-        splitPayments: {
+        SplitPayment: {
           some: {
             status: 'pending'
           }
         },
         // Check if overdue reminder not already sent
-        notifications: {
+        Notification: {
           none: {
             template: 'PAYMENT_OVERDUE',
             createdAt: {
@@ -101,8 +101,8 @@ export async function GET(request: NextRequest) {
         }
       },
       include: {
-        club: true,
-        splitPayments: {
+        Club: true,
+        SplitPayment: {
           where: { status: 'pending' }
         }
       }
@@ -113,7 +113,7 @@ export async function GET(request: NextRequest) {
     for (const booking of overduePayments) {
       try {
         // Send overdue payment reminders
-        for (const splitPayment of booking.splitPayments) {
+        for (const splitPayment of booking.SplitPayment) {
           console.log(`[Cron] Sending overdue payment reminder to: ${splitPayment.playerPhone}`)
           
           // For now, reuse the payment pending template

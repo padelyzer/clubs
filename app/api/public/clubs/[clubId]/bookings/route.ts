@@ -56,7 +56,7 @@ export async function GET(
         endTime: true,
         duration: true,
         status: true,
-        court: {
+        Court: {
           select: {
             id: true,
             name: true

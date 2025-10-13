@@ -30,6 +30,7 @@ interface PayrollRecord {
   id: string
   employeeId: string
   employeeName: string
+  employeeRole?: string
   period: string
   baseSalary: number
   bonuses: number
@@ -945,23 +946,30 @@ export default function PayrollModuleProfessional() {
               </h3>
               <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
                 {(() => {
+                  interface DepartmentStats {
+                    name: string
+                    employees: number
+                    amount: number
+                    color: string
+                  }
+
                   const departments = payrollRecords.reduce((acc, record) => {
                     const dept = record.employeeRole?.includes('Instructor') ? 'Instructores' : 'Empleados'
                     if (!acc[dept]) {
-                      acc[dept] = { 
-                        name: dept, 
-                        employees: 0, 
-                        amount: 0, 
-                        color: dept === 'Instructores' ? '#9333EA' : '#3B82F6' 
+                      acc[dept] = {
+                        name: dept,
+                        employees: 0,
+                        amount: 0,
+                        color: dept === 'Instructores' ? '#9333EA' : '#3B82F6'
                       }
                     }
                     acc[dept].employees += 1
                     acc[dept].amount += record.netAmount
                     return acc
-                  }, {})
-                  
+                  }, {} as Record<string, DepartmentStats>)
+
                   const totalAmount = Object.values(departments).reduce((sum, dept) => sum + dept.amount, 0)
-                  
+
                   return Object.values(departments).map((dept, index) => (
                     <div key={index}>
                       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '6px' }}>

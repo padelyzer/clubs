@@ -28,12 +28,12 @@ export async function POST(request: NextRequest) {
 
     // Validate notification type
     const validTypes: NotificationType[] = [
-      'BOOKING_CONFIRMATION',
-      'PAYMENT_REMINDER', 
-      'BOOKING_CANCELLATION',
-      'SPLIT_PAYMENT_REQUEST',
-      'SPLIT_PAYMENT_COMPLETED',
-      'GENERAL'
+      'WHATSAPP',
+      'EMAIL',
+      'SMS',
+      'REMINDER',
+      'PAYMENT_REMINDER',
+      'CANCELLATION'
     ]
 
     if (!validTypes.includes(notificationType)) {

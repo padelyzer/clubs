@@ -6,18 +6,18 @@ export async function GET(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
+  const paramData = await params
+  const { id } = paramData
+
   try {
     const session = await requireAuthAPI()
-    
+
     if (!session) {
       return NextResponse.json(
         { success: false, error: 'No autorizado' },
         { status: 401 }
       )
     }
-
-    const paramData = await params
-    const { id } = paramData
     
     console.log('[Check Payment] Checking payment for booking:', id)
 

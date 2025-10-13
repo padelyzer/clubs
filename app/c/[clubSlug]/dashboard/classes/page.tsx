@@ -42,7 +42,7 @@ type Class = {
   endTime: string
   duration: number
   courtId?: string
-  court?: {/* id: string; name: string */}
+  court?: { id: string; name: string }
   maxStudents: number
   currentStudents: number
   price: number
@@ -66,17 +66,17 @@ const classTypes = {
 }
 
 const classLevels = {
-  BEGINNER: {/* label: 'Principiante', color: '#16a34a' */},
-  INTERMEDIATE: {/* label: 'Intermedio', color: '#eab308' */},
-  ADVANCED: {/* label: 'Avanzado', color: '#dc2626' */},
-  ALL_LEVELS: {/* label: 'Todos los niveles', color: '#8b5cf6' */}
+  BEGINNER: { label: 'Principiante', color: '#16a34a' },
+  INTERMEDIATE: { label: 'Intermedio', color: '#eab308' },
+  ADVANCED: { label: 'Avanzado', color: '#dc2626' },
+  ALL_LEVELS: { label: 'Todos los niveles', color: '#8b5cf6' }
 }
 
 const classStatuses = {
-  SCHEDULED: {/* label: 'Programada', color: '#3b82f6' */},
-  IN_PROGRESS: {/* label: 'En Progreso', color: '#eab308' */},
-  COMPLETED: {/* label: 'Completada', color: '#16a34a' */},
-  CANCELLED: {/* label: 'Cancelada', color: '#ef4444' */}
+  SCHEDULED: { label: 'Programada', color: '#3b82f6' },
+  IN_PROGRESS: { label: 'En Progreso', color: '#eab308' },
+  COMPLETED: { label: 'Completada', color: '#16a34a' },
+  CANCELLED: { label: 'Cancelada', color: '#ef4444' }
 }
 
 function ClassesContent() {
@@ -123,7 +123,7 @@ function ClassesContent() {
     loading: boolean
     available: boolean | null
     message: string
-    conflicts: any[]
+    conflicts: any[] | { bookings?: any[]; classes?: any[] }
     alternatives: any[]
   }>({
     loading: false,
@@ -2054,10 +2054,10 @@ function ClassesContent() {
                           {availabilityCheck.conflicts && (
                             <div style={{/* fontSize: '12px', color: '#7f1d1d', marginBottom: '8px' */}}>
                               Conflictos:
-                              {availabilityCheck.conflicts.bookings?.map((b: any, i: number) => (
+                              {!Array.isArray(availabilityCheck.conflicts) && availabilityCheck.conflicts.bookings?.map((b: any, i: number) => (
                                 <div key={i}>• Reserva: {b.courtName} ({b.startTime} - {b.endTime})</div>
                               ))}
-                              {availabilityCheck.conflicts.classes?.map((c: any, i: number) => (
+                              {!Array.isArray(availabilityCheck.conflicts) && availabilityCheck.conflicts.classes?.map((c: any, i: number) => (
                                 <div key={i}>• Clase: {c.className} ({c.startTime} - {c.endTime})</div>
                               ))}
                             </div>

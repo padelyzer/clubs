@@ -24,10 +24,7 @@ export async function GET() {
       } : null,
       cookies: allCookies.map(c => ({
         name: c.name,
-        value: c.value.substring(0, 20) + '...',
-        httpOnly: c.httpOnly,
-        secure: c.secure,
-        sameSite: c.sameSite
+        value: c.value.substring(0, 20) + '...'
       })),
       environment: {
         nodeEnv: process.env.NODE_ENV,
@@ -37,8 +34,8 @@ export async function GET() {
     })
   } catch (error) {
     return NextResponse.json({
-      error: error.message,
-      stack: process.env.NODE_ENV === 'development' ? error.stack : undefined
+      error: (error as Error).message,
+      stack: process.env.NODE_ENV === 'development' ? (error as Error).stack : undefined
     }, { status: 500 })
   }
 }

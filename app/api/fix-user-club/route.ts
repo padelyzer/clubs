@@ -61,6 +61,7 @@ export async function POST(request: NextRequest) {
           name: 'Club Padel Puebla',
           slug: 'club-padel-puebla',
           address: 'Puebla, México',
+          city: 'Puebla',
           phone: '+52 222 123 4567',
           email: 'info@clubpadelpuebla.com',
           initialSetupCompleted: true,
@@ -92,7 +93,7 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({
       success: false,
       error: 'Internal server error',
-      details: error.message
+      details: (error as Error).message
     }, { status: 500 })
   }
 }
