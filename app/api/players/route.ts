@@ -265,10 +265,10 @@ export async function POST(request: NextRequest) {
         name: validatedData.name,
         email: validatedData.email || null,
         phone: validatedData.phone,
-        birthDate: validatedData.birthDate ? new Date(validatedData.birthDate) : null,
-        level: validatedData.level || null,
-        gender: validatedData.gender || null,
-        notes: validatedData.notes || null,
+        birthDate: validatedData.birthDate ? new Date(validatedData.birthDate) : undefined,
+        level: validatedData.level || undefined,
+        gender: validatedData.gender || undefined,
+        notes: validatedData.notes || undefined,
         memberNumber: memberNumber,
         updatedAt: new Date()
       }
