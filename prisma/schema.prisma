@@ -376,7 +376,6 @@ model Player {
   email             String?
   phone             String
   phoneVerified     Boolean       @default(false)
-  birthDate         DateTime?
   level             String?
   preferredPosition String?
   notes             String?

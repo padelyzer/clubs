@@ -8,7 +8,6 @@ const createPlayerSchema = z.object({
   name: z.string().min(1).max(100),
   email: z.string().email().optional().or(z.literal("")),
   phone: z.string().min(7).max(20),
-  birthDate: z.string().optional(),
   level: z.enum(['Open', 'Primera Fuerza', 'Segunda Fuerza', 'Tercera Fuerza', 'Cuarta Fuerza', 'Quinta Fuerza', 'Sexta Fuerza']).optional(),
   gender: z.enum(['male', 'female']).optional(),
   notes: z.string().optional(),
@@ -251,7 +250,6 @@ export async function POST(request: NextRequest) {
       name: validatedData.name,
       email: validatedData.email || null,
       phone: validatedData.phone,
-      birthDate: validatedData.birthDate ? new Date(validatedData.birthDate) : null,
       level: validatedData.level || null,
       gender: validatedData.gender || null,
       notes: validatedData.notes || null,
@@ -265,7 +263,6 @@ export async function POST(request: NextRequest) {
         name: validatedData.name,
         email: validatedData.email || null,
         phone: validatedData.phone,
-        birthDate: validatedData.birthDate ? new Date(validatedData.birthDate) : undefined,
         level: validatedData.level || undefined,
         gender: validatedData.gender || undefined,
         notes: validatedData.notes || undefined,
@@ -399,10 +396,7 @@ export async function PUT(request: NextRequest) {
     // Update player
     const updatedPlayer = await prisma.player.update({
       where: { id },
-      data: {
-        ...validatedData,
-        birthDate: validatedData.birthDate ? new Date(validatedData.birthDate) : undefined
-      }
+      data: validatedData
     })
 
     return NextResponse.json({
