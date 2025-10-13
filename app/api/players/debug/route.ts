@@ -33,13 +33,19 @@ export async function POST(request: NextRequest) {
     
     const body = await request.json()
     console.log('[DEBUG Player Creation] Raw body:', body)
-    
+
     // Clean phone number by removing spaces
     if (body.phone) {
       body.phone = body.phone.replace(/\s/g, '')
       console.log('[DEBUG Player Creation] Phone cleaned:', body.phone)
     }
-    
+
+    // Clean empty memberNumber (convert "" to undefined)
+    if (body.memberNumber === "") {
+      body.memberNumber = undefined
+      console.log('[DEBUG Player Creation] Empty memberNumber converted to undefined')
+    }
+
     console.log('[DEBUG Player Creation] About to validate with Zod...')
     const validatedData = createPlayerSchema.parse(body)
     console.log('[DEBUG Player Creation] Zod validation passed:', validatedData)
@@ -183,7 +189,12 @@ export async function POST(request: NextRequest) {
 
   } catch (error) {
     console.error('[DEBUG Player Creation] DETAILED ERROR:', error)
-    
+    console.error('[DEBUG Player Creation] Error details:', {
+      message: error instanceof Error ? error.message : 'Unknown error',
+      stack: error instanceof Error ? error.stack : 'No stack',
+      name: error instanceof Error ? error.name : 'Unknown'
+    })
+
     if (error instanceof z.ZodError) {
       console.error('[DEBUG Player Creation] Zod validation error:', error.issues)
       return NextResponse.json(
@@ -191,11 +202,12 @@ export async function POST(request: NextRequest) {
         { status: 400 }
       )
     }
-    
+
     return NextResponse.json(
-      { 
-        success: false, 
+      {
+        success: false,
         error: 'Error al crear jugador',
+        details: error instanceof Error ? error.message : 'Unknown error',
         debug: {
           type: 'ERROR_MODE',
           errorMessage: error instanceof Error ? error.message : 'Unknown error',

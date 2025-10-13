@@ -144,12 +144,17 @@ export async function POST(request: NextRequest) {
       )
     }
     const body = await request.json()
-    
+
     // Clean phone number by removing spaces
     if (body.phone) {
       body.phone = body.phone.replace(/\s/g, '')
     }
-    
+
+    // Clean empty memberNumber (convert "" to undefined)
+    if (body.memberNumber === "") {
+      body.memberNumber = undefined
+    }
+
     const validatedData = createPlayerSchema.parse(body)
     
     // Check if player with same phone already exists
@@ -279,16 +284,26 @@ export async function POST(request: NextRequest) {
 
   } catch (error) {
     console.error('Error creating player:', error)
-    
+    console.error('Error details:', {
+      message: error instanceof Error ? error.message : 'Unknown error',
+      stack: error instanceof Error ? error.stack : 'No stack',
+      name: error instanceof Error ? error.name : 'Unknown'
+    })
+
     if (error instanceof z.ZodError) {
       return NextResponse.json(
         { success: false, error: 'Datos inválidos', details: error.issues },
         { status: 400 }
       )
     }
-    
+
+    // Return detailed error in development/production for debugging
     return NextResponse.json(
-      { success: false, error: 'Error al crear jugador' },
+      {
+        success: false,
+        error: 'Error al crear jugador',
+        details: error instanceof Error ? error.message : 'Unknown error'
+      },
       { status: 500 }
     )
   }
