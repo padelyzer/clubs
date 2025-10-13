@@ -94,21 +94,33 @@ export function SplitPaymentManager({ bookingId, onClose, embedded = false }: Sp
 
   async function fetchPaymentConfig() {
     try {
-      const response = await fetch(`/api/bookings/${bookingId}`)
+      const response = await fetch('/api/settings/club')
       const data = await response.json()
-      
-      if (data.booking?.Club?.ClubSettings) {
-        const settings = data.booking.Club.ClubSettings
+
+      if (data.success && data.settings) {
         setPaymentConfig({
-          acceptCash: settings.acceptCash ?? true,
-          terminalEnabled: settings.terminalEnabled ?? false,
-          transferEnabled: settings.transferEnabled ?? false,
-          bankName: settings.bankName,
-          accountNumber: settings.accountNumber
+          acceptCash: data.settings.acceptCash ?? true,
+          terminalEnabled: data.settings.terminalEnabled ?? false,
+          transferEnabled: data.settings.transferEnabled ?? false,
+          bankName: data.settings.bankName,
+          accountNumber: data.settings.accountNumber
+        })
+      } else {
+        // Set defaults if no settings found
+        setPaymentConfig({
+          acceptCash: true,
+          terminalEnabled: false,
+          transferEnabled: false
         })
       }
     } catch (err) {
       console.error('Error fetching payment config:', err)
+      // Set defaults on error
+      setPaymentConfig({
+        acceptCash: true,
+        terminalEnabled: false,
+        transferEnabled: false
+      })
     }
   }
 
