@@ -199,12 +199,13 @@ export function SplitPaymentManager({ bookingId, onClose, embedded = false }: Sp
     setError(null)
 
     try {
-      const response = await fetch(`/api/bookings/${bookingId}/split-payments/${splitPaymentId}`, {
+      const response = await fetch(`/api/bookings/${bookingId}/split-payments`, {
         method: 'PUT',
         headers: {
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({
+          splitPaymentId,
           action: 'generate-link'
         }),
       })
