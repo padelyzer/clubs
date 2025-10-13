@@ -3,6 +3,7 @@
 import { useState, useEffect } from 'react'
 import { format } from 'date-fns'
 import { es } from 'date-fns/locale'
+import { useNotify } from '@/contexts/NotificationContext'
 
 interface SplitPayment {
   id: string
@@ -57,6 +58,7 @@ interface SplitPaymentManagerProps {
 }
 
 export function SplitPaymentManager({ bookingId, onClose, embedded = false }: SplitPaymentManagerProps) {
+  const notify = useNotify()
   const [status, setStatus] = useState<SplitPaymentStatus | null>(null)
   const [loading, setLoading] = useState(true)
   const [actionLoading, setActionLoading] = useState<string | null>(null)
@@ -215,7 +217,8 @@ export function SplitPaymentManager({ bookingId, onClose, embedded = false }: Sp
       if (data.success && data.paymentLink) {
         // Copy link to clipboard
         await navigator.clipboard.writeText(data.paymentLink)
-        
+        notify('Link copiado al portapapeles', 'success')
+
         // Show modal with payment link
         const splitPayment = status?.splitPayments?.find(sp => sp.id === splitPaymentId)
         if (splitPayment) {
@@ -996,7 +999,10 @@ export function SplitPaymentManager({ bookingId, onClose, embedded = false }: Sp
                           className="flex-1 bg-white border border-gray-300 rounded px-2 py-1 text-xs font-mono"
                         />
                         <button
-                          onClick={() => navigator.clipboard.writeText(payment.paymentLink!)}
+                          onClick={() => {
+                            navigator.clipboard.writeText(payment.paymentLink!)
+                            notify('Link copiado al portapapeles', 'success')
+                          }}
                           className="bg-gray-200 hover:bg-gray-300 px-2 py-1 rounded text-xs"
                         >
                           📋
@@ -1049,7 +1055,10 @@ export function SplitPaymentManager({ bookingId, onClose, embedded = false }: Sp
               <div className="flex items-center justify-between mb-2">
                 <span className="text-xs font-medium text-gray-700">Link de pago:</span>
                 <button
-                  onClick={() => navigator.clipboard.writeText(generatedLink.link)}
+                  onClick={() => {
+                    navigator.clipboard.writeText(generatedLink.link)
+                    notify('Link copiado al portapapeles', 'success')
+                  }}
                   className="text-xs text-blue-600 hover:text-blue-800 flex items-center gap-1"
                 >
                   <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
