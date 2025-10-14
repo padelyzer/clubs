@@ -1,5 +1,6 @@
 import React, { useState } from 'react'
 import { X, DollarSign, CreditCard, Banknote, Smartphone, Building2 } from 'lucide-react'
+import { ModalPortal } from '@/components/ModalPortal'
 import { ButtonModern } from '@/components/design-system/ButtonModern'
 import { useNotify } from '@/contexts/NotificationContext'
 import { formatCurrency } from '@/lib/design-system/localization'
@@ -100,6 +101,7 @@ export function PaymentModal({
   }
 
   return (
+    <ModalPortal>
     <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
       <div className="bg-white rounded-lg shadow-xl max-w-md w-full">
         {/* Header */}
@@ -268,4 +270,5 @@ export function PaymentModal({
       </div>
     </div>
   )
+    </ModalPortal>
 }

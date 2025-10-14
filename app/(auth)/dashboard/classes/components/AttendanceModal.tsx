@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react'
 import { X, CheckCircle, XCircle, Clock, DollarSign, Loader2 } from 'lucide-react'
+import { ModalPortal } from '@/components/ModalPortal'
 import { ButtonModern } from '@/components/design-system/ButtonModern'
 import { useNotify } from '@/contexts/NotificationContext'
 import { formatCurrency } from '@/lib/design-system/localization'
@@ -198,6 +199,7 @@ export function AttendanceModal({
   }
 
   return (
+    <ModalPortal>
     <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
       <div className="bg-white rounded-lg shadow-xl max-w-5xl w-full max-h-[90vh] overflow-y-auto">
         {/* Header */}
@@ -405,4 +407,5 @@ export function AttendanceModal({
       </div>
     </div>
   )
+    </ModalPortal>
 }
