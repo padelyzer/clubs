@@ -321,6 +321,7 @@ export async function POST(request: NextRequest) {
     
     // Create base class data
     const baseClassData = {
+      id: 'class_' + Date.now() + '_' + Math.random().toString(36).substring(2, 11),
       clubId,
       instructorId: body.instructorId,
       instructorName: instructor.name,
@@ -339,7 +340,8 @@ export async function POST(request: NextRequest) {
       instructorCost,
       currency: 'MXN',
       status: 'SCHEDULED',
-      notes: body.notes || null
+      notes: body.notes || null,
+      updatedAt: new Date()
     }
     
     const createdClasses = []
