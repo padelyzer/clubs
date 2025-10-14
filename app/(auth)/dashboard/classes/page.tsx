@@ -17,6 +17,7 @@ import { ClassList } from './components/ClassList'
 import { ClassFormModal } from './components/ClassFormModal'
 import { EnrollmentModal } from './components/EnrollmentModal'
 import { AttendanceModal } from './components/AttendanceModal'
+import { ClassDetailsModal } from './components/ClassDetailsModal'
 
 // Types
 import type { Class } from './types'
@@ -36,6 +37,7 @@ function ClassesContent() {
   const [selectedClass, setSelectedClass] = useState<Class | null>(null)
   const [showEnrollment, setShowEnrollment] = useState(false)
   const [showAttendance, setShowAttendance] = useState(false)
+  const [showDetails, setShowDetails] = useState(false)
 
   // Data Hook
   const {
@@ -93,7 +95,7 @@ function ClassesContent() {
 
   const handleViewDetails = (classItem: Class) => {
     setSelectedClass(classItem)
-    // Could open a details modal or navigate to details page
+    setShowDetails(true)
   }
 
   const handleEnroll = (classItem: Class) => {
@@ -111,6 +113,7 @@ function ClassesContent() {
     setEditingClass(null)
     setShowEnrollment(false)
     setShowAttendance(false)
+    setShowDetails(false)
     setSelectedClass(null)
   }
 
@@ -202,6 +205,19 @@ function ClassesContent() {
           classItem={selectedClass}
           onClose={handleModalClose}
           onSuccess={fetchClasses}
+        />
+      )}
+
+      {showDetails && selectedClass && (
+        <ClassDetailsModal
+          classItem={selectedClass}
+          players={players}
+          onClose={handleModalClose}
+          onEdit={() => handleEditClass(selectedClass)}
+          onDelete={() => handleDeleteClass(selectedClass)}
+          onEnroll={() => handleEnroll(selectedClass)}
+          onAttendance={() => handleAttendance(selectedClass)}
+          onRefresh={fetchClasses}
         />
       )}
     </div>
