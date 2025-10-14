@@ -1,8 +1,8 @@
 import React from 'react'
-import { User, Mail, Phone, DollarSign, Users } from 'lucide-react'
-import { AppleModal } from '@/components/design-system/AppleModal'
-import { AppleButton } from '@/components/design-system/AppleButton'
+import { X, User, Mail, Phone, DollarSign, Users } from 'lucide-react'
+import { ButtonModern } from '@/components/design-system/ButtonModern'
 import { InputModern } from '@/components/design-system/InputModern'
+import { ModalPortal } from '@/components/ModalPortal'
 import { formatCurrency } from '@/lib/design-system/localization'
 import { useEnrollment } from '../hooks/useEnrollment'
 import type { Class, Player } from '../types'
@@ -60,16 +60,25 @@ export function EnrollmentModal({
   }
 
   return (
-    <AppleModal
-      isOpen={true}
-      onClose={onClose}
-      title="Inscribir Estudiante"
-      subtitle={classItem.name}
-      size="large"
-      maxWidth="700px"
-    >
+    <ModalPortal>
+      <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+      <div className="bg-white rounded-lg shadow-xl max-w-2xl w-full max-h-[90vh] overflow-y-auto">
+        {/* Header */}
+        <div className="sticky top-0 bg-white border-b border-gray-200 px-6 py-4 flex items-center justify-between">
+          <h2 className="text-xl font-bold text-gray-900">Inscribir Estudiante</h2>
+          <button
+            onClick={onClose}
+            className="text-gray-400 hover:text-gray-600"
+          >
+            <X className="w-6 h-6" />
+          </button>
+        </div>
+
+        {/* Content */}
+        <div className="p-6">
           {/* Class Info */}
           <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 mb-6">
+            <h3 className="font-semibold text-gray-900 mb-2">{classItem.name}</h3>
             <div className="grid grid-cols-2 gap-2 text-sm text-gray-600">
               <div>
                 <strong>Fecha:</strong> {new Date(classItem.date).toLocaleDateString('es-MX')}
@@ -258,28 +267,29 @@ export function EnrollmentModal({
               </div>
 
               {/* Actions */}
-              <div style={{ display: 'flex', gap: '12px', marginTop: '24px' }}>
-                <AppleButton
+              <div className="flex justify-end gap-3 border-t border-gray-200 pt-6">
+                <ButtonModern
                   type="button"
                   variant="secondary"
                   onClick={onClose}
                   disabled={loading}
-                  fullWidth
                 >
                   Cancelar
-                </AppleButton>
-                <AppleButton
+                </ButtonModern>
+                <ButtonModern
                   type="submit"
                   variant="primary"
                   disabled={loading}
                   loading={loading}
-                  fullWidth
                 >
                   Inscribir Estudiante
-                </AppleButton>
+                </ButtonModern>
               </div>
             </form>
           )}
-    </AppleModal>
+        </div>
+      </div>
+    </div>
+    </ModalPortal>
   )
 }

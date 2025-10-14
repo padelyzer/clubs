@@ -1,7 +1,7 @@
 import React, { useState } from 'react'
-import { DollarSign, CreditCard, Banknote, Smartphone, Building2 } from 'lucide-react'
-import { AppleModal } from '@/components/design-system/AppleModal'
-import { AppleButton } from '@/components/design-system/AppleButton'
+import { X, DollarSign, CreditCard, Banknote, Smartphone, Building2 } from 'lucide-react'
+import { ModalPortal } from '@/components/ModalPortal'
+import { ButtonModern } from '@/components/design-system/ButtonModern'
 import { useNotify } from '@/contexts/NotificationContext'
 import { formatCurrency } from '@/lib/design-system/localization'
 
@@ -101,14 +101,28 @@ export function PaymentModal({
   }
 
   return (
-    <AppleModal
-      isOpen={true}
-      onClose={onClose}
-      title="Registrar Pago"
-      subtitle={`${studentName} - ${className}`}
-      size="medium"
-    >
-        <form onSubmit={handleSubmit} className="space-y-6">
+    <ModalPortal>
+    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+      <div className="bg-white rounded-lg shadow-xl max-w-md w-full">
+        {/* Header */}
+        <div className="border-b border-gray-200 px-6 py-4 flex items-center justify-between">
+          <div className="flex items-center gap-3">
+            <DollarSign className="w-6 h-6 text-green-600" />
+            <div>
+              <h2 className="text-xl font-bold text-gray-900">Registrar Pago</h2>
+              <p className="text-sm text-gray-600">{studentName}</p>
+            </div>
+          </div>
+          <button
+            onClick={onClose}
+            className="text-gray-400 hover:text-gray-600"
+          >
+            <X className="w-6 h-6" />
+          </button>
+        </div>
+
+        {/* Form */}
+        <form onSubmit={handleSubmit} className="p-6 space-y-6">
           {/* Class Info */}
           <div className="bg-blue-50 border border-blue-200 rounded-lg p-3">
             <p className="text-sm text-blue-700 font-medium">{className}</p>
@@ -234,25 +248,27 @@ export function PaymentModal({
           </div>
 
           {/* Actions */}
-          <div style={{ display: 'flex', gap: '12px', marginTop: '24px' }}>
-            <AppleButton
+          <div className="flex gap-3 pt-2">
+            <ButtonModern
               type="button"
               variant="secondary"
               onClick={onClose}
               fullWidth
             >
               Cancelar
-            </AppleButton>
-            <AppleButton
+            </ButtonModern>
+            <ButtonModern
               type="submit"
               variant="primary"
               loading={loading}
               fullWidth
             >
               Registrar Pago
-            </AppleButton>
+            </ButtonModern>
           </div>
         </form>
-    </AppleModal>
+      </div>
+    </div>
+    </ModalPortal>
   )
 }

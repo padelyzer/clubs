@@ -1,10 +1,10 @@
 import React, { useState, useEffect } from 'react'
 import {
-  BookOpen, Clock, MapPin, Users, DollarSign, User,
-  Calendar, Tag, UserPlus, CheckCircle, Edit, Trash2, X
+  X, BookOpen, Clock, MapPin, Users, DollarSign, User,
+  Calendar, Tag, UserPlus, CheckCircle, Edit, Trash2
 } from 'lucide-react'
-import { AppleModal } from '@/components/design-system/AppleModal'
-import { AppleButton } from '@/components/design-system/AppleButton'
+import { ModalPortal } from '@/components/ModalPortal'
+import { ButtonModern } from '@/components/design-system/ButtonModern'
 import { useNotify } from '@/contexts/NotificationContext'
 import { formatCurrency } from '@/lib/design-system/localization'
 import { CLASS_LEVELS, CLASS_STATUSES } from '../constants'
