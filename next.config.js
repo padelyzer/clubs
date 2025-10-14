@@ -14,14 +14,6 @@ const nextConfig = {
 
   // Use standalone output for dynamic applications
   output: 'standalone',
-
-  // Skip static page generation errors
-  staticPageGenerationTimeout: 1000,
-
-  // Disable static optimization
-  ...(process.env.SKIP_BUILD_STATIC_GENERATION === 'true' ? {
-    distDir: '.next',
-  } : {}),
   
   // Add security headers
   async headers() {

@@ -15,7 +15,7 @@
     "seed:dev": "npx tsx scripts/seed-dev-complete.ts",
     "seed:test": "npx tsx scripts/test-seed.ts",
     "build": "prisma generate && next build",
-    "vercel-build": "prisma generate && next build",
+    "vercel-build": "prisma migrate deploy && prisma generate && next build",
     "vercel-build-no-migrate": "prisma generate && next build",
     "build-simple": "next build",
     "build-safe": "node scripts/prisma-generate-only.js",
