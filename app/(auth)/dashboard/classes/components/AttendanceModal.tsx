@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react'
-import { X, CheckCircle, XCircle, Clock, DollarSign, Loader2 } from 'lucide-react'
-import { ModalPortal } from '@/components/ModalPortal'
+import { CheckCircle, XCircle, Clock, DollarSign, Loader2 } from 'lucide-react'
+import { ModernModal } from '@/components/design-system/ModernModal'
 import { ButtonModern } from '@/components/design-system/ButtonModern'
 import { useNotify } from '@/contexts/NotificationContext'
 import { formatCurrency } from '@/lib/design-system/localization'
@@ -198,26 +198,52 @@ export function AttendanceModal({
     setAttendance(newAttendance)
   }
 
-  return (
-    <ModalPortal>
-    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-[9999] p-4">
-      <div className="bg-white rounded-lg shadow-xl max-w-5xl w-full max-h-[90vh] overflow-y-auto">
-        {/* Header */}
-        <div className="sticky top-0 bg-white border-b border-gray-200 px-6 py-4 flex items-center justify-between">
-          <div>
-            <h2 className="text-xl font-bold text-gray-900">Asistencia y Check-in</h2>
-            <p className="text-sm text-gray-600 mt-1">{classItem.name}</p>
-          </div>
-          <button
-            onClick={onClose}
-            className="text-gray-400 hover:text-gray-600"
-          >
-            <X className="w-6 h-6" />
-          </button>
-        </div>
+  const footerContent = (
+    <div className="flex justify-between items-center">
+      <div className="text-sm text-gray-600">
+        {attendance.size > 0 && (
+          <span>
+            {attendance.size} estudiante{attendance.size !== 1 ? 's' : ''} seleccionado{attendance.size !== 1 ? 's' : ''}
+          </span>
+        )}
+      </div>
+      <div className="flex gap-3">
+        <ButtonModern
+          variant="secondary"
+          onClick={onClose}
+          disabled={loading}
+        >
+          Cancelar
+        </ButtonModern>
+        <ButtonModern
+          variant="primary"
+          onClick={handleQuickCheckIn}
+          disabled={loading || attendance.size === 0}
+          loading={loading}
+        >
+          Procesar Check-in ({attendance.size})
+        </ButtonModern>
+      </div>
+    </div>
+  )
 
+  return (
+    <ModernModal
+      isOpen={true}
+      onClose={onClose}
+      title="Asistencia y Check-in"
+      subtitle={classItem.name}
+      size="xlarge"
+      footer={footerContent}
+    >
         {/* Stats */}
-        <div className="bg-gray-50 border-b border-gray-200 px-6 py-4">
+        <div style={{
+          background: 'rgba(164, 223, 78, 0.04)',
+          border: '1px solid rgba(164, 223, 78, 0.1)',
+          borderRadius: '12px',
+          padding: '20px',
+          marginBottom: '20px'
+        }}>
           <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
             <div>
               <p className="text-xs text-gray-600">Total Inscritos</p>
@@ -375,37 +401,6 @@ export function AttendanceModal({
               })}
             </div>
           )}
-        </div>
-
-        {/* Actions */}
-        <div className="sticky bottom-0 bg-white border-t border-gray-200 px-6 py-4 flex justify-between items-center">
-          <div className="text-sm text-gray-600">
-            {attendance.size > 0 && (
-              <span>
-                {attendance.size} estudiante{attendance.size !== 1 ? 's' : ''} seleccionado{attendance.size !== 1 ? 's' : ''}
-              </span>
-            )}
-          </div>
-          <div className="flex gap-3">
-            <ButtonModern
-              variant="secondary"
-              onClick={onClose}
-              disabled={loading}
-            >
-              Cancelar
-            </ButtonModern>
-            <ButtonModern
-              variant="primary"
-              onClick={handleQuickCheckIn}
-              disabled={loading || attendance.size === 0}
-              loading={loading}
-            >
-              Procesar Check-in ({attendance.size})
-            </ButtonModern>
-          </div>
-        </div>
-      </div>
-    </div>
-    </ModalPortal>
+    </ModernModal>
   )
 }

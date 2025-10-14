@@ -1,8 +1,8 @@
 import React from 'react'
-import { X, User, Mail, Phone, DollarSign, Users } from 'lucide-react'
+import { User, Mail, Phone, DollarSign, Users } from 'lucide-react'
 import { ButtonModern } from '@/components/design-system/ButtonModern'
 import { InputModern } from '@/components/design-system/InputModern'
-import { ModalPortal } from '@/components/ModalPortal'
+import { ModernModal } from '@/components/design-system/ModernModal'
 import { formatCurrency } from '@/lib/design-system/localization'
 import { useEnrollment } from '../hooks/useEnrollment'
 import type { Class, Player } from '../types'
@@ -60,25 +60,28 @@ export function EnrollmentModal({
   }
 
   return (
-    <ModalPortal>
-      <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-[9999] p-4">
-      <div className="bg-white rounded-lg shadow-xl max-w-2xl w-full max-h-[90vh] overflow-y-auto">
-        {/* Header */}
-        <div className="sticky top-0 bg-white border-b border-gray-200 px-6 py-4 flex items-center justify-between">
-          <h2 className="text-xl font-bold text-gray-900">Inscribir Estudiante</h2>
-          <button
-            onClick={onClose}
-            className="text-gray-400 hover:text-gray-600"
-          >
-            <X className="w-6 h-6" />
-          </button>
-        </div>
-
-        {/* Content */}
-        <div className="p-6">
+    <ModernModal
+      isOpen={true}
+      onClose={onClose}
+      title="Inscribir Estudiante"
+      subtitle={classItem.name}
+      size="medium"
+    >
           {/* Class Info */}
-          <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 mb-6">
-            <h3 className="font-semibold text-gray-900 mb-2">{classItem.name}</h3>
+          <div style={{
+            background: 'rgba(164, 223, 78, 0.08)',
+            border: '1px solid rgba(164, 223, 78, 0.2)',
+            borderRadius: '16px',
+            padding: '20px',
+            marginBottom: '28px'
+          }}>
+            <h3 style={{
+              fontWeight: 600,
+              fontSize: '16px',
+              color: '#1C1C1E',
+              marginBottom: '12px',
+              fontFamily: '-apple-system, BlinkMacSystemFont, "SF Pro Display", "Segoe UI", Roboto, sans-serif'
+            }}>{classItem.name}</h3>
             <div className="grid grid-cols-2 gap-2 text-sm text-gray-600">
               <div>
                 <strong>Fecha:</strong> {new Date(classItem.date).toLocaleDateString('es-MX')}
@@ -196,7 +199,7 @@ export function EnrollmentModal({
                         value="online"
                         checked={enrollmentForm.paymentMethod === 'online'}
                         onChange={(e) => setEnrollmentForm(prev => ({ ...prev, paymentMethod: e.target.value as 'online' | 'onsite' }))}
-                        className="text-blue-600 focus:ring-blue-500"
+                        style={{ accentColor: '#A4DF4E' }}
                       />
                       <span className="text-sm text-gray-700">
                         Pago en línea (se enviará link por WhatsApp)
@@ -208,7 +211,7 @@ export function EnrollmentModal({
                         value="onsite"
                         checked={enrollmentForm.paymentMethod === 'onsite'}
                         onChange={(e) => setEnrollmentForm(prev => ({ ...prev, paymentMethod: e.target.value as 'online' | 'onsite' }))}
-                        className="text-blue-600 focus:ring-blue-500"
+                        style={{ accentColor: '#A4DF4E' }}
                       />
                       <span className="text-sm text-gray-700">
                         Pago en sitio (efectivo/tarjeta en el club)
@@ -218,13 +221,18 @@ export function EnrollmentModal({
                 </div>
 
                 {enrollmentForm.paymentMethod === 'online' && (
-                  <div className="bg-gray-50 p-4 rounded-lg">
+                  <div style={{
+                    background: 'rgba(164, 223, 78, 0.04)',
+                    border: '1px solid rgba(164, 223, 78, 0.1)',
+                    borderRadius: '12px',
+                    padding: '16px'
+                  }}>
                     <label className="flex items-center gap-2 mb-3">
                       <input
                         type="checkbox"
                         checked={enrollmentForm.splitPayment}
                         onChange={(e) => setEnrollmentForm(prev => ({ ...prev, splitPayment: e.target.checked }))}
-                        className="rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                        style={{ accentColor: '#A4DF4E' }}
                       />
                       <span className="text-sm font-medium text-gray-700">
                         Dividir pago en varias partes
@@ -287,9 +295,6 @@ export function EnrollmentModal({
               </div>
             </form>
           )}
-        </div>
-      </div>
-    </div>
-    </ModalPortal>
+    </ModernModal>
   )
 }
