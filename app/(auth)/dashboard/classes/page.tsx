@@ -6,7 +6,7 @@ import { useNotify } from '@/contexts/NotificationContext'
 import { DashboardWithNotifications } from '@/components/layouts/DashboardWithNotifications'
 import { CardModern, CardModernHeader, CardModernTitle, CardModernContent } from '@/components/design-system/CardModern'
 import { ButtonModern } from '@/components/design-system/ButtonModern'
-import { Plus, BookOpen } from 'lucide-react'
+import { Plus, BookOpen, DollarSign } from 'lucide-react'
 
 // Hooks
 import { useClassesData } from './hooks/useClassesData'
@@ -18,6 +18,7 @@ import { ClassFormModal } from './components/ClassFormModal'
 import { EnrollmentModal } from './components/EnrollmentModal'
 import { AttendanceModal } from './components/AttendanceModal'
 import { ClassDetailsModal } from './components/ClassDetailsModal'
+import { PendingPaymentsView } from './components/PendingPaymentsView'
 
 // Types
 import type { Class } from './types'
@@ -38,6 +39,7 @@ function ClassesContent() {
   const [showEnrollment, setShowEnrollment] = useState(false)
   const [showAttendance, setShowAttendance] = useState(false)
   const [showDetails, setShowDetails] = useState(false)
+  const [showPendingPayments, setShowPendingPayments] = useState(false)
 
   // Data Hook
   const {
@@ -132,42 +134,65 @@ function ClassesContent() {
                 </p>
               </div>
             </div>
-            <ButtonModern
-              variant="primary"
-              onClick={handleCreateClass}
-            >
-              <Plus className="w-5 h-5 mr-2" />
-              Nueva Clase
-            </ButtonModern>
+            <div className="flex gap-3">
+              <ButtonModern
+                variant={showPendingPayments ? 'primary' : 'secondary'}
+                onClick={() => setShowPendingPayments(!showPendingPayments)}
+              >
+                <DollarSign className="w-5 h-5 mr-2" />
+                {showPendingPayments ? 'Ver Clases' : 'Pagos Pendientes'}
+              </ButtonModern>
+              {!showPendingPayments && (
+                <ButtonModern
+                  variant="primary"
+                  onClick={handleCreateClass}
+                >
+                  <Plus className="w-5 h-5 mr-2" />
+                  Nueva Clase
+                </ButtonModern>
+              )}
+            </div>
           </div>
         </CardModernHeader>
       </CardModern>
 
-      {/* Filters */}
-      <ClassFilters
-        selectedDate={selectedDate}
-        selectedLevel={selectedLevel}
-        selectedInstructor={selectedInstructor}
-        instructors={instructors}
-        onDateChange={setSelectedDate}
-        onLevelChange={setSelectedLevel}
-        onInstructorChange={setSelectedInstructor}
-      />
-
-      {/* Classes List */}
-      <CardModern>
-        <CardModernContent>
-          <ClassList
-            classes={classes}
-            loading={loading}
-            onClassClick={handleViewDetails}
-            onEdit={handleEditClass}
-            onDelete={handleDeleteClass}
-            onEnroll={handleEnroll}
-            onAttendance={handleAttendance}
+      {/* Conditional Content */}
+      {showPendingPayments ? (
+        /* Pending Payments View */
+        <CardModern>
+          <CardModernContent>
+            <PendingPaymentsView />
+          </CardModernContent>
+        </CardModern>
+      ) : (
+        <>
+          {/* Filters */}
+          <ClassFilters
+            selectedDate={selectedDate}
+            selectedLevel={selectedLevel}
+            selectedInstructor={selectedInstructor}
+            instructors={instructors}
+            onDateChange={setSelectedDate}
+            onLevelChange={setSelectedLevel}
+            onInstructorChange={setSelectedInstructor}
           />
-        </CardModernContent>
-      </CardModern>
+
+          {/* Classes List */}
+          <CardModern>
+            <CardModernContent>
+              <ClassList
+                classes={classes}
+                loading={loading}
+                onClassClick={handleViewDetails}
+                onEdit={handleEditClass}
+                onDelete={handleDeleteClass}
+                onEnroll={handleEnroll}
+                onAttendance={handleAttendance}
+              />
+            </CardModernContent>
+          </CardModern>
+        </>
+      )}
 
       {/* Modals */}
       {isCreatingClass && (
