@@ -69,18 +69,18 @@ export function ClassCard({
         </div>
 
         {/* Court */}
-        {classItem.court && (
+        {(classItem.Court || classItem.court) && (
           <div className="flex items-center gap-2 text-sm text-gray-600">
             <MapPin className="w-4 h-4" />
-            <span>{classItem.court.name}</span>
+            <span>{(classItem.Court || classItem.court)?.name}</span>
           </div>
         )}
 
         {/* Instructor */}
-        {classItem.instructor && (
+        {(classItem.Instructor || classItem.instructor) && (
           <div className="flex items-center gap-2 text-sm text-gray-600">
             <User className="w-4 h-4" />
-            <span>{classItem.instructor.name}</span>
+            <span>{(classItem.Instructor || classItem.instructor)?.name}</span>
           </div>
         )}
 
@@ -110,58 +110,62 @@ export function ClassCard({
       </div>
 
       {/* Actions */}
-      <div className="flex items-center gap-2 pt-3 border-t border-gray-100">
-        <ButtonModern
-          variant="secondary"
-          size="sm"
-          onClick={() => onViewDetails(classItem)}
-          fullWidth
-        >
-          Ver Detalles
-        </ButtonModern>
-
-        {classItem.status === 'SCHEDULED' && !isFull && (
+      <div className="space-y-2 pt-3 border-t border-gray-100">
+        {/* Primary Actions */}
+        <div className="grid grid-cols-2 gap-2">
           <ButtonModern
             variant="primary"
             size="sm"
             onClick={() => onEnroll(classItem)}
+            disabled={isFull || classItem.status !== 'SCHEDULED'}
           >
             <UserPlus className="w-4 h-4 mr-1" />
             Inscribir
           </ButtonModern>
-        )}
 
-        {(classItem.status === 'SCHEDULED' || classItem.status === 'IN_PROGRESS') && (
           <ButtonModern
             variant="primary"
             size="sm"
             onClick={() => onAttendance(classItem)}
+            disabled={classItem.status === 'CANCELLED' || classItem.status === 'COMPLETED'}
           >
             <CheckCircle className="w-4 h-4 mr-1" />
             Asistencia
           </ButtonModern>
-        )}
+        </div>
 
-        {classItem.status === 'SCHEDULED' && (
-          <>
-            <ButtonModern
-              variant="secondary"
-              size="sm"
-              onClick={() => onEdit(classItem)}
-            >
-              <Edit className="w-4 h-4" />
-            </ButtonModern>
+        {/* Secondary Actions */}
+        <div className="flex items-center gap-2">
+          <ButtonModern
+            variant="secondary"
+            size="sm"
+            onClick={() => onViewDetails(classItem)}
+            fullWidth
+          >
+            Ver Detalles
+          </ButtonModern>
 
-            <ButtonModern
-              variant="secondary"
-              size="sm"
-              onClick={() => onDelete(classItem)}
-              className="text-red-600 hover:text-red-700 hover:bg-red-50"
-            >
-              <Trash2 className="w-4 h-4" />
-            </ButtonModern>
-          </>
-        )}
+          {classItem.status === 'SCHEDULED' && (
+            <>
+              <ButtonModern
+                variant="secondary"
+                size="sm"
+                onClick={() => onEdit(classItem)}
+              >
+                <Edit className="w-4 h-4" />
+              </ButtonModern>
+
+              <ButtonModern
+                variant="secondary"
+                size="sm"
+                onClick={() => onDelete(classItem)}
+                className="text-red-600 hover:text-red-700 hover:bg-red-50"
+              >
+                <Trash2 className="w-4 h-4" />
+              </ButtonModern>
+            </>
+          )}
+        </div>
       </div>
     </div>
   )
