@@ -154,11 +154,12 @@ export function useClassForm(
       }
 
       // Prepare data with recurrence if enabled
+      const { isRecurring, ...formData } = classForm
       const classData = {
-        ...classForm,
+        ...formData,
         price: classForm.price * 100, // Convert to cents
-        recurring: classForm.isRecurring,
-        recurrencePattern: classForm.isRecurring ? classForm.recurrencePattern : null
+        recurring: isRecurring,
+        recurrencePattern: isRecurring ? classForm.recurrencePattern : null
       }
 
       const response = await fetch('/api/classes', {
