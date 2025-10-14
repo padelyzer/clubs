@@ -269,6 +269,6 @@ export function PaymentModal({
         </form>
       </div>
     </div>
-  )
     </ModalPortal>
+  )
 }

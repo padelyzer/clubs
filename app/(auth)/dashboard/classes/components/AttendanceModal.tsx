@@ -406,6 +406,6 @@ export function AttendanceModal({
         </div>
       </div>
     </div>
-  )
     </ModalPortal>
+  )
 }

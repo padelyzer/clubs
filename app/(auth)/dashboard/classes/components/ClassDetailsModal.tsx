@@ -561,6 +561,6 @@ export function ClassDetailsModal({
         </div>
       </div>
     </div>
-  )
     </ModalPortal>
+  )
 }
