@@ -461,7 +461,12 @@ export async function POST(request: NextRequest) {
   } catch (error) {
     console.error('Error creating class:', error)
     return NextResponse.json(
-      { success: false, error: 'Error al crear clase' },
+      {
+        success: false,
+        error: 'Error al crear clase',
+        details: error instanceof Error ? error.message : String(error),
+        stack: error instanceof Error ? error.stack : undefined
+      },
       { status: 500 }
     )
   }
