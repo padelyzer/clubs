@@ -104,12 +104,12 @@ export async function GET(request: NextRequest) {
 
   } catch (error) {
     console.error('Error fetching classes:', error)
-    const errorMessage = error instanceof Error ? error.message : 'Error desconocido'
     return NextResponse.json(
-      { 
-        success: false, 
+      {
+        success: false,
         error: 'Error al obtener clases',
-        details: process.env.NODE_ENV === 'development' ? errorMessage : undefined
+        details: error instanceof Error ? error.message : String(error),
+        stack: error instanceof Error ? error.stack : undefined
       },
       { status: 500 }
     )
