@@ -236,9 +236,8 @@ export function AttendanceModal({
       size="xlarge"
       footer={footerContent}
     >
-      <>
-        {/* Stats */}
-        <div style={{
+      {/* Stats */}
+      <div style={{
           background: 'rgba(164, 223, 78, 0.04)',
           border: '1px solid rgba(164, 223, 78, 0.1)',
           borderRadius: '12px',
@@ -263,10 +262,10 @@ export function AttendanceModal({
               <p className="text-2xl font-bold text-orange-600">{stats.pending}</p>
             </div>
           </div>
-        </div>
+      </div>
 
-        {/* Quick Actions */}
-        <div className="border-b border-gray-200 px-6 py-3 bg-blue-50">
+      {/* Quick Actions */}
+      <div className="border-b border-gray-200 px-6 py-3 bg-blue-50">
           <div className="flex items-center gap-2">
             <span className="text-sm font-medium text-gray-700">Acciones rápidas:</span>
             <ButtonModern
@@ -283,12 +282,12 @@ export function AttendanceModal({
             >
               Marcar todos Tarde
             </ButtonModern>
-          </div>
         </div>
+      </div>
 
-        {/* Student List */}
-        <div className="p-6">
-          {loading && students.length === 0 ? (
+      {/* Student List */}
+      <div className="p-6">
+        {loading && students.length === 0 ? (
             <div className="flex items-center justify-center py-12">
               <Loader2 className="w-8 h-8 animate-spin text-blue-600" />
               <span className="ml-3 text-gray-600">Cargando estudiantes...</span>
@@ -298,8 +297,8 @@ export function AttendanceModal({
               <p className="text-gray-600">No hay estudiantes inscritos en esta clase</p>
             </div>
           ) : (
-            <div className="space-y-3">
-              {students.map(student => {
+          <div className="space-y-3">
+            {students.map(student => {
                 const currentAttendance = attendance.get(student.classBookingId)
                 const isCheckedIn = student.currentStatus.checkedIn
                 const isPaid = student.currentStatus.paymentStatus === 'completed'
@@ -398,11 +397,11 @@ export function AttendanceModal({
                       )}
                     </div>
                   </div>
-                )
-              })}
-            </div>
-          )}
-      </>
+              )
+            })}
+          </div>
+        )}
+      </div>
     </ModernModal>
   )
 }
