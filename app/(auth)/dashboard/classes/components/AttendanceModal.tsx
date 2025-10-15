@@ -236,6 +236,7 @@ export function AttendanceModal({
       size="xlarge"
       footer={footerContent}
     >
+      <>
         {/* Stats */}
         <div style={{
           background: 'rgba(164, 223, 78, 0.04)',
@@ -401,6 +402,7 @@ export function AttendanceModal({
               })}
             </div>
           )}
+      </>
     </ModernModal>
   )
 }
