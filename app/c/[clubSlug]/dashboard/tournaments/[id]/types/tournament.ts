@@ -4,7 +4,7 @@
  * Date: October 15, 2025
  */
 
-export type ViewType = 'overview' | 'registrations' | 'schedule' | 'kanban' | 'capture' | 'tv'
+export type ViewType = 'overview' | 'registrations' | 'schedule' | 'brackets' | 'capture' | 'tv'
 
 export type TournamentData = {
   tournament: {
@@ -42,11 +42,14 @@ export type Match = {
   team2Name: string
   team1Score: string | null
   team2Score: string | null
+  team1Sets: number[] | null
+  team2Sets: number[] | null
   round: string
   courtNumber: number | null
   status: 'pending' | 'in_progress' | 'completed'
   scheduledAt: string | null
   startTime: string | null
+  winner: string | null
 }
 
 export type TournamentStats = {

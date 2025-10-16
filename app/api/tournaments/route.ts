@@ -3,6 +3,7 @@ import { requireAuthAPI } from '@/lib/auth/actions'
 import { requireTournamentsModule } from '@/lib/saas/middleware'
 import { prisma } from '@/lib/config/prisma'
 import { z } from 'zod'
+import { v4 as uuidv4 } from 'uuid'
 
 // Validation schema for creating tournaments
 const createTournamentSchema = z.object({
@@ -201,6 +202,7 @@ export async function POST(request: NextRequest) {
     // 5. Crear el torneo
     const tournament = await prisma.tournament.create({
       data: {
+        id: uuidv4(),
         ...validatedData,
         clubId: session.clubId,
         status: 'DRAFT',

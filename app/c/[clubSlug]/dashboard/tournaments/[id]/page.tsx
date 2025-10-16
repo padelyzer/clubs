@@ -12,6 +12,8 @@ import { TournamentSidebar } from './sidebar/TournamentSidebar'
 import { OverviewView } from './overview/OverviewView'
 import { CaptureView } from './capture/CaptureView'
 import { RegistrationsView } from './registrations/RegistrationsView'
+import { ScheduleView } from './schedule/ScheduleView'
+import { BracketsView } from './brackets/BracketsView'
 import { TVView } from './tv/TVView'
 
 // Types
@@ -93,7 +95,7 @@ export default function TournamentV2Page() {
 
   // Capture view state
   const [captureCategoryFilter, setCaptureCategoryFilter] = useState<string>('all')
-  const [captureStatusFilter, setCaptureStatusFilter] = useState<'pending' | 'all' | 'completed'>('pending')
+  const [captureStatusFilter, setCaptureStatusFilter] = useState<'pending' | 'all' | 'completed'>('all')
   const [selectedMatches, setSelectedMatches] = useState<Set<string>>(new Set())
 
   // Fetch tournament data with polling
@@ -105,12 +107,70 @@ export default function TournamentV2Page() {
 
   const fetchTournamentData = async () => {
     try {
-      const response = await fetch(`/api/tournaments-v2/${tournamentId}`)
+      const response = await fetch(`/api/tournaments/${tournamentId}`)
       if (!response.ok) {
         throw new Error('Error al cargar el torneo')
       }
-      const data = await response.json()
-      setTournamentData(data)
+      const result = await response.json()
+
+      // Helper para normalizar status de matches
+      const normalizeMatchStatus = (status: string): 'pending' | 'in_progress' | 'completed' => {
+        const statusLower = status.toLowerCase()
+        if (statusLower === 'scheduled' || statusLower === 'pending') return 'pending'
+        if (statusLower === 'in_progress') return 'in_progress'
+        if (statusLower === 'completed') return 'completed'
+        return 'pending' // default
+      }
+
+      // Helper para normalizar un match
+      const normalizeMatch = (match: any) => ({
+        id: match.id,
+        team1Name: match.team1Name || 'TBD',
+        team2Name: match.team2Name || 'TBD',
+        team1Score: match.team1Score != null ? String(match.team1Score) : null,
+        team2Score: match.team2Score != null ? String(match.team2Score) : null,
+        team1Sets: match.team1Sets || null,
+        team2Sets: match.team2Sets || null,
+        round: match.round || '',
+        courtNumber: match.courtNumber || null,
+        status: normalizeMatchStatus(match.status),
+        scheduledAt: match.scheduledAt || null,
+        startTime: match.startTime || null,
+        winner: match.winner || null
+      })
+
+      // Normalizar todos los matches
+      const allMatches = (result.tournament.matches || []).map(normalizeMatch)
+
+      // Adaptar estructura del endpoint existente al formato esperado por los componentes
+      const adaptedData: TournamentData = {
+        tournament: {
+          id: result.tournament.id,
+          name: result.tournament.name,
+          startDate: result.tournament.startDate,
+          endDate: result.tournament.endDate,
+          status: result.tournament.status.toLowerCase() as 'active' | 'pending' | 'completed',
+          club: {
+            name: result.tournament.club?.name || 'Club'
+          }
+        },
+        categories: result.tournament.categories || [],
+        matches: {
+          upcoming: allMatches.filter(m => m.status === 'pending'),
+          inProgress: allMatches.filter(m => m.status === 'in_progress'),
+          completed: allMatches.filter(m => m.status === 'completed')
+        },
+        stats: result.tournament.stats || {
+          totalTeams: 0,
+          totalMatches: 0,
+          completedMatches: 0,
+          pendingMatches: 0,
+          inProgressMatches: 0,
+          todayMatches: 0
+        }
+      }
+
+      setTournamentData(adaptedData)
       setError(null)
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Error desconocido')
@@ -208,6 +268,7 @@ export default function TournamentV2Page() {
             setCaptureStatusFilter={setCaptureStatusFilter}
             selectedMatches={selectedMatches}
             setSelectedMatches={setSelectedMatches}
+            onRefresh={fetchTournamentData}
           />
         )}
 
@@ -224,24 +285,18 @@ export default function TournamentV2Page() {
           />
         )}
 
+        {activeView === 'brackets' && (
+          <BracketsView
+            tournamentData={tournamentData}
+            colors={colorConfig}
+            onRefresh={fetchTournamentData}
+          />
+        )}
+
         {activeView === 'tv' && <TVView tournamentData={tournamentData} colors={colorConfig} />}
 
         {activeView === 'schedule' && (
-          <div style={{ marginTop: '24px' }}>
-            <div style={{ padding: '20px', background: 'white', borderRadius: '12px' }}>
-              <h2>Schedule View</h2>
-              <p>This view is temporarily disabled while fixing syntax errors.</p>
-            </div>
-          </div>
-        )}
-
-        {activeView === 'kanban' && (
-          <div style={{ marginTop: '24px' }}>
-            <div style={{ padding: '20px', background: 'white', borderRadius: '12px' }}>
-              <h2>Kanban View</h2>
-              <p>This view is temporarily disabled while fixing syntax errors.</p>
-            </div>
-          </div>
+          <ScheduleView tournamentData={tournamentData} colors={colorConfig} />
         )}
       </div>
 

@@ -10,11 +10,11 @@ import {
   Users,
   Calendar,
   Grid3x3,
-  Columns3,
   Camera,
   Tv2,
   Settings,
-  ChevronRight
+  ChevronRight,
+  GitBranch
 } from 'lucide-react'
 import { NavigationItem } from './NavigationItem'
 import { CategorySection } from './CategorySection'
@@ -312,25 +312,20 @@ export function TournamentSidebar({
               sidebarCollapsed={sidebarCollapsed}
             />
             <NavigationItem
+              icon={GitBranch}
+              label="Brackets"
+              subtitle="Llaves del torneo"
+              isActive={activeView === 'brackets'}
+              onClick={() => setActiveView('brackets')}
+              sidebarCollapsed={sidebarCollapsed}
+            />
+            <NavigationItem
               icon={Calendar}
               label="Programación"
               subtitle="Calendario de partidos"
               isActive={activeView === 'schedule'}
               onClick={() => setActiveView('schedule')}
               sidebarCollapsed={sidebarCollapsed}
-            />
-            <NavigationItem
-              icon={Columns3}
-              label="Vista Kanban"
-              subtitle="Estado de canchas"
-              isActive={activeView === 'kanban'}
-              onClick={() => setActiveView('kanban')}
-              sidebarCollapsed={sidebarCollapsed}
-              badge={{
-                text: 'PRO',
-                color: 'white',
-                background: 'linear-gradient(135deg, #a855f7, #9333ea)'
-              }}
             />
             <NavigationItem
               icon={Camera}

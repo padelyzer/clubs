@@ -284,95 +284,117 @@ export default function TournamentsV2ListPage() {
           {tournaments.map((tournament) => {
             const statusStyle = getStatusBadge(tournament.status)
             return (
-              <CardModern 
-                key={tournament.id} 
-                variant="glass" 
+              <CardModern
+                key={tournament.id}
+                variant="glass"
                 padding="lg"
-                interactive
-                onClick={() => {
-                  const targetSlug = clubSlug || 'club-demo-padelyzer'
-                  router.push(`/c/${targetSlug}/dashboard/tournaments/${tournament.id}`)
-                }}
-                style={{ cursor: 'pointer' }}
               >
-                <div style={{ 
+                {/* Header with Status Badge */}
+                <div style={{
                   display: 'flex',
                   alignItems: 'flex-start',
                   justifyContent: 'space-between',
                   marginBottom: '16px'
                 }}>
-                  <div style={{ flex: 1 }}>
-                    <div style={{ 
+                  <div style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '12px',
+                    flex: 1,
+                    minWidth: 0
+                  }}>
+                    <div style={{
+                      width: '40px',
+                      height: '40px',
+                      borderRadius: '12px',
+                      background: 'linear-gradient(135deg, #10B981, #059669)',
                       display: 'flex',
                       alignItems: 'center',
-                      gap: '12px',
-                      marginBottom: '8px'
+                      justifyContent: 'center',
+                      flexShrink: 0
                     }}>
-                      <div style={{
-                        width: '40px',
-                        height: '40px',
-                        borderRadius: '12px',
-                        background: 'linear-gradient(135deg, #10B981, #059669)',
-                        display: 'flex',
-                        alignItems: 'center',
-                        justifyContent: 'center'
+                      <Trophy size={20} color="white" />
+                    </div>
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                      <h3 style={{
+                        fontSize: '18px',
+                        fontWeight: 600,
+                        color: colors.text.primary,
+                        marginBottom: '4px',
+                        overflow: 'hidden',
+                        textOverflow: 'ellipsis',
+                        whiteSpace: 'nowrap'
                       }}>
-                        <Trophy size={24} color="white" />
-                      </div>
-                      <div>
-                        <h3 style={{ 
-                          fontSize: '18px',
-                          fontWeight: 600,
-                          color: colors.text.primary,
-                          marginBottom: '2px'
-                        }}>
-                          {tournament.name}
-                        </h3>
-                        {tournament.description && (
-                          <p style={{ 
-                            fontSize: '13px',
-                            color: colors.text.secondary,
-                            lineHeight: 1.4
-                          }}>
-                            {tournament.description}
-                          </p>
-                        )}
-                      </div>
+                        {tournament.name}
+                      </h3>
                     </div>
                   </div>
-                  
+
                   <div style={{
                     ...statusStyle,
                     padding: '6px 12px',
                     borderRadius: '8px',
                     fontSize: '12px',
-                    fontWeight: 500
+                    fontWeight: 500,
+                    flexShrink: 0,
+                    marginLeft: '12px'
                   }}>
                     {statusStyle.label}
                   </div>
                 </div>
 
-                <div style={{ 
+                {/* Description */}
+                {tournament.description && (
+                  <p style={{
+                    fontSize: '13px',
+                    color: colors.text.secondary,
+                    lineHeight: 1.5,
+                    marginBottom: '16px',
+                    display: '-webkit-box',
+                    WebkitLineClamp: 2,
+                    WebkitBoxOrient: 'vertical',
+                    overflow: 'hidden'
+                  }}>
+                    {tournament.description}
+                  </p>
+                )}
+
+                {/* Stats Section */}
+                <div style={{
                   display: 'grid',
                   gridTemplateColumns: '1fr 1fr',
-                  gap: '16px',
-                  paddingTop: '16px',
-                  borderTop: `1px solid ${colors.border.light}`
+                  gap: '12px',
+                  padding: '12px',
+                  background: colors.neutral[50],
+                  borderRadius: '10px',
+                  border: `1px solid ${colors.border.light}`
                 }}>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                    <Calendar size={16} style={{ color: colors.text.tertiary }} />
-                    <div>
-                      <p style={{ 
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                    <div style={{
+                      width: '32px',
+                      height: '32px',
+                      borderRadius: '8px',
+                      background: 'white',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      flexShrink: 0
+                    }}>
+                      <Calendar size={16} style={{ color: colors.primary[600] }} />
+                    </div>
+                    <div style={{ minWidth: 0 }}>
+                      <p style={{
                         fontSize: '11px',
                         color: colors.text.tertiary,
-                        marginBottom: '2px'
+                        marginBottom: '2px',
+                        fontWeight: 500
                       }}>
                         Fecha inicio
                       </p>
-                      <p style={{ 
+                      <p style={{
                         fontSize: '13px',
                         color: colors.text.primary,
-                        fontWeight: 500
+                        fontWeight: 600
                       }}>
                         {new Date(tournament.startDate).toLocaleDateString('es-MX', {
                           day: 'numeric',
@@ -382,21 +404,33 @@ export default function TournamentsV2ListPage() {
                       </p>
                     </div>
                   </div>
-                  
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                    <Users size={16} style={{ color: colors.text.tertiary }} />
-                    <div>
-                      <p style={{ 
+
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                    <div style={{
+                      width: '32px',
+                      height: '32px',
+                      borderRadius: '8px',
+                      background: 'white',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      flexShrink: 0
+                    }}>
+                      <Users size={16} style={{ color: colors.primary[600] }} />
+                    </div>
+                    <div style={{ minWidth: 0 }}>
+                      <p style={{
                         fontSize: '11px',
                         color: colors.text.tertiary,
-                        marginBottom: '2px'
+                        marginBottom: '2px',
+                        fontWeight: 500
                       }}>
                         Equipos
                       </p>
-                      <p style={{ 
+                      <p style={{
                         fontSize: '13px',
                         color: colors.text.primary,
-                        fontWeight: 500
+                        fontWeight: 600
                       }}>
                         {tournament._count?.TournamentRegistration || 0} / {tournament.maxPlayers}
                       </p>
@@ -404,59 +438,45 @@ export default function TournamentsV2ListPage() {
                   </div>
                 </div>
 
-                <div style={{ 
+                {/* Action Button */}
+                <div style={{
                   marginTop: '16px',
                   paddingTop: '16px',
-                  borderTop: `1px solid ${colors.border.light}`,
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'space-between'
+                  borderTop: `1px solid ${colors.border.light}`
                 }}>
                   <button
-                    onClick={(e) => {
-                      e.stopPropagation()
+                    onClick={() => {
                       const targetSlug = clubSlug || 'club-demo-padelyzer'
                       router.push(`/c/${targetSlug}/dashboard/tournaments/${tournament.id}`)
                     }}
                     style={{
-                      padding: '8px 16px',
-                      borderRadius: '8px',
+                      width: '100%',
+                      padding: '10px 16px',
+                      borderRadius: '10px',
                       background: 'linear-gradient(135deg, #10B981, #059669)',
                       color: 'white',
                       border: 'none',
-                      fontSize: '13px',
-                      fontWeight: 500,
+                      fontSize: '14px',
+                      fontWeight: 600,
                       cursor: 'pointer',
                       display: 'flex',
                       alignItems: 'center',
-                      gap: '6px',
-                      transition: 'all 0.2s'
+                      justifyContent: 'center',
+                      gap: '8px',
+                      transition: 'all 0.2s',
+                      boxShadow: '0 2px 8px rgba(16, 185, 129, 0.15)'
+                    }}
+                    onMouseEnter={(e) => {
+                      e.currentTarget.style.transform = 'translateY(-2px)'
+                      e.currentTarget.style.boxShadow = '0 4px 12px rgba(16, 185, 129, 0.3)'
+                    }}
+                    onMouseLeave={(e) => {
+                      e.currentTarget.style.transform = 'translateY(0)'
+                      e.currentTarget.style.boxShadow = '0 2px 8px rgba(16, 185, 129, 0.15)'
                     }}
                   >
-                    Gestionar
-                    <ChevronRight size={16} />
-                  </button>
-                  
-                  <button
-                    onClick={(e) => {
-                      e.stopPropagation()
-                      // Volver a versión anterior
-                      const targetSlug = clubSlug || 'club-demo-padelyzer'
-                      router.push(`/c/${targetSlug}/dashboard/tournaments/${tournament.id}`)
-                    }}
-                    style={{
-                      padding: '8px 16px',
-                      borderRadius: '8px',
-                      background: 'transparent',
-                      color: colors.text.secondary,
-                      border: `1px solid ${colors.border.default}`,
-                      fontSize: '13px',
-                      fontWeight: 500,
-                      cursor: 'pointer',
-                      transition: 'all 0.2s'
-                    }}
-                  >
-                    Versión anterior
+                    Gestionar Torneo
+                    <ChevronRight size={18} />
                   </button>
                 </div>
               </CardModern>
